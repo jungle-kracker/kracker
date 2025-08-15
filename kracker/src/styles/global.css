@@ -1,0 +1,10 @@
+@font-face {
+  font-family: 'Krafton';
+  src: url('../assets/fonts/KRAFTON_FONTWindow.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+body {
+  font-family: 'Krafton', sans-serif;
+}
