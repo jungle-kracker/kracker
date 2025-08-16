@@ -1,5 +1,7 @@
 import React from "react";
 import RoomSelectButton from "../buttons/RoomSelectButton";
+import { ReactComponent as PublicIcon} from "../../assets/images/publicIcon.svg";
+import { ReactComponent as PrivateIcon} from "../../assets/images/privateIcon.svg";
 
 export type Visibility = "public" | "private";
 
@@ -17,6 +19,8 @@ const RoomSelectPanel: React.FC<RoomSelectPanelProps> = ({
         title="Public"
         description="공개된 방을 생성합니다."
         onClick={() => onSelect("public")}
+        avatarSize={260}
+        avatarNode = {<PublicIcon/>}
         // 필요시 avatarNode로 커스텀 이미지를 넣을 수 있습니다.
       />
 
@@ -24,6 +28,8 @@ const RoomSelectPanel: React.FC<RoomSelectPanelProps> = ({
         title="Private"
         description="방 찾기에 나타나지 않는 방을 생성합니다."
         onClick={() => onSelect("private")}
+        avatarSize={260}
+        avatarNode = {<PrivateIcon/>}
       />
     </div>
   );

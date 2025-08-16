@@ -47,7 +47,7 @@ const RoomSettingPanel: React.FC<RoomSettingPanelProps> = ({
       style={{
         width: containerWidth,
         display: "grid",
-        rowGap: 28,                 // 섹션 간 충분한 간격
+        rowGap: 48,                 // 섹션 간 충분한 간격
         justifyItems: "stretch",
       }}
     >

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import styled from "styled-components";
+import '../styles/global.css';
 
 import BgBase from "../assets/images/titleBackground.svg";
 import TextBase from "../assets/images/textBackground.svg";
@@ -36,17 +37,21 @@ const Home: React.FC = () => {
         }}
       />
       <SearchRoomModal
-        isOpen={createRoomOpen}
-        onClose={() => setCreateRoomOpen(false)}
-        onCreate={(data) => {
-          console.log("생성 요청:", data);
-          // TODO: 소켓/서버로 전송 후 onClose()
-          setCreateRoomOpen(false);
+        isOpen={searchRoomOpen}
+        onClose={() => setsearchRoomOpen(false)}
+        rooms={[]} // TODO: 서버에서 공개방 목록 받아서 넘겨주기
+        onSubmitCode={(code) => {
+          console.log("코드로 참가 요청:", code);
+          setsearchRoomOpen(false);
+        }}
+        onJoinRoom={(roomId) => {
+          console.log("공개방 참가 요청:", roomId);
+          setsearchRoomOpen(false);
         }}
       />
       <SettingModal
-        isOpen={createRoomOpen}
-        onClose={() => setCreateRoomOpen(false)}
+        isOpen={SettingOpen}
+        onClose={() => setSettingOpen(false)}
       />
     </>
   );

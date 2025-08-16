@@ -21,7 +21,7 @@ const RoomSelectButton: React.FC<RoomSelectButtonProps> = ({
   description,
   onClick,
   avatarSize = 260,
-  gutter = 16,
+  gutter = 10,
   lineRatio = 0.9,
   lineOffset = -6, // 요청: 원 중심보다 살짝 위로
   avatarNode,
