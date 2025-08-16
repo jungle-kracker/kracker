@@ -1,126 +1,147 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import ReactDOM from "react-dom";
-interface BasicButtonProps {
+
+interface BasicModalProps {
     isOpen: boolean;
     title: string;
     onClose: () => void;
-    children: React.ReactNode;
-    width?: number | string;
-    maxHeight?: number | string;
+    children?: React.ReactNode;
 }
 
-const BasicButton: React.FC<BasicButtonProps> = ({
-    isOpen,
-    title,
-    onClose,
-    children,
-    width,
-    maxHeight,
-}) => {
-
-    const contentRef = useRef<HTMLDivElement>(null)
-
-    // ESC 닫기, 스크롤 잠금
+const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, children }) => {
+    // 바디 스크롤 잠금만 유지 (오버레이/ESC로 닫기 없음)
     useEffect(() => {
         if (!isOpen) return;
-        const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-        document.addEventListener("keydown", onKey);
         const prev = document.body.style.overflow;
         document.body.style.overflow = "hidden";
         return () => {
-            document.removeEventListener("keydown", onKey);
             document.body.style.overflow = prev;
         };
-    }, [isOpen, onClose]);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
     return ReactDOM.createPortal(
         <div
-            aria-modal
             role="dialog"
+            aria-modal
             aria-labelledby="modal-title"
-            onClick={onClose}
             style={{
                 position: "fixed",
                 inset: 0,
-                // #1C1B1B with 82% opacity
-                backgroundColor: "rgba(28, 27, 27, 0.82)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                width: "100dvw",
+                height: "100dvh",
+                backgroundColor: "rgba(28,27,27,0.82)", // #1C1B1B + 82%
+                backdropFilter: "blur(6px)",
+                WebkitBackdropFilter: "blur(6px)",
+                display: "grid",
+                gridTemplateRows: "auto 1fr", // title 섹션 / content 섹션
                 zIndex: 1000,
+                color: "#fff",
+                touchAction: "none",
             }}
         >
+            {/* ===== Title 섹션 ===== */}
             <div
-                onClick={(e) => e.stopPropagation()}
-                ref={contentRef}
+                // 1) 버튼+제목 행  2) 제목 하단 선
                 style={{
-                    width: typeof width === "number" ? `${width}px` : width,
-                    maxHeight,
-                    overflow: "auto",
-                    background: "rgba(16,16,18,0.96)",
-                    borderRadius: 12,
-                    boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-                    padding: "20px 24px",
-                    color: "#e8e8ea",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                    backdropFilter: "blur(4px)",
+                    display: "grid",
+                    gridTemplateRows: "auto auto",
+                    rowGap: 8,
+                    paddingTop: 8,
+                    marginTop: 40,
                 }}
             >
-                {/* 헤더 */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {/* (1) 버튼 + 제목 행 */}
+                <div
+                    style={{
+                        position: "relative",
+                        display: "grid",
+                        placeItems: "center", // 제목을 중앙 정렬
+                        padding: "0 16px",
+                        minHeight: 120, // 제목(90px)과 버튼(85px)이 여유 있게 들어가도록
+                    }}
+                >
+                    {/* 좌측 정렬 뒤로가기 버튼 (85 x 85) */}
                     <button
                         onClick={onClose}
-                        aria-label="닫기"
+                        aria-label="뒤로가기"
                         style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 8,
-                            border: "1px solid rgba(255,255,255,0.08)",
+                            position: "absolute",
+                            left: 12,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            width: 85,
+                            height: 85,
+                            marginLeft: 30,
                             background: "transparent",
+                            border: "none",
+                            borderRadius: 12,
                             cursor: "pointer",
+                            padding: 0,
+                            WebkitTapHighlightColor: "transparent",
                             display: "grid",
                             placeItems: "center",
                         }}
                     >
-                        {/* ← 아이콘 */}
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                            <path d="M15 18l-6-6 6-6" stroke="#cfd2dc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path
+                                d="M15 18l-6-6 6-6"
+                                stroke="#FFFFFF"
+                                strokeWidth="0.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
                         </svg>
                     </button>
 
+                    {/* 중앙 제목 (90px) */}
                     <h2
                         id="modal-title"
                         style={{
                             margin: 0,
                             fontWeight: 800,
-                            letterSpacing: ".2px",
-                            fontSize: 20,
-                            color: "#ffffff",
+                            fontSize: 90,
+                            lineHeight: 1,
+                            textAlign: "center",
+                            textShadow: "0 1px 1px rgba(0,0,0,0.25)",
+                            letterSpacing: "-0.5px",
                         }}
                     >
                         {title}
                     </h2>
                 </div>
 
-                {/* 구분선 */}
-                <hr
+                {/* (2) 제목 하단 구분선: 1920px에서 1326px → 69.0625vw */}
+                <div
                     style={{
-                        margin: "14px 0 16px",
-                        border: 0,
+                        width: "69.0625vw",
+                        maxWidth: "100%",
                         height: 1,
-                        background:
-                            "linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.16), rgba(255,255,255,0.06))",
+                        margin: "0 auto",
+                        background: "rgba(255,255,255,1)",
                     }}
                 />
+            </div>
 
-                {/* 바디(Children) */}
-                <div>{children}</div>
+            {/* ===== Content 섹션 ===== */}
+            <div
+                style={{
+                    width: "100%",
+                    height: "100%",
+                    overflow: "auto",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center", // 내용 중앙 배치
+                    padding: 0,
+                    WebkitOverflowScrolling: "touch",
+                }}
+            >
+                <div style={{ display: "grid", placeItems: "center", paddingBottom: 40 }}>{children}</div>
             </div>
         </div>,
         document.body
     );
 };
 
-export default BasicButton;
+export default BasicModal;

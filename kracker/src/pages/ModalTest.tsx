@@ -12,7 +12,6 @@ const RoomCreatePage: React.FC = () => {
         isOpen={open}
         title="방 만들기"
         onClose={() => setOpen(false)}
-        width={640}
       >
         {/* 여기에 Figma에서 설계한 컨텐츠(라디오: Public/Private, 입력폼 등) */}
         <div style={{ display: "grid", gap: 16 }}>

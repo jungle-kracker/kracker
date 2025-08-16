@@ -1,26 +1,58 @@
-import React from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
 
 import BgBase from "../assets/images/titleBackground.svg";
 import TextBase from "../assets/images/textBackground.svg";
 
-const Main: React.FC = () => {
+import CreateRoomModal from "../components/modals/CreateRoomModal";
+import SearchRoomModal from "../components/modals/SearchRoomModal";
+import SettingModal from "../components/modals/SettingModal";
+
+const Home: React.FC = () => {
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [searchRoomOpen, setsearchRoomOpen] = useState(false);
+  const [SettingOpen, setSettingOpen] = useState(false);
+
   return (
-    <Background>
-      <Wrap>
-        <Title data-text="KRACKER">KRACKER</Title>
-        <Divider />
-        <Menu>
-          <MenuBtn>방 만들기</MenuBtn>
-          <MenuBtn>게임 찾기</MenuBtn>
-          <MenuBtn>게임 설정</MenuBtn>
-        </Menu>
-      </Wrap>
-    </Background>
+    <>
+      <Background>
+        <Wrap>
+          <Title data-text="KRACKER">KRACKER</Title>
+          <Divider />
+          <Menu>
+            <MenuBtn onClick={() => setCreateRoomOpen(true)}>방 만들기</MenuBtn>
+            <MenuBtn onClick={() => setsearchRoomOpen(true)}>게임 찾기</MenuBtn>
+            <MenuBtn onClick={() => setSettingOpen(true)}>게임 설정</MenuBtn>
+          </Menu>
+        </Wrap>
+      </Background>
+      <CreateRoomModal
+        isOpen={createRoomOpen}
+        onClose={() => setCreateRoomOpen(false)}
+        onCreate={(data) => {
+          console.log("생성 요청:", data);
+          // TODO: 소켓/서버로 전송 후 onClose()
+          setCreateRoomOpen(false);
+        }}
+      />
+      <SearchRoomModal
+        isOpen={createRoomOpen}
+        onClose={() => setCreateRoomOpen(false)}
+        onCreate={(data) => {
+          console.log("생성 요청:", data);
+          // TODO: 소켓/서버로 전송 후 onClose()
+          setCreateRoomOpen(false);
+        }}
+      />
+      <SettingModal
+        isOpen={createRoomOpen}
+        onClose={() => setCreateRoomOpen(false)}
+      />
+    </>
   );
 };
 
-export default Main;
+export default Home;
 
 /* ---------------- 스타일 ---------------- */
 
@@ -86,7 +118,7 @@ const Title = styled.h1`
 const Divider = styled.hr`
   width: min(1000px, 120%);
   height: 3px;
-  margin-bottom: 70px;
+  margin-bottom: 30px;
   border: 0;
   background: rgba(255, 255, 255, 0.8);
   border-radius: 999px;
