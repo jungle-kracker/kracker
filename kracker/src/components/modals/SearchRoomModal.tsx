@@ -20,6 +20,12 @@ const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
 }) => {
   const [code, setCode] = useState("");
 
+  const demoRooms: SearchRoom[] = [
+    { id: "r1",  isPublic: true,  name: "이것은 게임 방 목록을" },
+    { id: "r2",  isPublic: true,  name: "보기 위해 만든 임시 데이터" },
+    { id: "r3",  isPublic: true,  name: "함께 게임해요" },
+  ];
+
   const handleChange = (v: string) => {
     // 대문자 + 공백 제거
     setCode(v.toUpperCase().replace(/\s+/g, ""));
@@ -32,7 +38,10 @@ const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
   };
 
   // rooms가 바뀌어도 렌더링 최적화
-  const memoRooms = useMemo(() => rooms, [rooms]);
+  const memoRooms = useMemo(
+    () => (rooms && rooms.length > 0 ? rooms : demoRooms),
+    [rooms]
+  );
 
   return (
     <BasicModal isOpen={isOpen} onClose={onClose} title="게임 찾기">
@@ -43,6 +52,7 @@ const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
             style={{
               position: "relative",
               justifySelf: "center",
+              margin: "30px 0px",
               width: 1600,
               height: 98,
               overflow: "hidden",
