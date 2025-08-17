@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom";
+import BackButton from "../buttons/BackButton";
 
 interface BasicModalProps {
     isOpen: boolean;
@@ -63,26 +64,8 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                     }}
                 >
                     {/* 좌측 정렬 뒤로가기 버튼 (85 x 85) */}
-                    <button
+                    <BackButton
                         onClick={onClose}
-                        aria-label="뒤로가기"
-                        style={{
-                            position: "absolute",
-                            left: 12,
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            width: 85,
-                            height: 85,
-                            marginLeft: 30,
-                            background: "transparent",
-                            border: "none",
-                            borderRadius: 12,
-                            cursor: "pointer",
-                            padding: 0,
-                            WebkitTapHighlightColor: "transparent",
-                            display: "grid",
-                            placeItems: "center",
-                        }}
                     >
                         <svg width="120" height="120" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path
@@ -93,7 +76,7 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                                 strokeLinejoin="round"
                             />
                         </svg>
-                    </button>
+                    </BackButton>
 
                     {/* 중앙 제목 (90px) */}
                     <h2
