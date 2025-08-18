@@ -50,7 +50,7 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                     gridTemplateRows: "auto auto",
                     rowGap: 8,
                     paddingTop: 8,
-                    marginTop: 40,
+                    marginTop: 20,
                 }}
             >
                 {/* (1) 버튼 + 제목 행 */}
@@ -66,6 +66,11 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                     {/* 좌측 정렬 뒤로가기 버튼 (85 x 85) */}
                     <BackButton
                         onClick={onClose}
+                        style={{
+                            width: 85,
+                            height: 85,
+                            marginLeft: 30,
+                        }}
                     >
                         <svg width="120" height="120" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path
@@ -108,7 +113,7 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
             </div>
 
             {/* ===== Content 섹션 ===== */}
-            <div
+            < div
                 style={{
                     width: "100%",
                     height: "100%",
@@ -121,8 +126,8 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                 }}
             >
                 <div style={{ display: "grid", placeItems: "center", paddingBottom: 40 }}>{children}</div>
-            </div>
-        </div>,
+            </div >
+        </div >,
         document.body
     );
 };

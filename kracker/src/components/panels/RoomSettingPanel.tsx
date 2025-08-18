@@ -1,7 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import BasicSelect, { OptionItem } from "../selects/BasicSelect";
-import ConfirmButton from "../buttons/ActionButton";
+import ActionButton from "../buttons/ActionButton";
 
 export interface RoomSettingPanelProps {
   roomName: string;
@@ -98,13 +98,18 @@ const RoomSettingPanel: React.FC<RoomSettingPanelProps> = ({
       </Field>
 
       {/* 액션 */}
-      <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 8 }}>
-        <ConfirmButton
+      <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: "-20px" }}>
+        <ActionButton
           disabled={!isValid}
           aria-disabled={!isValid}
+          style={{
+            opacity: isValid ? 1 : 0.45,
+            color: isValid ? '#ffffffff' : '#8f8f8f',
+            cursor: isValid ? "pointer" : "not-allowed",
+          }}
         >
           완료
-        </ConfirmButton>
+        </ActionButton>
       </div>
     </form >
   );

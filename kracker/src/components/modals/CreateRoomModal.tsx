@@ -4,12 +4,17 @@ import BasicModal from "./BasicModal";
 import RoomSelectPanel, { Visibility } from "../panels/RoomSelectPanel";
 import RoomSettingPanel from "../panels/RoomSettingPanel";
 
+export type PlayerSummary = { id: string; nick: string; ready: boolean };
+export type RoomStatus = "waiting" | "playing" | "ended";
 type Step = "select" | "form";
 
 export interface CreateRoomPayload {
   roomId: string;        // 4~6자리 대문자
   roomName: string;
   maxPlayers: number;    // 2~8
+  currentPlayers: PlayerSummary[];
+  status: RoomStatus;
+  createdAt: number;        // timestamp
   visibility: Visibility;
   gameMode: string;
 }
@@ -62,6 +67,9 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClose, onCr
       roomId,
       roomName: roomName.trim() || "ROOM",
       maxPlayers: Math.min(8, Math.max(2, maxPlayers)),
+      currentPlayers: [],
+      status: "waiting",
+      createdAt: Date.now(),        // timestamp
       visibility,
       gameMode: gameMode.trim(),
     });
