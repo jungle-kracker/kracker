@@ -1,53 +1,95 @@
+// src/components/SearchRoomModal.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import BasicModal from "./BasicModal";
 import SearchRoomPanel, { SearchRoom } from "../panels/SearchRoomPanel";
 import styled from "styled-components";
+import { socket } from "../../lib/socket";
 
 interface SearchRoomModalProps {
   isOpen: boolean;
   onClose: () => void;
-  rooms?: SearchRoom[];                    // 서버에서 받은 전체 방 목록
-  onSubmitCode?: (code: string) => void;   // 코드 입력 후 엔터/제출
-  onJoinRoom?: (roomId: string) => void;   // 공개방 클릭
+  nickname?: string;
+  onJoined?: (room: any) => void; // 참가 성공시 콜백
 }
 
 const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
   isOpen,
   onClose,
-  rooms = [],
-  onSubmitCode,
-  onJoinRoom,
+  nickname = "Player",
+  onJoined,
 }) => {
   const [code, setCode] = useState("");
-
-  const demoRooms: SearchRoom[] = [
-    { id: "r1",  isPublic: true,  name: "이것은 게임 방 목록을" },
-    { id: "r2",  isPublic: true,  name: "보기 위해 만든 임시 데이터" },
-    { id: "r3",  isPublic: true,  name: "함께 게임해요" },
-  ];
+  const [rooms, setRooms] = useState<SearchRoom[]>([]);
 
   const handleChange = (v: string) => {
-    // 대문자 + 공백 제거
     setCode(v.toUpperCase().replace(/\s+/g, ""));
   };
 
+  // 코드로 참가
   const submit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!code) return;
-    onSubmitCode?.(code);
+
+    socket.emit("room:join", { roomId: code, nickname }, (res: any) => {
+      if (res.ok) {
+        console.log("참가 성공", res.room);
+        onJoined?.(res.room);
+        onClose();
+      } else {
+        alert("참가 실패: " + (res.error || "알 수 없음"));
+      }
+    });
   };
 
-  // rooms가 바뀌어도 렌더링 최적화
+  // 공개방 클릭 → 바로 참가 시도
+  const joinRoom = (roomId: string) => {
+    socket.emit("room:join", { roomId, nickname }, (res: any) => {
+      if (res.ok) {
+        onJoined?.(res.room);
+        onClose();
+      } else {
+        alert("참가 실패: " + (res.error || "알 수 없음"));
+      }
+    });
+  };
+
+  // 방 목록 가져오기 (옵션: 서버가 room:list 제공해야함)
+  useEffect(() => {
+    if (!isOpen) return;
+    socket.emit("room:list", {}, (res: any) => {
+      if (res.ok) {
+        // 서버에서 내려준 방 리스트를 SearchRoom[] 형식으로 매핑
+        setRooms(
+          res.rooms.map((r: any) => ({
+            id: r.roomId,
+            isPublic: true,
+            name: `방(${r.players.length}/${r.max})`,
+          }))
+        );
+      }
+    });
+  }, [isOpen]);
+
   const memoRooms = useMemo(
-    () => (rooms && rooms.length > 0 ? rooms : demoRooms),
+    () => (rooms && rooms.length > 0 ? rooms : []),
     [rooms]
   );
 
   return (
     <BasicModal isOpen={isOpen} onClose={onClose} title="게임 찾기">
-      <div style={{ display: "grid", gap: 36, placeItems: "center", width: "100%" }}>
-        {/* ===== 코드 입력(양방향 선형 그라데이션) ===== */}
-        <form onSubmit={submit} style={{ width: "max(700px, min(69.0625vw, 1326px))" }}>
+      <div
+        style={{
+          display: "grid",
+          gap: 36,
+          placeItems: "center",
+          width: "100%",
+        }}
+      >
+        {/* 코드 입력 */}
+        <form
+          onSubmit={submit}
+          style={{ width: "max(700px, min(69.0625vw, 1326px))" }}
+        >
           <div
             style={{
               position: "relative",
@@ -56,7 +98,6 @@ const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
               width: 1600,
               height: 98,
               overflow: "hidden",
-              // 양끝 어둡고 중앙 밝은 금속 느낌의 양방향 그라데이션
               background:
                 "linear-gradient(90deg, rgba(0,0,0,0) 20%, rgba(255,255,255,0.97) 50%, rgba(0,0,0,0) 80%)",
             }}
@@ -70,11 +111,11 @@ const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
           </div>
         </form>
 
-        {/* ===== 공개방 목록 패널 ===== */}
-        <SearchRoomPanel rooms={memoRooms} onJoinRoom={onJoinRoom} />
+        {/* 공개방 목록 */}
+        <SearchRoomPanel rooms={memoRooms} onJoinRoom={joinRoom} />
       </div>
     </BasicModal>
-  )
+  );
 };
 
 const CodeInput = styled.input`
@@ -86,14 +127,10 @@ const CodeInput = styled.input`
   outline: none;
   background: transparent;
   text-align: center;
-
-  /* 입력 텍스트 */
   font-weight: 800;
   font-size: 50px;
   letter-spacing: 2px;
   color: rgba(0, 0, 0, 1);
-
-  /* placeholder 전용 */
   &::placeholder {
     font-weight: 300;
     font-size: 36px;

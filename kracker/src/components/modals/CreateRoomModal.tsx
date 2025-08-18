@@ -3,29 +3,37 @@ import React, { useEffect, useMemo, useState } from "react";
 import BasicModal from "./BasicModal";
 import RoomSelectPanel, { Visibility } from "../panels/RoomSelectPanel";
 import RoomSettingPanel from "../panels/RoomSettingPanel";
+import { socket, Ack, SafeRoomState } from "../../lib/socket";
 
-export type PlayerSummary = { id: string; nick: string; ready: boolean };
+export type PlayerSummary = { id: string; nick: string; ready: boolean }; // 기존 타입 유지해도 무방
 export type RoomStatus = "waiting" | "playing" | "ended";
 type Step = "select" | "form";
 
 export interface CreateRoomPayload {
-  roomId: string;        // 4~6자리 대문자
+  roomId: string;
   roomName: string;
-  maxPlayers: number;    // 2~8
+  maxPlayers: number;
   currentPlayers: PlayerSummary[];
   status: RoomStatus;
-  createdAt: number;        // timestamp
+  createdAt: number;
   visibility: Visibility;
   gameMode: string;
 }
 
 interface CreateRoomModalProps {
   isOpen: boolean;
-  onClose: () => void;   // 최종 닫기
+  onClose: () => void;
   onCreate?: (payload: CreateRoomPayload) => void;
+  /** 현재 로그인/닉네임(없으면 "Player") */
+  nickname?: string;
 }
 
-const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClose, onCreate }) => {
+const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
+  isOpen,
+  onClose,
+  onCreate,
+  nickname = "Player",
+}) => {
   const [step, setStep] = useState<Step>("select");
   const [visibility, setVisibility] = useState<Visibility>("public");
 
@@ -34,15 +42,18 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClose, onCr
   const [maxPlayers, setMaxPlayers] = useState(0);
   const [gameMode, setGameMode] = useState("");
 
-  // 방 코드
+  // 방 코드 (UI용 랜덤)
   const roomId = useMemo(() => {
     if (!isOpen) return "";
     const len = Math.floor(Math.random() * 3) + 4; // 4~6
     const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    return Array.from({ length: len }, () => A[Math.floor(Math.random() * A.length)]).join("");
+    return Array.from(
+      { length: len },
+      () => A[Math.floor(Math.random() * A.length)]
+    ).join("");
   }, [isOpen]);
 
-  // 모달이 다시 열릴 때 항상 1단계부터 시작
+  // 모달 재오픈 시 초기화
   useEffect(() => {
     if (isOpen) {
       setStep("select");
@@ -62,18 +73,41 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClose, onCr
     onClose();
   };
 
+  /** 서버로 방 생성 요청 */
   const submit = () => {
-    onCreate?.({
-      roomId,
-      roomName: roomName.trim() || "ROOM",
-      maxPlayers: Math.min(8, Math.max(2, maxPlayers)),
-      currentPlayers: [],
-      status: "waiting",
-      createdAt: Date.now(),        // timestamp
-      visibility,
-      gameMode: gameMode.trim(),
-    });
-    onClose();
+    const wantMax = Math.min(8, Math.max(2, maxPlayers || 4));
+
+    socket.emit(
+      "room:create",
+      { nickname: nickname.trim() || "Player", max: wantMax },
+      (res: Ack<{ room: SafeRoomState }>) => {
+        // 서버 ack 처리
+        if (!res || !("ok" in res) || !res.ok || !res.room) {
+          console.warn("방 생성 실패:", res);
+          onClose();
+          return;
+        }
+
+        const srv = res.room;
+        // 우리 UI용 payload로 매핑
+        onCreate?.({
+          roomId: srv.roomId,
+          roomName: roomName.trim() || "ROOM",
+          maxPlayers: srv.max,
+          currentPlayers: srv.players.map((p) => ({
+            id: p.id,
+            nick: p.nickname, // 서버 필드명: nickname
+            ready: p.ready,
+          })),
+          status: (srv.status as RoomStatus) ?? "waiting",
+          createdAt: Date.now(),
+          visibility,
+          gameMode: gameMode.trim(),
+        });
+
+        onClose();
+      }
+    );
   };
 
   return (

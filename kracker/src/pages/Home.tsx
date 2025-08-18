@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import '../styles/global.css';
+import "../styles/global.css";
 
 import BgBase from "../assets/images/titleBackground.svg";
 import TextBase from "../assets/images/textBackground.svg";
@@ -10,12 +10,18 @@ import CreateRoomModal from "../components/modals/CreateRoomModal";
 import SearchRoomModal from "../components/modals/SearchRoomModal";
 import SettingModal from "../components/modals/SettingModal";
 
+import hoverSfx from "../assets/sfx/main1.mp3";
+
+const hoverAudio = new Audio(hoverSfx);
+hoverAudio.volume = 0.4;
+
 const Home: React.FC = () => {
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [searchRoomOpen, setsearchRoomOpen] = useState(false);
   const [SettingOpen, setSettingOpen] = useState(false);
 
   const navigate = useNavigate();
+  const nickname = localStorage.getItem("nickname") || "Player";
 
   return (
     <>
@@ -24,48 +30,79 @@ const Home: React.FC = () => {
           <Title data-text="KRACKER">KRACKER</Title>
           <Divider />
           <Menu>
-            <MenuBtn onClick={() => setCreateRoomOpen(true)}>방 만들기</MenuBtn>
-            <MenuBtn onClick={() => setsearchRoomOpen(true)}>게임 찾기</MenuBtn>
-            <MenuBtn onClick={() => setSettingOpen(true)}>게임 설정</MenuBtn>
+            <MenuBtn
+              onMouseEnter={() => {
+                hoverAudio.currentTime = 0;
+                hoverAudio.play().catch(() => {});
+              }}
+              onClick={() => setCreateRoomOpen(true)}
+            >
+              방 만들기
+            </MenuBtn>
+
+            <MenuBtn
+              onMouseEnter={() => {
+                hoverAudio.currentTime = 0;
+                hoverAudio.play().catch(() => {});
+              }}
+              onClick={() => setsearchRoomOpen(true)}
+            >
+              게임 찾기
+            </MenuBtn>
+
+            <MenuBtn
+              onMouseEnter={() => {
+                hoverAudio.currentTime = 0;
+                hoverAudio.play().catch(() => {});
+              }}
+              onClick={() => setSettingOpen(true)}
+            >
+              게임 설정
+            </MenuBtn>
           </Menu>
         </Wrap>
       </Background>
+
+      {/* 방 만들기 → 서버 ack로 받은 room 정보로 이동 */}
       <CreateRoomModal
         isOpen={createRoomOpen}
         onClose={() => setCreateRoomOpen(false)}
+        nickname={nickname}
         onCreate={(data) => {
-          const room = {
-            roomId: data.roomId,
-            hostId: "p1", // TODO: 실제 소켓/유저 ID
-            maxPlayers: data.maxPlayers,
-            currentPlayers: [{ id: "p1", nick: "Host", ready: true }], // 초기 호스트
-            status: "waiting" as const,
-            createdAt: Date.now(),
-            roomName: data.roomName,
-          };
-          // TODO: 소켓/서버로 전송 후 onClose()
           setCreateRoomOpen(false);
-          navigate("/lobby", { state: { room } });
+          // 방 상태 최소 정보만 들고 로비로 이동
+          navigate("/lobby", {
+            state: {
+              room: {
+                roomId: data.roomId,
+                maxPlayers: data.maxPlayers,
+                status: data.status,
+                roomName: data.roomName,
+              },
+            },
+          });
         }}
       />
+
+      {/* 방 찾기 → 코드/공개방 참가 성공 시 이동 */}
       <SearchRoomModal
         isOpen={searchRoomOpen}
         onClose={() => setsearchRoomOpen(false)}
-        rooms={[]} // TODO: 서버에서 공개방 목록 받아서 넘겨주기
-        onSubmitCode={(code) => {
-          const room = { roomId: code }; // 최소 정보만 전달
-          sessionStorage.setItem("room:last", JSON.stringify(room)); // 새로고침 대비
+        nickname={nickname}
+        onJoined={(room) => {
           setsearchRoomOpen(false);
-          navigate("/lobby", { state: { room } });
-          setsearchRoomOpen(false);
-        }}
-        onJoinRoom={(roomId) => {
-          const room = { roomId }; // 데모 단계: 최소 정보만 전달
-          sessionStorage.setItem("room:last", JSON.stringify(room)); // 새로고침 대비
-          setsearchRoomOpen(false);
-          navigate("/lobby", { state: { room } });
+          navigate("/lobby", {
+            state: {
+              room: {
+                roomId: room.roomId,
+                maxPlayers: room.max,
+                status: room.status,
+              },
+            },
+          });
         }}
       />
+
       <SettingModal
         isOpen={SettingOpen}
         onClose={() => setSettingOpen(false)}
