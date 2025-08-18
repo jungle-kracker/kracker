@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import styled from "styled-components";
+import { useNavigate } from "react-router-dom";
 import '../styles/global.css';
 
 import BgBase from "../assets/images/titleBackground.svg";
@@ -13,6 +14,8 @@ const Home: React.FC = () => {
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
   const [searchRoomOpen, setsearchRoomOpen] = useState(false);
   const [SettingOpen, setSettingOpen] = useState(false);
+
+  const navigate = useNavigate();
 
   return (
     <>
@@ -31,9 +34,18 @@ const Home: React.FC = () => {
         isOpen={createRoomOpen}
         onClose={() => setCreateRoomOpen(false)}
         onCreate={(data) => {
-          console.log("생성 요청:", data);
+          const room = {
+            roomId: data.roomId,
+            hostId: "p1", // TODO: 실제 소켓/유저 ID
+            maxPlayers: data.maxPlayers,
+            currentPlayers: [{ id: "p1", nick: "Host", ready: true }], // 초기 호스트
+            status: "waiting" as const,
+            createdAt: Date.now(),
+            roomName: data.roomName,
+          };
           // TODO: 소켓/서버로 전송 후 onClose()
           setCreateRoomOpen(false);
+          navigate("/lobby", { state: { room } });
         }}
       />
       <SearchRoomModal

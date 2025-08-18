@@ -1,9 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link, NavLink, Router } from 'react-router-dom';
-import logo from './logo.svg';
 import './App.css';
 import ModalTest from './pages/ModalTest';
 import Home from './pages/Home';
+import GameLobby from './pages/GameLobby';
 
 function App() {
   return (
@@ -11,6 +11,7 @@ function App() {
       <Routes>
         <Route path='/test' element={<ModalTest/>} />
         <Route path='/' element={<Home/>}/>
+        <Route path='/lobby' element={<GameLobby/>}/>
       </Routes>
     </BrowserRouter>
   );

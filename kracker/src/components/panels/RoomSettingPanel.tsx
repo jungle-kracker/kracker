@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import BasicSelect, { OptionItem } from "../selects/BasicSelect";
+import ActionButton from "../buttons/ActionButton";
 
 export interface RoomSettingPanelProps {
   roomName: string;
@@ -97,20 +98,18 @@ const RoomSettingPanel: React.FC<RoomSettingPanelProps> = ({
       </Field>
 
       {/* 액션 */}
-      <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 8 }}>
-        <button
-          type="submit"
+      <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: "-20px" }}>
+        <ActionButton
           disabled={!isValid}
           aria-disabled={!isValid}
           style={{
-            ...primaryBtnStyle,
             opacity: isValid ? 1 : 0.45,
             color: isValid ? '#ffffffff' : '#8f8f8f',
             cursor: isValid ? "pointer" : "not-allowed",
           }}
         >
           완료
-        </button>
+        </ActionButton>
       </div>
     </form >
   );
@@ -138,24 +137,6 @@ const InputWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     {children}
   </div>
 );
-
-// 버튼
-const baseBtn: React.CSSProperties = {
-  minWidth: 180,
-  height: 80,
-  padding: "0 28px",
-  borderRadius: 24,
-  cursor: "pointer",
-  fontSize: 50,
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  ...baseBtn,
-  border: "none",
-  background: "rgba(255,255,255,0)",
-  color: "#8F8F8F",
-  fontWeight: 800,
-};
 
 const FieldInput = styled.input<{ $error?: boolean }>`
   width: 100%;
