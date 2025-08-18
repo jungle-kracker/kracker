@@ -4,15 +4,18 @@ import './App.css';
 import ModalTest from './pages/ModalTest';
 import Home from './pages/Home';
 import GameLobby from './pages/GameLobby';
+import { BgmProvider } from './providers/BgmProvider';
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path='/test' element={<ModalTest/>} />
-        <Route path='/' element={<Home/>}/>
-        <Route path='/lobby' element={<GameLobby/>}/>
-      </Routes>
+      <BgmProvider>
+        <Routes>
+          <Route path='/test' element={<ModalTest />} />
+          <Route path='/' element={<Home />} />
+          <Route path='/lobby' element={<GameLobby />} />
+        </Routes>
+      </BgmProvider>
     </BrowserRouter>
   );
 }
