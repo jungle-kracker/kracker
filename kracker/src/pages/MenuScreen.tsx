@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { useEffect } from "react";
-import styled from 'styled-components';
-import MenuButton from '../components/buttons/MenuButton';
-import { connectSocket, disconnectSocket, socket } from '../api/socket';
+import styled from "styled-components";
+import MenuButton from "../components/buttons/MenuButton";
+import { connectSocket, disconnectSocket, socket } from "../api/socket";
 
 const Wrapper = styled.div`
   width: 100vw;
@@ -32,7 +32,7 @@ const ButtonWrapper = styled.div`
   gap: 20px;
 `;
 
-const buttons = ['방 만들기', '게임 찾기', '게임 설정'];
+const buttons = ["방 만들기", "게임 찾기", "게임 설정"];
 
 const MenuScreen: React.FC = () => {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
