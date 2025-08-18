@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import BackButton from "../components/buttons/BackButton";
@@ -12,7 +12,18 @@ interface GameLobbyProps {
 const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) => {
   const navigate = useNavigate();
   const location = useLocation() as { state?: { room?: any } };
-  const room = location.state?.room;
+  const [room, setRoom] = useState<any>(location.state?.room ?? null);
+
+  useEffect(() => {
+    if (!room) {
+      const cached = sessionStorage.getItem("room:last");
+      if (cached) {
+        try {
+          setRoom(JSON.parse(cached));
+        } catch { }
+      }
+    }
+  }, [room]);
 
   const codeToShow = room?.roomId ?? roomCode;
 
@@ -21,7 +32,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
       {/* === 모달과 동일한 헤더 패턴 === */}
       <TitleSection>
         {/* 좌측: 텍스트형 '나가기' (absolute) */}
-        <TextBackButton onClick={onExit ?? (()=>navigate("/"))} aria-label="나가기">나가기</TextBackButton>
+        <TextBackButton onClick={onExit ?? (() => navigate("/"))} aria-label="나가기">나가기</TextBackButton>
 
         {/* 중앙: 방 코드 라벨/값 */}
         <TitleBox>

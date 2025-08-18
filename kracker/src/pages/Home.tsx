@@ -53,12 +53,17 @@ const Home: React.FC = () => {
         onClose={() => setsearchRoomOpen(false)}
         rooms={[]} // TODO: 서버에서 공개방 목록 받아서 넘겨주기
         onSubmitCode={(code) => {
-          console.log("코드로 참가 요청:", code);
+          const room = { roomId: code }; // 최소 정보만 전달
+          sessionStorage.setItem("room:last", JSON.stringify(room)); // 새로고침 대비
+          setsearchRoomOpen(false);
+          navigate("/lobby", { state: { room } });
           setsearchRoomOpen(false);
         }}
         onJoinRoom={(roomId) => {
-          console.log("공개방 참가 요청:", roomId);
+          const room = { roomId }; // 데모 단계: 최소 정보만 전달
+          sessionStorage.setItem("room:last", JSON.stringify(room)); // 새로고침 대비
           setsearchRoomOpen(false);
+          navigate("/lobby", { state: { room } });
         }}
       />
       <SettingModal
