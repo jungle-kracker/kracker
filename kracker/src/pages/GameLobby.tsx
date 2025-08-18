@@ -1,8 +1,26 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import BackButton from "../components/buttons/BackButton";
 import ActionButton from "../components/buttons/ActionButton";
+import PlayerCard from "../components/cards/PlayerCard";
+import { UI_CONSTANTS } from "../game/config/GameConstants";
+
+// ===== 모드 설정 =====
+const IS_TEAM_MODE = true;       // 팀전/개인전 전환용 (추후 룸 데이터에 연동)
+const NUM_TEAMS = IS_TEAM_MODE ? 2 : 0; // 3v3 => 2팀, 개인전 => 0이면 드롭다운 숨김
+
+// ===== 더미 플레이어 (team을 숫자로) =====
+type Player = { id: string; team: number; name: string; tone: string };
+
+const initialPlayers: Player[] = [
+  { id: "p1", team: 1, name: "진짜로", tone: UI_CONSTANTS.COLORS.RED },
+  { id: "p2", team: 1, name: "코딩이", tone: UI_CONSTANTS.COLORS.ORANGE },
+  { id: "p3", team: 1, name: "너무어려워요", tone: UI_CONSTANTS.COLORS.GREEN },
+  { id: "p4", team: 2, name: "매일밤을", tone: UI_CONSTANTS.COLORS.CYAN },
+  { id: "p5", team: 2, name: "새고있어요", tone: UI_CONSTANTS.COLORS.PURPLE },
+  { id: "p6", team: 2, name: "다들화이팅", tone: UI_CONSTANTS.COLORS.PINK },
+];
 
 interface GameLobbyProps {
   roomCode?: string;
@@ -12,66 +30,100 @@ interface GameLobbyProps {
 const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) => {
   const navigate = useNavigate();
   const location = useLocation() as { state?: { room?: any } };
+  const [modalOpen, setModalOpen] = useState(false);
+
   const [room, setRoom] = useState<any>(location.state?.room ?? null);
+  const [players, setPlayers] = useState<Player[]>(initialPlayers);
 
   useEffect(() => {
     if (!room) {
       const cached = sessionStorage.getItem("room:last");
       if (cached) {
-        try {
-          setRoom(JSON.parse(cached));
-        } catch { }
+        try { setRoom(JSON.parse(cached)); } catch { /* noop */ }
       }
     }
   }, [room]);
 
   const codeToShow = room?.roomId ?? roomCode;
 
+  const handleTeamChange = (id: string, nextTeam: number) => {
+    if (NUM_TEAMS < 2) return; // 개인전이면 무시
+    setPlayers(prev => prev.map(p => p.id === id ? { ...p, team: nextTeam } : p));
+  };
+
   return (
     <Wrap>
-      {/* === 모달과 동일한 헤더 패턴 === */}
       <TitleSection>
-        {/* 좌측: 텍스트형 '나가기' (absolute) */}
         <TextBackButton onClick={onExit ?? (() => navigate("/"))} aria-label="나가기">나가기</TextBackButton>
-
-        {/* 중앙: 방 코드 라벨/값 */}
         <TitleBox>
           <Label>방 코드</Label>
           <Code>{codeToShow}</Code>
         </TitleBox>
       </TitleSection>
 
-      {/* === 본문: 큰 카드(외곽 + 디바이더만) === */}
+      {/*색상 선택 모달 구현위치*/}
+      {modalOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
+          display: 'hidden', placeItems: 'center', zIndex: 9999
+        }}
+          onClick={() => setModalOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ justifySelf: 'center', background: '#111', color: '#fff', padding: 24, borderRadius: 12 }}>
+            <p>플레이어 색상 선택 모달 구현 위치…</p>
+          </div>
+        </div>
+      )}
+
       <OuterCard>
-        <RowSpace />  {/* 위 슬롯 자리만 확보 */}
+        <SlotGrid>
+          {players.slice(0, 3).map((p) => (
+            <PlayerCard
+              key={p.id}
+              name={p.name}
+              team={p.team}
+              numTeams={NUM_TEAMS}
+              onTeamChange={(n) => handleTeamChange(p.id, n)}
+              onCardClick={() => setModalOpen(true)}
+            />
+          ))}
+        </SlotGrid>
         <InnerDivider />
-        <RowSpace />  {/* 아래 슬롯 자리만 확보 */}
+        <SlotGrid>
+          {players.slice(3, 6).map((p) => (
+            <PlayerCard
+              key={p.id}
+              name={p.name}
+              team={p.team}
+              numTeams={NUM_TEAMS}
+              onTeamChange={(n) => handleTeamChange(p.id, n)}
+              onCardClick={() => setModalOpen(true)}
+            />
+          ))}
+        </SlotGrid>
       </OuterCard>
 
-      <ActionButton >
-        시작하기
-      </ActionButton>
+      <ActionButton>시작하기</ActionButton>
     </Wrap>
   );
 };
 
 export default GameLobby;
 
-/* ================= styles ================ */
+/* ================= styles (기존 그대로) ================ */
 
 const Wrap = styled.main`
   min-height: 100vh;
-  background: #0b0a18; /* 배경 생략 */
+  background: #0b0a18;
   display: flex;
   flex-direction: column;
 `;
 
-/* 모달 헤더와 동일한 구조: relative 컨테이너 + absolute BackButton + 중앙 그리드 */
 const TitleSection = styled.header`
   position: relative;
   display: grid;
-  place-items: center;       /* 중앙 정렬 */
-  min-height: 120px;         /* 모달 타이틀 높이 */
+  place-items: center;
+  min-height: 120px;
   padding: 40px clamp(24px, 5vw, 64px);
 `;
 
@@ -90,18 +142,13 @@ const TextBackButton = styled(BackButton)`
   border: none;
   border-radius: 0;
   cursor: pointer;
-
   color: #8f8f8f;
   font-family: "Apple SD Gothic Neo", sans-serif;
   font-size: 40px;
   font-weight: 300;
   letter-spacing: -0.2px;
-
   &:hover { color: #fff; }
-  &:focus-visible { 
-  outline: none; box-shadow: 0 0 0 3px rgba(255,255,255,0.45); 
-  border-radius: 8px; 
-  }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255,255,255,0.45); border-radius: 8px; }
 `;
 
 const TitleBox = styled.div`
@@ -130,15 +177,18 @@ const OuterCard = styled.section`
   width: max(700px, min(69.0625vw, 1326px));
   margin: -10px auto 20px;
   padding: clamp(24px, 4vh, 40px) clamp(24px, 4vw, 44px);
-
   background: rgba(255,255,255,0.08);
   border: 2px solid rgba(255,255,255,0.25);
   border-radius: 36px;
   box-shadow: 0 24px 64px rgba(0,0,0,0.45);
 `;
 
-const RowSpace = styled.div`
-  height: clamp(160px, 24vh, 260px); /* 내부 슬롯 자리를 위한 공간만 */
+const SlotGrid = styled.div`
+  display: grid;
+  justify-items: center;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(60px, 2.6vw, 60px);
+  padding: 8px 0;
 `;
 
 const InnerDivider = styled.hr`
