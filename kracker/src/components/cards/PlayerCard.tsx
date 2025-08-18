@@ -9,6 +9,7 @@ type PlayerCardProps = {
     name: string;
     className?: string;
     onCardClick?: () => void;
+    playerColor?: string;
 };
 
 const CARD_W = 346;

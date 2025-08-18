@@ -1,25 +1,30 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
+
+import BgBase from "../assets/images/titleBackground.svg";
+
 import BackButton from "../components/buttons/BackButton";
 import ActionButton from "../components/buttons/ActionButton";
 import PlayerCard from "../components/cards/PlayerCard";
-import { UI_CONSTANTS } from "../game/config/GameConstants";
+import { PLAYER_CONSTANTS } from "../game/config/GameConstants";
+import ColorSelectModal from "../components/modals/ColorSelectModal";
 
 // ===== 모드 설정 =====
 const IS_TEAM_MODE = true;       // 팀전/개인전 전환용 (추후 룸 데이터에 연동)
 const NUM_TEAMS = IS_TEAM_MODE ? 2 : 0; // 3v3 => 2팀, 개인전 => 0이면 드롭다운 숨김
 
+const toCssHex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 // ===== 더미 플레이어 (team을 숫자로) =====
-type Player = { id: string; team: number; name: string; tone: string };
+type Player = { id: string; team: number; name: string; color: string };
 
 const initialPlayers: Player[] = [
-  { id: "p1", team: 1, name: "진짜로", tone: UI_CONSTANTS.COLORS.RED },
-  { id: "p2", team: 1, name: "코딩이", tone: UI_CONSTANTS.COLORS.ORANGE },
-  { id: "p3", team: 1, name: "너무어려워요", tone: UI_CONSTANTS.COLORS.GREEN },
-  { id: "p4", team: 2, name: "매일밤을", tone: UI_CONSTANTS.COLORS.CYAN },
-  { id: "p5", team: 2, name: "새고있어요", tone: UI_CONSTANTS.COLORS.PURPLE },
-  { id: "p6", team: 2, name: "다들화이팅", tone: UI_CONSTANTS.COLORS.PINK },
+  { id: "p1", team: 1, name: "진짜로",    color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary) },
+  { id: "p2", team: 1, name: "코딩이",    color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.주황색.primary) },
+  { id: "p3", team: 1, name: "너무어려워요", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.초록색.primary) },
+  { id: "p4", team: 2, name: "매일밤을",  color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.파란색.primary) },
+  { id: "p5", team: 2, name: "새고있어요", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.보라색.primary) },
+  { id: "p6", team: 2, name: "다들화이팅", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.핑크색.primary) },
 ];
 
 interface GameLobbyProps {
@@ -30,10 +35,21 @@ interface GameLobbyProps {
 const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) => {
   const navigate = useNavigate();
   const location = useLocation() as { state?: { room?: any } };
+  
+  const [selected, setSelected] = useState<Player | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
   const [room, setRoom] = useState<any>(location.state?.room ?? null);
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
+
+  const applyPlayerChange = (next: Player) => {
+    setPlayers(prev => prev.map(p => (p.id === next.id ? next : p)));
+  };
+
+  const openColorPicker = (p: Player) => {
+    setSelected(p);
+    setModalOpen(true);
+  };
 
   useEffect(() => {
     if (!room) {
@@ -63,16 +79,13 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
 
       {/*색상 선택 모달 구현위치*/}
       {modalOpen && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)',
-          display: 'hidden', placeItems: 'center', zIndex: 9999
-        }}
-          onClick={() => setModalOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()}
-            style={{ justifySelf: 'center', background: '#111', color: '#fff', padding: 24, borderRadius: 12 }}>
-            <p>플레이어 색상 선택 모달 구현 위치…</p>
-          </div>
-        </div>
+        <ColorSelectModal
+          open={modalOpen}
+          player={selected}
+          numTeams={NUM_TEAMS}
+          onClose={() => setModalOpen(false)}
+          onConfirm={(next) => applyPlayerChange(next)}
+        />
       )}
 
       <OuterCard>
@@ -84,7 +97,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
               team={p.team}
               numTeams={NUM_TEAMS}
               onTeamChange={(n) => handleTeamChange(p.id, n)}
-              onCardClick={() => setModalOpen(true)}
+              onCardClick={() => openColorPicker(p)}
             />
           ))}
         </SlotGrid>
@@ -97,7 +110,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
               team={p.team}
               numTeams={NUM_TEAMS}
               onTeamChange={(n) => handleTeamChange(p.id, n)}
-              onCardClick={() => setModalOpen(true)}
+              onCardClick={() => openColorPicker(p)}
             />
           ))}
         </SlotGrid>
@@ -114,9 +127,17 @@ export default GameLobby;
 
 const Wrap = styled.main`
   min-height: 100vh;
-  background: #0b0a18;
+  background: #090731;
   display: flex;
   flex-direction: column;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url(${BgBase}) center/cover no-repeat;
+    opacity: 0.1;
+  }
 `;
 
 const TitleSection = styled.header`
