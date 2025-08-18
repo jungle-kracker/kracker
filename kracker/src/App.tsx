@@ -1,23 +1,22 @@
-import React from "react";
-// import {
-//   BrowserRouter,
-//   Routes,
-//   Route,
-//   Link,
-//   NavLink,
-//   Router,
-// } from "react-router-dom";
-// import logo from "./logo.svg";
-// import "./App.css";
-// import ModalTest from "./pages/ModalTest";
-// import Main from "./pages/Main";
-import RoundsGame from "./components/RoundsGame";
+import React from 'react';
+import { BrowserRouter, Routes, Route, Link, NavLink, Router } from 'react-router-dom';
+import './App.css';
+import ModalTest from './pages/ModalTest';
+import Home from './pages/Home';
+import GameLobby from './pages/GameLobby';
+import { BgmProvider } from './providers/BgmProvider';
 
 function App() {
   return (
-    <div className="App">
-      <RoundsGame />
-    </div>
+    <BrowserRouter>
+      <BgmProvider>
+        <Routes>
+          <Route path='/test' element={<ModalTest />} />
+          <Route path='/' element={<Home />} />
+          <Route path='/lobby' element={<GameLobby />} />
+        </Routes>
+      </BgmProvider>
+    </BrowserRouter>
   );
 }
 
