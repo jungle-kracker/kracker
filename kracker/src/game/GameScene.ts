@@ -103,6 +103,10 @@ export default class GameScene extends Phaser.Scene {
       // 플레이어 생성
       this.createPlayer(data?.spawn);
       this.player.setCollisionSystem(this.collisionSystem);
+      
+      // 추가: CollisionSystem에도 플레이어를 알려줌
+      this.collisionSystem.setPlayer(this.player);
+
       // 추가 데이터 처리
       this.processAdditionalData(data);
 

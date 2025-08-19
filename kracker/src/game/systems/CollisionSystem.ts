@@ -21,6 +21,8 @@ export class CollisionSystem {
   private readonly EPS = 0.1; // 더 큰 여유값
   private readonly SPAWN_SAFETY_DISTANCE = 10; // 스폰 시 안전 거리
 
+  private player?: any;
+
   constructor(
     scene: Phaser.Scene,
     bulletGroup: Phaser.Physics.Arcade.Group,
@@ -45,6 +47,10 @@ export class CollisionSystem {
 
   public getPlatformGroup(): Phaser.Physics.Arcade.StaticGroup {
     return this.platformGroup;
+  }
+
+  public setPlayer(player: any): void {
+    this.player = player;
   }
 
   destroy() {
@@ -147,6 +153,52 @@ export class CollisionSystem {
         b.setData("__prevY", curY);
         b.setData("__hitThisFrame", false);
         continue;
+      }
+
+      // 🔥 총알 ↔ 플레이어 충돌 체크 (원-원)
+      if (this.player && typeof this.player.getPosition === "function") {
+        const pos = this.player.getPosition();
+        const pb = this.player.getBounds?.();
+        const playerRadius = pb?.radius ?? 25; // 플레이어 반경(기본값 25)
+
+        const dx = b.x - pos.x;
+        const dy = b.y - pos.y;
+        const bulletR = this.getBulletRadius(b);
+        const rSum = playerRadius + bulletR;
+
+        if (dx * dx + dy * dy <= rSum * rSum) {
+          // 한 프레임 중복 처리 방지
+          b.setData("__hitThisFrame", true);
+
+          // 데미지 가져오기
+          const bulletRef = b.getData("__bulletRef");
+          const dmg =
+            bulletRef && typeof bulletRef.getConfig === "function"
+              ? bulletRef.getConfig().damage
+              : 10;
+
+          // 플레이어에 데미지 적용
+          try {
+            this.player.takeDamage?.(dmg);
+          } catch (e) {
+            console.warn("player.takeDamage 호출 실패:", e);
+          }
+
+          // 총알 폭발/제거
+          try {
+            if (bulletRef && typeof bulletRef.hit === "function") {
+              bulletRef.hit(b.x, b.y);
+            } else {
+              b.destroy(true);
+            }
+          } catch (e) {
+            console.warn("bullet.hit/destroy 실패:", e);
+            b.destroy(true);
+          }
+
+          // 이 총알은 처리 완료 → 다음 총알로
+          continue;
+        }
       }
 
       // 🔥 더 정밀한 스윕 검사
