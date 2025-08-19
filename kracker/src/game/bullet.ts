@@ -1,6 +1,7 @@
-// src/game/bullet.ts - 완전히 수정된 총알 시스템
+// src/game/bullet.ts - 삼각형 테일 효과가 있는 총알 시스템
 import Phaser from "phaser";
 
+// ===== 총알 관련 인터페이스 =====
 export interface BulletConfig {
   speed?: number;
   damage?: number;
@@ -18,6 +19,38 @@ export interface BulletEvents {
   onDestroy?: () => void;
 }
 
+// ===== 무기 관련 인터페이스 =====
+export interface WeaponConfig {
+  fireRate: number;
+  damage: number;
+  accuracy: number;
+  recoil: number;
+  muzzleVelocity: number;
+  magazineSize?: number;
+  reloadTime?: number;
+  burstCount?: number;
+  burstDelay?: number;
+}
+
+export interface ShootingState {
+  lastShotTime: number;
+  currentAmmo: number;
+  isReloading: boolean;
+  reloadStartTime: number;
+  burstRemaining: number;
+  recoilAccumulation: number;
+  totalShotsFired: number;
+}
+
+export interface MuzzleFlashConfig {
+  enabled: boolean;
+  color: number;
+  intensity: number;
+  duration: number;
+  size: number;
+}
+
+// ===== 총알 클래스 =====
 export class Bullet {
   private scene: Phaser.Scene;
   public sprite!: Phaser.Physics.Arcade.Image;
@@ -30,7 +63,7 @@ export class Bullet {
 
   // 테일 효과를 위한 위치 히스토리
   private positionHistory: Array<{ x: number; y: number; time: number }> = [];
-  private maxHistoryLength: number = 8;
+  private maxHistoryLength: number = 12; // 삼각형 테일을 위해 더 많은 포인트
 
   // 시각적 효과
   private bodyCircle!: Phaser.GameObjects.Arc;
@@ -65,7 +98,7 @@ export class Bullet {
       radius: 6,
       color: 0xffaa00,
       tailColor: 0xff6600,
-      tailLength: 80,
+      tailLength: 2000,
       gravity: { x: 0, y: 300 },
       useWorldGravity: false,
       lifetime: 8000,
@@ -206,77 +239,48 @@ export class Bullet {
       `⚡ 물리 설정 중... 각도: ${((angle * 180) / Math.PI).toFixed(1)}도`
     );
 
-    // 속도 설정
+    // 초기 속도
     const vx = Math.cos(angle) * this.config.speed;
     const vy = Math.sin(angle) * this.config.speed;
     this.sprite.setVelocity(vx, vy);
-
     console.log(`🎯 초기 속도 설정: (${vx.toFixed(1)}, ${vy.toFixed(1)})`);
 
-    // 중력 설정 개선
+    body.setAllowGravity(true);
+
+    const worldG = this.scene.physics.world.gravity; // Phaser.Math.Vector2
+
     if (this.config.useWorldGravity) {
-      // 월드 중력만 사용
+      // 월드 중력만 사용 (총알에 별도 중력 추가 없음)
       body.setGravity(0, 0);
-      body.setAllowGravity(true);
-      console.log(`🌍 월드 중력 사용`);
+      console.log(`🌍 월드 중력 사용: (${worldG.x}, ${worldG.y})`);
     } else {
-      // 개별 중력만 사용
-      body.setAllowGravity(false); // 월드 중력 비활성화
-      body.setGravity(this.config.gravity.x, this.config.gravity.y);
+      // 개별 중력만 사용하고 싶음 → (월드 + 바디) = 원하는 중력 이 되도록 보정
+      const gx = this.config.gravity.x - worldG.x;
+      const gy = this.config.gravity.y - worldG.y;
+      body.setGravity(gx, gy);
       console.log(
-        `🎯 개별 중력 설정: (${this.config.gravity.x}, ${this.config.gravity.y})`
+        `🎯 개별 중력 사용: 목표=(${this.config.gravity.x}, ${this.config.gravity.y}), 보정값=(${gx}, ${gy})`
       );
     }
 
-    // 물리 속성 명시적 설정
+    // 기타 물리 속성
     body.setDrag(0, 0);
     body.setBounce(0, 0);
     body.setFriction(0, 0);
     body.setImmovable(false);
     body.setCollideWorldBounds(false);
-
-    // 바디가 움직일 수 있도록 설정
     (body as any).moves = true;
     body.enable = true;
 
-    // 바디 크기 정확히 설정
-    body.setSize(this.config.radius * 2, this.config.radius * 2);
+    // 원형 바디 + 사이즈 정합
+    const r = this.config.radius;
+    body.setCircle(r);
+    body.setSize(r * 2, r * 2); // setCircle이 내부적으로 offset을 조정하므로 유지
     body.updateFromGameObject();
 
     console.log(`✅ 물리 설정 완료`);
-
-    // 100ms 후 상태 체크
-    this.scene.time.delayedCall(100, () => {
-      this.checkPhysicsStatus();
-    });
   }
 
-  /**
-   * 물리 상태 체크
-   */
-  private checkPhysicsStatus(): void {
-    if (!this.sprite || !this.sprite.body) return;
-
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    const currentSpeed = body.velocity.length();
-
-    console.log(`📊 100ms 후 총알 상태:`);
-    console.log(`   - 속도: ${currentSpeed.toFixed(1)}`);
-    console.log(
-      `   - 위치: (${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`
-    );
-    console.log(`   - 중력: (${body.gravity.x}, ${body.gravity.y})`);
-    console.log(`   - 월드중력허용: ${body.allowGravity}`);
-
-    if (currentSpeed < 50) {
-      console.warn(`⚠️ 총알이 비정상적으로 느려졌습니다!`);
-      this.debugPhysics();
-    }
-  }
-
-  /**
-   * 수명 설정
-   */
   private setupLifetime(): void {
     this.scene.time.delayedCall(this.config.lifetime, () => {
       if (this._active) {
@@ -313,8 +317,8 @@ export class Bullet {
       this.sprite.setRotation(angle);
     }
 
-    // 테일 그리기
-    this.updateTail();
+    // 삼각형 테일 그리기
+    this.updateTriangularTail();
 
     // 속도 기반 시각적 효과
     this.updateVisualEffects();
@@ -336,57 +340,143 @@ export class Bullet {
     }
 
     // 오래된 히스토리 제거 (시간 기준)
-    const cutoffTime = now - 300; // 0.3초
+    const cutoffTime = now - 400; // 0.4초
     this.positionHistory = this.positionHistory.filter(
       (pos) => pos.time > cutoffTime
     );
   }
 
   /**
-   * 테일 업데이트
+   * 🔥 새로운 삼각형 테일 업데이트
    */
-  private updateTail(): void {
+  private updateTriangularTail(): void {
     if (!this.tail || !this.tail.scene) return;
 
     this.tail.clear();
 
-    if (this.positionHistory.length < 2) return;
+    if (this.positionHistory.length < 3) return;
 
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     const speed = body.velocity.length();
 
     // 속도가 낮으면 테일 표시 안 함
-    if (speed < 50) return;
+    if (speed < 100) return;
 
-    // 테일 그라디언트 그리기
     const positions = this.positionHistory.slice();
+    const currentPos = positions[positions.length - 1];
 
-    for (let i = 1; i < positions.length; i++) {
-      const prev = positions[i - 1];
-      const curr = positions[i];
+    // 속도 벡터 계산
+    const velocityAngle = Math.atan2(body.velocity.y, body.velocity.x);
 
-      // 알파값 계산 (뒤쪽일수록 투명)
-      const alpha = (i / positions.length) * 0.8;
+    // 테일 길이는 속도에 비례
+    const tailLength = Math.min(80, speed * 0.08);
+    const tailWidth = Math.min(20, this.config.radius * 2 + speed * 0.01);
 
-      // 두께 계산 (앞쪽일수록 두껍게)
-      const thickness = Math.max(
-        1,
-        (i / positions.length) * this.config.radius * 0.5
-      );
+    // 삼각형 테일 포인트들 계산
+    const trianglePoints: number[] = [];
 
-      // 색상 계산 (속도에 따라 변화)
-      const speedFactor = Math.min(1, speed / 1000);
-      const color = Phaser.Display.Color.Interpolate.ColorWithColor(
-        Phaser.Display.Color.ValueToColor(this.config.tailColor),
-        Phaser.Display.Color.ValueToColor(0xffffff),
-        1,
-        speedFactor
-      );
+    // 1. 총알 뒤쪽 중심점 (삼각형의 뾰족한 끝)
+    const tailEndX = currentPos.x - Math.cos(velocityAngle) * tailLength;
+    const tailEndY = currentPos.y - Math.sin(velocityAngle) * tailLength;
 
-      this.tail.lineStyle(thickness, color.color, alpha);
+    // 2. 총알 근처의 양쪽 날개 (삼각형의 밑변)
+    const wingOffset = tailWidth * 0.5;
+    const perpAngle = velocityAngle + Math.PI / 2;
+
+    const wing1X = currentPos.x + Math.cos(perpAngle) * wingOffset;
+    const wing1Y = currentPos.y + Math.sin(perpAngle) * wingOffset;
+
+    const wing2X = currentPos.x - Math.cos(perpAngle) * wingOffset;
+    const wing2Y = currentPos.y - Math.sin(perpAngle) * wingOffset;
+
+    // 삼각형 정점들
+    trianglePoints.push(
+      wing1X,
+      wing1Y, // 첫 번째 날개
+      wing2X,
+      wing2Y, // 두 번째 날개
+      tailEndX,
+      tailEndY // 뒤쪽 끝점
+    );
+
+    // 속도에 따른 색상 계산
+    const speedFactor = Math.min(1, speed / 1200);
+
+    // 색상을 직접 계산하여 hex 값으로 변환
+    const baseR = (this.config.tailColor >> 16) & 0xff;
+    const baseG = (this.config.tailColor >> 8) & 0xff;
+    const baseB = this.config.tailColor & 0xff;
+
+    const brightR = 255;
+    const brightG = 255;
+    const brightB = 255;
+
+    const blendFactor = speedFactor * 0.4;
+    const finalR = Math.round(baseR + (brightR - baseR) * blendFactor);
+    const finalG = Math.round(baseG + (brightG - baseG) * blendFactor);
+    const finalB = Math.round(baseB + (brightB - baseB) * blendFactor);
+
+    const blendedColor = (finalR << 16) | (finalG << 8) | finalB;
+
+    // 메인 삼각형 그리기
+    this.tail.fillStyle(blendedColor, 0.8);
+    this.tail.beginPath();
+    this.tail.moveTo(trianglePoints[0], trianglePoints[1]);
+    this.tail.lineTo(trianglePoints[2], trianglePoints[3]);
+    this.tail.lineTo(trianglePoints[4], trianglePoints[5]);
+    this.tail.closePath();
+    this.tail.fillPath();
+
+    // 추가 그라데이션 효과를 위한 더 작은 삼각형들
+    for (let i = 1; i <= 3; i++) {
+      const scale = 1 - i * 0.25;
+      const alpha = 0.6 - i * 0.15;
+
+      if (alpha <= 0) break;
+
+      const smallerTailLength = tailLength * scale;
+      const smallerTailWidth = tailWidth * scale;
+      const smallerWingOffset = smallerTailWidth * 0.5;
+
+      const smallTailEndX =
+        currentPos.x - Math.cos(velocityAngle) * smallerTailLength;
+      const smallTailEndY =
+        currentPos.y - Math.sin(velocityAngle) * smallerTailLength;
+
+      const smallWing1X =
+        currentPos.x + Math.cos(perpAngle) * smallerWingOffset;
+      const smallWing1Y =
+        currentPos.y + Math.sin(perpAngle) * smallerWingOffset;
+
+      const smallWing2X =
+        currentPos.x - Math.cos(perpAngle) * smallerWingOffset;
+      const smallWing2Y =
+        currentPos.y - Math.sin(perpAngle) * smallerWingOffset;
+
+      // 더 밝은 색으로 그라데이션
+      const innerBlendFactor = i * 0.2;
+      const innerR = Math.round(finalR + (brightR - finalR) * innerBlendFactor);
+      const innerG = Math.round(finalG + (brightG - finalG) * innerBlendFactor);
+      const innerB = Math.round(finalB + (brightB - finalB) * innerBlendFactor);
+      const innerColor = (innerR << 16) | (innerG << 8) | innerB;
+
+      this.tail.fillStyle(innerColor, alpha);
       this.tail.beginPath();
-      this.tail.moveTo(prev.x, prev.y);
-      this.tail.lineTo(curr.x, curr.y);
+      this.tail.moveTo(smallWing1X, smallWing1Y);
+      this.tail.lineTo(smallWing2X, smallWing2Y);
+      this.tail.lineTo(smallTailEndX, smallTailEndY);
+      this.tail.closePath();
+      this.tail.fillPath();
+    }
+
+    // 외곽선 추가 (선택적)
+    if (speed > 600) {
+      this.tail.lineStyle(1, 0xffffff, 0.3);
+      this.tail.beginPath();
+      this.tail.moveTo(trianglePoints[0], trianglePoints[1]);
+      this.tail.lineTo(trianglePoints[2], trianglePoints[3]);
+      this.tail.lineTo(trianglePoints[4], trianglePoints[5]);
+      this.tail.closePath();
       this.tail.strokePath();
     }
   }
@@ -411,13 +501,18 @@ export class Bullet {
     // 색상 변화 (속도가 빠르면 더 밝게)
     if (speed > 500) {
       const intensity = Math.min(1, (speed - 500) / 500);
-      const brightColor = Phaser.Display.Color.Interpolate.ColorWithColor(
-        Phaser.Display.Color.ValueToColor(this.config.color),
-        Phaser.Display.Color.ValueToColor(0xffffff),
-        1,
-        intensity * 0.3
-      );
-      this.bodyCircle.setFillStyle(brightColor.color);
+
+      // 현재 색상에서 흰색으로 블렌딩
+      const r = (this.config.color >> 16) & 0xff;
+      const g = (this.config.color >> 8) & 0xff;
+      const b = this.config.color & 0xff;
+
+      const brightR = Math.round(r + (255 - r) * intensity * 0.3);
+      const brightG = Math.round(g + (255 - g) * intensity * 0.3);
+      const brightB = Math.round(b + (255 - b) * intensity * 0.3);
+
+      const brightColor = (brightR << 16) | (brightG << 8) | brightB;
+      this.bodyCircle.setFillStyle(brightColor);
     } else {
       this.bodyCircle.setFillStyle(this.config.color);
     }
@@ -602,8 +697,8 @@ export class Bullet {
       radius: 6,
       color: 0xffaa00,
       tailColor: 0xff6600,
-      tailLength: 80,
-      gravity: { x: 0, y: 300 },
+      tailLength: 2000,
+      gravity: { x: 0, y: 900 },
       useWorldGravity: false,
       lifetime: 8000,
     };
@@ -633,5 +728,391 @@ export class Bullet {
       enable: body.enable,
       immovable: body.immovable,
     });
+  }
+}
+
+// ===== 단순화된 사격 함수 =====
+
+/**
+ * 🔥 완전히 단순화된 사격 함수
+ */
+export function doShoot(opts: {
+  scene: any;
+  gunX: number;
+  gunY: number;
+  targetX: number;
+  targetY: number;
+  platforms?: any[];
+  speed?: number;
+  cooldownMs: number;
+  lastShotTime: number;
+  recoilBase?: number;
+  wobbleBase?: number;
+  collisionSystem?: any;
+}): {
+  bullet: Bullet;
+  lastShotTime: number;
+  recoilAdd: number;
+  wobbleAdd: number;
+} {
+  const {
+    scene,
+    gunX,
+    gunY,
+    targetX,
+    targetY,
+    speed = 3000,
+    recoilBase = 1.5,
+    wobbleBase = 0.3,
+    collisionSystem,
+  } = opts;
+
+  console.log(`🔫 단순화된 사격:`);
+  console.log(`   총구: (${gunX.toFixed(1)}, ${gunY.toFixed(1)})`);
+  console.log(`   목표: (${targetX.toFixed(1)}, ${targetY.toFixed(1)})`);
+
+  // 1. 발사 각도 계산
+  const angle = Math.atan2(targetY - gunY, targetX - gunX);
+  console.log(`   각도: ${((angle * 180) / Math.PI).toFixed(1)}도`);
+
+  // 2. 총알 스폰 위치 - 총구에서 약간 앞으로
+  const spawnDistance = 10;
+  const spawnX = gunX + Math.cos(angle) * spawnDistance;
+  const spawnY = gunY + Math.sin(angle) * spawnDistance;
+
+  console.log(`   스폰: (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);
+
+  // 3. 총알 그룹 가져오기
+  let bulletGroup: Phaser.Physics.Arcade.Group;
+  if (collisionSystem && typeof collisionSystem.getBulletGroup === "function") {
+    bulletGroup = collisionSystem.getBulletGroup();
+  } else {
+    console.warn("⚠️ CollisionSystem 없음, 임시 그룹 생성");
+    bulletGroup = scene.physics.add.group({
+      runChildUpdate: true,
+      allowGravity: true,
+    });
+  }
+
+  // 4. 총알 생성
+  const bullet = new Bullet(scene, bulletGroup, spawnX, spawnY, angle, {
+    speed,
+    gravity: { x: 0, y: 1500 },
+    useWorldGravity: false,
+    radius: 6,
+    color: 0xffaa00,
+    tailColor: 0xff6600,
+    lifetime: 8000,
+  });
+
+  console.log(`✅ 총알 생성 완료: ${bullet.id}`);
+
+  return {
+    bullet,
+    lastShotTime: Date.now(),
+    recoilAdd: recoilBase,
+    wobbleAdd: wobbleBase,
+  };
+}
+
+/**
+ * 사격 가능 여부 체크
+ */
+export function canShoot(
+  lastShotTime: number,
+  cooldownMs: number,
+  now: number = Date.now()
+): boolean {
+  return now - lastShotTime >= cooldownMs;
+}
+
+// ===== 고급 사격 시스템 클래스 =====
+
+export class ShootingSystem {
+  private scene: Phaser.Scene;
+  private bullets: Map<string, Bullet> = new Map();
+  private weaponConfig: Required<WeaponConfig>;
+  private state: ShootingState;
+  private bulletGroup!: Phaser.Physics.Arcade.Group;
+  private muzzleFlashConfig: MuzzleFlashConfig;
+  private onShotCallback?: (recoil: number) => void;
+  private maxBullets: number = 30;
+
+  constructor(
+    scene: Phaser.Scene,
+    weaponConfig: WeaponConfig,
+    muzzleFlashConfig: Partial<MuzzleFlashConfig> = {}
+  ) {
+    this.scene = scene;
+
+    this.weaponConfig = {
+      magazineSize: 30,
+      reloadTime: 2000,
+      burstCount: 1,
+      burstDelay: 100,
+      ...weaponConfig,
+    };
+
+    this.muzzleFlashConfig = {
+      enabled: true,
+      color: 0xffaa00,
+      intensity: 0.8,
+      duration: 100,
+      size: 15,
+      ...muzzleFlashConfig,
+    };
+
+    this.state = {
+      lastShotTime: 0,
+      currentAmmo: this.weaponConfig.magazineSize,
+      isReloading: false,
+      reloadStartTime: 0,
+      burstRemaining: 0,
+      recoilAccumulation: 0,
+      totalShotsFired: 0,
+    };
+
+    this.setupPhysicsGroups();
+    this.setupUpdateLoop();
+  }
+
+  private setupPhysicsGroups(): void {
+    this.bulletGroup = this.scene.physics.add.group({
+      runChildUpdate: false,
+      allowGravity: true,
+    });
+  }
+
+  private setupUpdateLoop(): void {
+    this.scene.events.on("update", this.update, this);
+  }
+
+  public getBulletGroup(): Phaser.Physics.Arcade.Group {
+    return this.bulletGroup;
+  }
+
+  public tryShoot(
+    gunX: number,
+    gunY: number,
+    targetX: number,
+    targetY: number,
+    bulletConfig?: Partial<BulletConfig>
+  ): boolean {
+    const now = Date.now();
+
+    if (this.state.isReloading) {
+      if (now - this.state.reloadStartTime >= this.weaponConfig.reloadTime) {
+        this.finishReload();
+      } else {
+        return false;
+      }
+    }
+
+    if (this.state.currentAmmo <= 0) {
+      this.startReload();
+      return false;
+    }
+
+    const fireInterval = 60000 / this.weaponConfig.fireRate;
+    if (now - this.state.lastShotTime < fireInterval) {
+      return false;
+    }
+
+    this.fireBullet(gunX, gunY, targetX, targetY, bulletConfig);
+
+    this.state.lastShotTime = now;
+    this.state.currentAmmo--;
+    this.state.totalShotsFired++;
+    this.state.recoilAccumulation += this.weaponConfig.recoil;
+
+    return true;
+  }
+
+  private fireBullet(
+    gunX: number,
+    gunY: number,
+    targetX: number,
+    targetY: number,
+    bulletConfig?: Partial<BulletConfig>
+  ): void {
+    // doShoot 사용해서 단순화
+    const shot = doShoot({
+      scene: this.scene,
+      gunX,
+      gunY,
+      targetX,
+      targetY,
+      speed: this.weaponConfig.muzzleVelocity,
+      cooldownMs: 0, // ShootingSystem에서는 별도 관리
+      lastShotTime: 0,
+      recoilBase: this.weaponConfig.recoil,
+      wobbleBase: 0.3,
+      collisionSystem: { getBulletGroup: () => this.bulletGroup },
+    });
+
+    this.bullets.set(shot.bullet.id, shot.bullet);
+    this.limitBulletCount();
+    this.createMuzzleFlash(gunX, gunY, shot.bullet.getConfig().speed);
+
+    this.onShotCallback?.(shot.recoilAdd);
+  }
+
+  private startReload(): void {
+    if (this.state.isReloading) return;
+    this.state.isReloading = true;
+    this.state.reloadStartTime = Date.now();
+  }
+
+  private finishReload(): void {
+    this.state.isReloading = false;
+    this.state.currentAmmo = this.weaponConfig.magazineSize;
+  }
+
+  private createMuzzleFlash(x: number, y: number, angle: number): void {
+    if (!this.muzzleFlashConfig.enabled) return;
+
+    const flash = this.scene.add.circle(
+      x,
+      y,
+      this.muzzleFlashConfig.size,
+      this.muzzleFlashConfig.color,
+      this.muzzleFlashConfig.intensity
+    );
+
+    flash.setDepth(100);
+
+    this.scene.tweens.add({
+      targets: flash,
+      scaleX: 0,
+      scaleY: 0,
+      alpha: 0,
+      duration: this.muzzleFlashConfig.duration,
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  private limitBulletCount(): void {
+    if (this.bullets.size > this.maxBullets) {
+      const bulletIds = Array.from(this.bullets.keys());
+      const oldest = bulletIds[0];
+      const bullet = this.bullets.get(oldest);
+      if (bullet) {
+        bullet.destroy();
+        this.bullets.delete(oldest);
+      }
+    }
+  }
+
+  private update = (): void => {
+    const bulletsToRemove: string[] = [];
+    this.bullets.forEach((bullet, id) => {
+      if (!bullet || !bullet.active) {
+        bulletsToRemove.push(id);
+      }
+    });
+
+    bulletsToRemove.forEach((id) => {
+      this.bullets.delete(id);
+    });
+
+    this.state.recoilAccumulation *= 0.95;
+    if (this.state.recoilAccumulation < 0.01) {
+      this.state.recoilAccumulation = 0;
+    }
+  };
+
+  // ===== 공개 메서드들 =====
+
+  public canShoot(): boolean {
+    const now = Date.now();
+    const fireInterval = 60000 / this.weaponConfig.fireRate;
+    return (
+      !this.state.isReloading &&
+      this.state.currentAmmo > 0 &&
+      now - this.state.lastShotTime >= fireInterval
+    );
+  }
+
+  public getCurrentAmmo(): number {
+    return this.state.currentAmmo;
+  }
+
+  public getMaxAmmo(): number {
+    return this.weaponConfig.magazineSize;
+  }
+
+  public isReloading(): boolean {
+    return this.state.isReloading;
+  }
+
+  public getBulletCount(): number {
+    return this.bullets.size;
+  }
+
+  public getRecoilAccumulation(): number {
+    return this.state.recoilAccumulation;
+  }
+
+  public getTotalShotsFired(): number {
+    return this.state.totalShotsFired;
+  }
+
+  public getWeaponConfig(): Readonly<Required<WeaponConfig>> {
+    return { ...this.weaponConfig };
+  }
+
+  public getState(): Readonly<ShootingState> {
+    return { ...this.state };
+  }
+
+  public setOnShotCallback(callback: (recoil: number) => void): void {
+    this.onShotCallback = callback;
+  }
+
+  public forceReload(): void {
+    this.startReload();
+  }
+
+  public clearAllBullets(): void {
+    this.bullets.forEach((bullet) => {
+      if (bullet && typeof bullet.destroy === "function") {
+        bullet.destroy();
+      }
+    });
+    this.bullets.clear();
+    this.bulletGroup.clear(true, false);
+  }
+
+  public updateBullets(): void {
+    this.bullets.forEach((bullet) => {
+      if (bullet && bullet.active) {
+        bullet.update();
+      }
+    });
+  }
+
+  public destroy(): void {
+    this.scene.events.off("update", this.update, this);
+    this.clearAllBullets();
+    if (this.bulletGroup) {
+      this.bulletGroup.destroy(true);
+    }
+  }
+
+  // ===== 디버깅 메서드들 =====
+
+  public debugInfo(): void {
+    console.log("🔫 ShootingSystem 상태:", {
+      ammo: `${this.state.currentAmmo}/${this.weaponConfig.magazineSize}`,
+      isReloading: this.state.isReloading,
+      bulletCount: this.bullets.size,
+      recoilAccumulation: this.state.recoilAccumulation.toFixed(2),
+      totalShots: this.state.totalShotsFired,
+      canShoot: this.canShoot(),
+    });
+  }
+
+  public getAllBullets(): Bullet[] {
+    return Array.from(this.bullets.values());
   }
 }

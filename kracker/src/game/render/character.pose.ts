@@ -91,8 +91,8 @@ export function updatePose(
   body.y = y + Math.cos(wobble * 1.5) * 0.5 + crouchOffset;
 
   // 스케일(웅크리기)
-  const scaleY = scaleOverride?.y ?? 1 - crouchHeight * 0.2;
-  const scaleX = scaleOverride?.x ?? 1 + crouchHeight * 0.1;
+  const scaleY = scaleOverride?.y ?? 1 - crouchHeight * 0.04;
+  const scaleX = scaleOverride?.x ?? 1 + crouchHeight * 0.005;
   body.setScale(scaleX, scaleY);
 
   // 색상 동기화(옵션)

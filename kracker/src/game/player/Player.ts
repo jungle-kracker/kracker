@@ -34,7 +34,7 @@ import {
   performWallJump,
 } from "../mechanics/wallgrab";
 
-import { canShoot, doShoot } from "../combat/shooting";
+import { canShoot, doShoot } from "../bullet";
 
 // 기존 config / Bullet 의존성은 유지
 import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../config";
