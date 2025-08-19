@@ -151,6 +151,120 @@ function getCurrentKeyframe(animationState: AnimationState): CharacterKeyframe {
 }
 
 /**
+ * 왼쪽 팔 조준 그리기 (완전히 새로운 로직)
+ */
+/**
+ * 왼쪽 팔 조준 그리기 (각도 제한 없음)
+ */
+function drawLeftArmAiming(
+  armGraphics: any,
+  shoulderX: number,
+  shoulderY: number,
+  mouseX: number,
+  mouseY: number,
+  color: number,
+  shootRecoil: number,
+  gunGraphics: any
+) {
+  const armLength = 25;
+  const recoilOffset = shootRecoil * 3;
+
+  // 마우스를 향한 각도 (제한 없음)
+  const dx = mouseX - shoulderX;
+  const dy = mouseY - shoulderY;
+  const angle = Math.atan2(dy, dx);
+
+  // 팔 끝 위치 계산
+  const armEndX = shoulderX + Math.cos(angle) * armLength + recoilOffset;
+  const armEndY = shoulderY + Math.sin(angle) * armLength;
+
+  // 제어점
+  const controlX = shoulderX + Math.cos(angle - 0.4) * (armLength * 0.6);
+  const controlY = shoulderY + Math.sin(angle - 0.4) * (armLength * 0.6);
+
+  // 팔 그리기
+  armGraphics.clear();
+  armGraphics.lineStyle(3, color);
+  armGraphics.beginPath();
+  drawCurve(
+    armGraphics,
+    shoulderX,
+    shoulderY,
+    controlX,
+    controlY,
+    armEndX,
+    armEndY
+  );
+  armGraphics.strokePath();
+
+  // 총 그리기
+  drawGun(
+    gunGraphics,
+    armEndX,
+    armEndY,
+    angle,
+    true,
+    { limbs: color } as CharacterColors,
+    shootRecoil
+  );
+}
+
+/**
+ * 오른쪽 팔 조준 그리기 (각도 제한 없음)
+ */
+function drawRightArmAiming(
+  armGraphics: any,
+  shoulderX: number,
+  shoulderY: number,
+  mouseX: number,
+  mouseY: number,
+  color: number,
+  shootRecoil: number,
+  gunGraphics: any
+) {
+  const armLength = 25;
+  const recoilOffset = shootRecoil * 3;
+
+  // 마우스를 향한 각도 (제한 없음)
+  const dx = mouseX - shoulderX;
+  const dy = mouseY - shoulderY;
+  const angle = Math.atan2(dy, dx);
+
+  // 팔 끝 위치 계산
+  const armEndX = shoulderX + Math.cos(angle) * armLength - recoilOffset;
+  const armEndY = shoulderY + Math.sin(angle) * armLength;
+
+  // 제어점
+  const controlX = shoulderX + Math.cos(angle + 0.4) * (armLength * 0.6);
+  const controlY = shoulderY + Math.sin(angle + 0.4) * (armLength * 0.6);
+
+  // 팔 그리기
+  armGraphics.clear();
+  armGraphics.lineStyle(3, color);
+  armGraphics.beginPath();
+  drawCurve(
+    armGraphics,
+    shoulderX,
+    shoulderY,
+    controlX,
+    controlY,
+    armEndX,
+    armEndY
+  );
+  armGraphics.strokePath();
+
+  // 총 그리기
+  drawGun(
+    gunGraphics,
+    armEndX,
+    armEndY,
+    angle,
+    false,
+    { limbs: color } as CharacterColors,
+    shootRecoil
+  );
+}
+/**
  * 메인 limbs 그리기 함수 - 새로운 키프레임 시스템 사용
  */
 export function drawLimbs(
@@ -358,20 +472,23 @@ function drawLimbsWithAiming(
     colors.limbs
   );
 
-  // 팔: 조준하는 팔은 마우스 방향, 반대팔은 키프레임
   if (isMouseOnRight) {
     // 오른팔로 조준
-    drawAimingArm(
+    const shoulderX = baseX + keyframe.rightArm.hip.x;
+    const shoulderY = baseY + keyframe.rightArm.hip.y + crouchOffset;
+
+    drawRightArmAiming(
       rightArm,
-      baseX + 10,
-      baseY + crouchOffset,
+      shoulderX,
+      shoulderY,
       mouseX,
       mouseY,
       colors.limbs,
       shootRecoil,
-      false,
       gun
     );
+
+    // 왼팔은 키프레임 사용
     drawLimb(
       leftArm,
       baseX + keyframe.leftArm.hip.x,
@@ -384,17 +501,21 @@ function drawLimbsWithAiming(
     );
   } else {
     // 왼팔로 조준
-    drawAimingArm(
+    const shoulderX = baseX + keyframe.leftArm.hip.x;
+    const shoulderY = baseY + keyframe.leftArm.hip.y + crouchOffset;
+
+    drawLeftArmAiming(
       leftArm,
-      baseX - 10,
-      baseY + crouchOffset,
+      shoulderX,
+      shoulderY,
       mouseX,
       mouseY,
       colors.limbs,
       shootRecoil,
-      true,
       gun
     );
+
+    // 오른팔은 키프레임 사용
     drawLimb(
       rightArm,
       baseX + keyframe.rightArm.hip.x,
@@ -406,76 +527,6 @@ function drawLimbsWithAiming(
       colors.limbs
     );
   }
-}
-
-/**
- * 조준하는 팔 그리기 (기존 로직 유지)
- */
-function drawAimingArm(
-  armGraphics: any,
-  shoulderX: number,
-  shoulderY: number,
-  mouseX: number,
-  mouseY: number,
-  color: number,
-  shootRecoil: number,
-  isLeftArm: boolean,
-  gunGraphics: any // gun을 파라미터로 받음
-) {
-  const armLength = 25;
-  const recoilOffset = shootRecoil * 3;
-
-  const dx = mouseX - shoulderX;
-  const dy = mouseY - shoulderY;
-  let angle = Math.atan2(dy, dx);
-
-  // 각도 제한
-  if (!isLeftArm) {
-    // 오른팔
-    if (angle > Math.PI / 2) angle = Math.PI / 2;
-    else if (angle < -Math.PI / 2) angle = -Math.PI / 2;
-  } else {
-    // 왼팔
-    if (angle > 0) angle = Math.max(angle, Math.PI / 2);
-    else angle = Math.min(angle, -Math.PI / 2);
-  }
-
-  const armEndX =
-    shoulderX +
-    Math.cos(angle) * armLength +
-    (isLeftArm ? recoilOffset : -recoilOffset);
-  const armEndY = shoulderY + Math.sin(angle) * armLength;
-
-  const controlX =
-    shoulderX + Math.cos(angle + (isLeftArm ? -0.3 : 0.3)) * (armLength * 0.6);
-  const controlY =
-    shoulderY + Math.sin(angle + (isLeftArm ? -0.3 : 0.3)) * (armLength * 0.6);
-
-  // 팔 그리기
-  armGraphics.clear();
-  armGraphics.lineStyle(3, color);
-  armGraphics.beginPath();
-  drawCurve(
-    armGraphics,
-    shoulderX,
-    shoulderY,
-    controlX,
-    controlY,
-    armEndX,
-    armEndY
-  );
-  armGraphics.strokePath();
-
-  // 총 그리기
-  drawGun(
-    gunGraphics,
-    armEndX,
-    armEndY,
-    angle,
-    isLeftArm,
-    { limbs: color } as CharacterColors,
-    shootRecoil
-  );
 }
 
 /**
