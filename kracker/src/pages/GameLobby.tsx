@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 
@@ -10,23 +10,19 @@ import ActionButton from "../components/buttons/ActionButton";
 import PlayerCard from "../components/cards/PlayerCard";
 import { PLAYER_CONSTANTS } from "../game/config/GameConstants";
 import ColorSelectModal from "../components/modals/ColorSelectModal";
-
+import { socket } from './../lib/socket';
 
 const toCssHex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
-// ===== 더미 플레이어 (team을 숫자로) =====
-type Player = { id: string; team: number; name: string; color: string };
 
-const initialPlayers: Player[] = [
-  { id: "p1", team: 1, name: "Player1", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary) },
-  { id: "p2", team: 2, name: "Player2", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.주황색.primary) },
-];
+// ✔ ColorSelectModal과 호환되도록 color는 항상 string
+type Player = { id: string; team: number; name: string; color: string };
 
 interface GameLobbyProps {
   roomCode?: string;
   onExit?: () => void;
 }
 
-const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) => {
+const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
   const navigate = useNavigate();
   const location = useLocation() as { state?: { room?: RoomSummary } };
 
@@ -34,24 +30,65 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
   const [modalOpen, setModalOpen] = useState(false);
 
   const [room, setRoom] = useState<RoomSummary | null>(location.state?.room ?? null);
-  const [players, setPlayers] = useState<Player[]>(initialPlayers);
 
-  // 방 정보가 있으면 그걸 신뢰, 없으면 기존 기본값으로 폴백
+  // 네비게이션 state로 전달된 players를 string color로 정규화하여 초기화
+  const [players, setPlayers] = useState<Player[]>(
+    () =>
+      (location.state?.room as any)?.players?.map((p: any) => ({
+        id: String(p.id),
+        team: typeof p.team === "number" ? p.team : 1,
+        name: p.nickname ?? p.name ?? "Player",
+        color:
+          typeof p.color === "string" && p.color.length > 0
+            ? p.color
+            : toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary),
+      })) ?? []
+  );
+
+  // 공통 정규화 함수(서버 응답/이벤트 수신 시 사용)
+  const normalizePlayer = useCallback((p: any): Player => {
+    return {
+      id: String(p.id),
+      team: Number.isFinite(p.team) ? p.team : 1,
+      name: p.nickname ?? p.name ?? "Player",
+      color:
+        typeof p.color === "string" && p.color.length > 0
+          ? p.color
+          : toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary),
+    };
+  }, []);
+
+  // 팀전 여부
   const isTeamMode = room?.gameMode ? room.gameMode === "팀전" : true;
   const NUM_TEAMS = isTeamMode ? 2 : 0;
-
   const TEAM_CAP = 3;
 
   const codeToShow = room?.roomId ?? roomCode;
 
-  // 팀 카운트/시작 버튼 조건도 팀전일 때만
+  // 팀 인원 카운트 및 과밀 체크
   const teamCounts = useMemo(() => {
     const acc: Record<number, number> = {};
     for (const p of players) acc[p.team] = (acc[p.team] ?? 0) + 1;
     return acc;
   }, [players]);
 
-  const overCapacity = isTeamMode && Object.values(teamCounts).some(c => c > TEAM_CAP);
+  const overCapacity = isTeamMode && Object.values(teamCounts).some((c) => c > TEAM_CAP);
+
+  // ===== 새로고침(서버 재조회) 함수 =====
+  const fetchRoomInfo = useCallback(() => {
+    const id = room?.roomId;
+    if (!id) return;
+    socket.emit("room:info", { roomId: id }, (res: any) => {
+      if (res?.ok && res.room) {
+        setRoom((prev) => ({ ...(prev ?? {}), ...res.room }));
+        setPlayers((res.room.players ?? []).map(normalizePlayer));
+      }
+    });
+  }, [room?.roomId, normalizePlayer]);
+
+  const handleRefreshClick = useCallback(() => {
+    fetchRoomInfo();
+  }, [fetchRoomInfo]);
 
   const applyPlayerChange = (next: Player) => {
     setPlayers(prev => prev.map(p => (p.id === next.id ? next : p)));
@@ -62,19 +99,78 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
     setModalOpen(true);
   };
 
+  // 로비 진입 시 room 캐시/복원
   useEffect(() => {
     if (!room) {
       const cached = sessionStorage.getItem("room:last");
       if (cached) {
-        try { setRoom(JSON.parse(cached)); } catch { /* noop */ }
+        try {
+          setRoom(JSON.parse(cached));
+        } catch { }
       }
+    } else {
+      sessionStorage.setItem("room:last", JSON.stringify(room));
     }
   }, [room]);
 
+  // 최초 동기화 + 소켓 이벤트 수신 시 자동 새로고침
+  useEffect(() => {
+    if (!room?.roomId) return;
+
+    // 최초 한번 상태 싱크
+    fetchRoomInfo();
+
+    // payload 기반의 빠른 업데이트(낙관적)
+    const onUpdate = (payload: any) => {
+      const list = payload?.players ?? payload?.room?.players;
+      if (list) {
+        setPlayers(list.map(normalizePlayer));
+      }
+    };
+
+    // 새 플레이어 접속/퇴장 시에는 권위 상태를 다시 조회(= "새로고침")
+    const onJoinedOrLeft = () => {
+      fetchRoomInfo();
+    };
+
+    socket.on("room:update", onUpdate);
+    socket.on("player:updated", onUpdate);
+
+    socket.on("player:joined", onJoinedOrLeft);
+    socket.on("player:left", onJoinedOrLeft);
+
+    return () => {
+      socket.off("room:update", onUpdate);
+      socket.off("player:updated", onUpdate);
+      socket.off("player:joined", onJoinedOrLeft);
+      socket.off("player:left", onJoinedOrLeft);
+    };
+  }, [room?.roomId, fetchRoomInfo, normalizePlayer]);
+
   const handleTeamChange = (id: string, nextTeam: number) => {
     if (NUM_TEAMS < 2) return; // 개인전이면 무시
-    setPlayers(prev => prev.map(p => p.id === id ? { ...p, team: nextTeam } : p));
+    setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, team: nextTeam } : p)));
+    // 필요 시 서버에도 반영: socket.emit("player:setTeam", { roomId: room?.roomId, playerId: id, team: nextTeam })
   };
+
+  const handleExit = () => {
+    socket.emit("room:leave", {}, () => {
+      sessionStorage.removeItem("room:last");
+      navigate("/");
+    });
+  };
+
+  useEffect(() => {
+    const onClosed = () => {
+      alert("방이 종료되었습니다.");
+      sessionStorage.removeItem("room:last");
+      navigate("/");
+    };
+    socket.on("room:closed", onClosed);
+    return () => {
+      socket.off("room:closed", onClosed);
+    };
+  }, [navigate]);
 
   const handleGameStart = () => {
     navigate('/game');
@@ -82,14 +178,22 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
 
   const isDisabled = overCapacity
 
+  // ===== blockedColors: 반드시 string[]로 보장 =====
+  const blockedColors = useMemo(
+    () => players.map((p) => p.color).filter((c): c is string => typeof c === "string" && c.length > 0),
+    [players]
+  );
+
   return (
     <Wrap>
       <TitleSection>
-        <TextBackButton onClick={onExit ?? (() => navigate("/"))} aria-label="나가기">나가기</TextBackButton>
+        <TextBackButton onClick={handleExit} aria-label="나가기">나가기</TextBackButton>
+
         <TitleBox>
           <Label>방 코드</Label>
           <Code>{codeToShow}</Code>
         </TitleBox>
+
       </TitleSection>
 
       {/*색상 선택 모달 구현위치*/}
@@ -100,11 +204,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
           numTeams={NUM_TEAMS}
           onClose={() => setModalOpen(false)}
           onConfirm={(next) => applyPlayerChange(next)}
-          blockedColors={
-            selected
-              ? players.filter(p => p.id !== selected.id).map(p => p.color)
-              : players.map(p => p.color)
-          }
+          blockedColors={selected ? blockedColors.filter((c) => c !== selected.color) : blockedColors}
         />
       )}
 

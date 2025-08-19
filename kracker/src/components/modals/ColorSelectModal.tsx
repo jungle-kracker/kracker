@@ -17,7 +17,7 @@ interface ColorSelectModalProps {
   blockedColors?: string[];
 }
 
-// 0xRRGGBB → "#RRGGBB"
+// 0xRRGGBB → "#RGGBB"
 const toCssHex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 
 const DEFAULT_PALETTE: string[] = [

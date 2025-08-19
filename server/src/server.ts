@@ -3,7 +3,6 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-
 type Team = "A" | "B";
 type Status = "waiting" | "playing";
 
@@ -15,12 +14,18 @@ type Player = {
   ready: boolean;
 };
 
+type Visibility = "public" | "private";
+
 type Room = {
   roomId: string;
   hostId: string;
   max: number;
   status: Status;
-  players: Record<string, Player>; // key = socket.id
+  players: Record<string, Player>;
+  // 추가
+  visibility: Visibility;        // 공개/비공개
+  roomName: string;              // 방 이름
+  gameMode: string;              // "팀전" 등
 };
 
 const app = express();
@@ -44,6 +49,10 @@ function safeRoomState(room: Room) {
     max: room.max,
     status: room.status,
     players,
+    // 추가
+    visibility: room.visibility,
+    roomName: room.roomName,
+    gameMode: room.gameMode,
   };
 }
 
@@ -56,7 +65,15 @@ io.on("connection", (socket) => {
   // 방 생성
   socket.on(
     "room:create",
-    (payload: { nickname: string; max: number }, ack?: Function) => {
+    (
+      payload: {
+        nickname: string;
+        max: number;
+        visibility?: Visibility;
+        roomName?: string;
+        gameMode?: string;
+      },
+      ack?: Function) => {
       const roomId = Math.random().toString(36).slice(2, 7).toUpperCase();
       const room: Room = {
         roomId,
@@ -64,6 +81,10 @@ io.on("connection", (socket) => {
         max: Math.max(2, Math.min(16, payload.max || 8)),
         status: "waiting",
         players: {},
+        // 기본값 지정
+        visibility: payload.visibility ?? "public",
+        roomName: (payload.roomName ?? "").trim() || "ROOM",
+        gameMode: (payload.gameMode ?? "").trim() || "팀전",
       };
       rooms.set(roomId, room);
 
@@ -85,18 +106,28 @@ io.on("connection", (socket) => {
     }
   );
 
-  // 방 목록
+  // 4) 방 목록: 공개방만 + 필드 포함
   socket.on("room:list", (_: {}, ack?: Function) => {
-    const list = [...rooms.values()].map((r) => ({
-      roomId: r.roomId,
-      max: r.max,
-      players: Object.values(r.players),
-      status: r.status,
-    }));
-    console.log(
-      `[ROOM LIST] requested by ${socket.id} -> ${list.length} rooms`
-    );
+    const list = [...rooms.values()]
+      .filter((r) => r.visibility === "public" && r.status === "waiting")
+      .map((r) => ({
+        roomId: r.roomId,
+        max: r.max,
+        players: Object.values(r.players),
+        status: r.status,
+        // 추가
+        visibility: r.visibility,
+        roomName: r.roomName,
+        gameMode: r.gameMode,
+      }));
     ack?.({ ok: true, rooms: list });
+  });
+
+  // 5) 방 정보 조회 (로비 새로고침용)
+  socket.on("room:info", (payload: { roomId: string }, ack?: Function) => {
+    const room = rooms.get(payload.roomId);
+    if (!room) return ack?.({ ok: false, error: "NOT_FOUND" });
+    ack?.({ ok: true, room: safeRoomState(room) });
   });
 
   // 방 참가
@@ -104,6 +135,7 @@ io.on("connection", (socket) => {
     "room:join",
     (payload: { roomId: string; nickname: string }, ack?: Function) => {
       const room = rooms.get(payload.roomId);
+
       if (!room) {
         console.log(
           `[ROOM JOIN FAIL] ${socket.id} -> ${payload.roomId} (NOT_FOUND)`
@@ -131,13 +163,15 @@ io.on("connection", (socket) => {
       };
 
       console.log(
-        `[ROOM JOIN] ${payload.nickname} (${socket.id}) -> ${payload.roomId} (${
-          Object.keys(room.players).length
+        `[ROOM JOIN] ${payload.nickname} (${socket.id}) -> ${payload.roomId} (${Object.keys(room.players).length
         }/${room.max})`
       );
 
       ack?.({ ok: true, room: safeRoomState(room) });
       io.to(room.roomId).emit("room:update", safeRoomState(room));
+      io.to(room.roomId).emit("player:joined", { id: socket.id });
+
+
     }
   );
 
@@ -158,8 +192,7 @@ io.on("connection", (socket) => {
 
     p.ready = !p.ready;
     console.log(
-      `[READY] ${p.nickname} (${socket.id}) -> ${rid} : ${
-        p.ready ? "ON" : "OFF"
+      `[READY] ${p.nickname} (${socket.id}) -> ${rid} : ${p.ready ? "ON" : "OFF"
       }`
     );
 
@@ -199,8 +232,7 @@ io.on("connection", (socket) => {
       }
 
       console.log(
-        `[SELECT] ${p.nickname} (${socket.id}) -> room ${rid} team=${
-          p.team ?? "-"
+        `[SELECT] ${p.nickname} (${socket.id}) -> room ${rid} team=${p.team ?? "-"
         } color=${p.color ?? "-"}`
       );
 
@@ -306,8 +338,12 @@ function leaveAllRooms(socket: any) {
     }
 
     socket.leave(rid);
-    if (rooms.has(rid)) io.to(rid).emit("room:update", safeRoomState(room));
-    else io.to(rid).emit("room:closed");
+    if (rooms.has(rid)) {
+      io.to(rid).emit("room:update", safeRoomState(room));
+      io.to(rid).emit("player:left", { id: socket.id });
+    } else {
+      io.to(rid).emit("room:closed");
+    }
     left.push(rid);
   }
   return left;
