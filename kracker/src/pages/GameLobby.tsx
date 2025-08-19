@@ -35,6 +35,12 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
 
   const [myId, setMyId] = useState<string | null>(socket.id ?? null);
 
+  //닉네임
+  const getSavedNickname = () =>
+    (localStorage.getItem("userNickname") || "").trim();
+
+  const isMe = (pid: string | null | undefined) => !!pid && pid === myId;
+
   // 네비게이션 state로 전달된 players를 string color로 정규화하여 초기화
   const [players, setPlayers] = useState<Player[]>(
     () =>
@@ -48,6 +54,35 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
             : DEFAULT_SKIN,
       })) ?? []
   );
+
+  const normalizeHex = (s: string) => {
+    const t = s.startsWith('#') ? s.slice(1) : s;
+    return `#${t.toUpperCase()}`;
+  };
+
+  const handleColorConfirm = (next: Player) => {
+    if (!room?.roomId) return;
+
+    // 1) 낙관적 업데이트 (바로 보이게)
+    const hex = normalizeHex(next.color);
+    setPlayers(prev => prev.map(p => (p.id === next.id ? { ...p, color: hex } : p)));
+
+    // 2) 서버에 반영
+    socket.emit("player:setColor", { roomId: room.roomId, color: hex }, (res: any) => {
+      if (!res?.ok) {
+        // 실패 시 서버 권위 상태로 리셋
+        fetchRoomInfo();
+        alert(
+          res?.error === "COLOR_TAKEN" ? "이미 사용 중인 색입니다." :
+            res?.error === "INVALID_COLOR" ? "잘못된 색 형식입니다. (#RRGGBB)" :
+              "색 변경에 실패했습니다."
+        );
+      } else {
+        // 성공 후에도 서버 상태로 한번 더 확정 (레이스 방지)
+        fetchRoomInfo();
+      }
+    });
+  };
 
   // 공통 정규화 함수(서버 응답/이벤트 수신 시 사용)
   const normalizePlayer = useCallback((p: any): Player => {
@@ -100,9 +135,22 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
     });
   }, [room?.roomId, normalizePlayer]);
 
-  const handleRefreshClick = useCallback(() => {
-    fetchRoomInfo();
-  }, [fetchRoomInfo]);
+  useEffect(() => {
+    if (!room?.roomId || !myId) return;
+    const nick = getSavedNickname();
+    if (!nick) return;
+
+    const me = players.find(p => p.id === myId);
+    if (!me || me.name === nick) return;
+
+    socket.emit(
+      "player:setNickname",
+      { roomId: room.roomId, nickname: nick },
+      (res: any) => {
+        if (res?.ok) fetchRoomInfo(); // 서버 권위 상태로 재싱크
+      }
+    );
+  }, [room?.roomId, myId, players, fetchRoomInfo]);
 
   const applyPlayerChange = (next: Player) => {
     setPlayers(prev => prev.map(p => (p.id === next.id ? next : p)));
@@ -243,7 +291,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
           player={selected}
           numTeams={NUM_TEAMS}
           onClose={() => setModalOpen(false)}
-          onConfirm={(next) => applyPlayerChange(next)}
+          onConfirm={handleColorConfirm}
           blockedColors={selected ? blockedColors.filter((c) => c !== selected.color) : blockedColors}
         />
       )}
@@ -277,7 +325,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
                   numTeams={NUM_TEAMS}
                   editable={p.id === myId}
                   onTeamChange={p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined}
-                  onCardClick={() => openColorPicker(p)}
+                  onCardClick={p.id === myId ? () => openColorPicker(p) : undefined}
                   playerColor={p.color}
                 />
               ))}
@@ -293,8 +341,9 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
                   name={p.name}
                   team={p.team}
                   numTeams={NUM_TEAMS}
-                  onTeamChange={(n) => handleTeamChange(p.id, n)}
-                  onCardClick={() => openColorPicker(p)}
+                  editable={p.id === myId}
+                 onTeamChange={p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined}
+                  onCardClick={p.id === myId ? () => openColorPicker(p) : undefined}
                   playerColor={p.color}
                 />
               ))}
@@ -309,8 +358,9 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
                   name={p.name}
                   team={p.team}
                   numTeams={NUM_TEAMS}
-                  onTeamChange={(n) => handleTeamChange(p.id, n)}
-                  onCardClick={() => openColorPicker(p)}
+                  editable={p.id === myId}
+                  onTeamChange={p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined}
+                  onCardClick={p.id === myId ? () => openColorPicker(p) : undefined}
                   playerColor={p.color}
                 />
               ))}

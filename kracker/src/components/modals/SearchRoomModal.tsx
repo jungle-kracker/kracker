@@ -15,7 +15,7 @@ interface SearchRoomModalProps {
 const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
   isOpen,
   onClose,
-  nickname = "Player",
+  nickname,
   onJoined,
 }) => {
   const [code, setCode] = useState("");
