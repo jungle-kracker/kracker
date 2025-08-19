@@ -126,17 +126,6 @@ export class ShootingManager {
       this.forceReload();
     });
 
-    // 스페이스바로도 재장전 가능
-    const spaceKey = this.scene.input.keyboard?.addKey("SPACE");
-    spaceKey?.on("down", () => {
-      if (
-        this.shootingSystem.getCurrentAmmo() < this.shootingSystem.getMaxAmmo()
-      ) {
-        Debug.log.info(LogCategory.INPUT, "스페이스바 재장전");
-        this.forceReload();
-      }
-    });
-
     Debug.log.info(LogCategory.INPUT, "사격 이벤트 설정 완료");
   }
 
