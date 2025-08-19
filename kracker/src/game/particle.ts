@@ -32,20 +32,20 @@ export class ParticleSystem {
 
     const emitter = this.scene.add.particles(x, y, "particle_circle", {
       // 한 번에 여러 개 뿌리기
-      quantity: { min: 8, max: 15 },
+      quantity: { min: 1, max: 2 },
 
       // 속도 (멀리 튀는 애 + 가까이 있는 애)
-      speed: { min: 80, max: 400 },
-      angle: { min: 180, max: 360 },
+      speed: { min: 10, max: 100 },
+      angle: { min: 90, max: 180 },
 
       // 중력 (밑으로 빨려 내려감)
-      gravityY: 600,
+      gravityY: -100,
 
       // 생존 시간
-      lifespan: { min: 400, max: 900 },
+      lifespan: { min: 400, max: 700 },
 
       // 크기 → 큰 거 + 작은 거 섞임
-      scale: { start: 1.2, end: 0 },
+      scale: { start: 2, end: 0 },
 
       // 투명도 → 서서히 사라짐
       alpha: { start: 1, end: 0 },
@@ -61,9 +61,117 @@ export class ParticleSystem {
     emitter.explode(Phaser.Math.Between(8, 15));
 
     // 2초 뒤 정리
-    this.scene.time.delayedCall(2000, () => emitter.destroy());
+    this.scene.time.delayedCall(1500, () => emitter.destroy());
   }
 
+  createJumpParticle(x: number, y: number) {
+    this.ensureParticleTexture(); // circle 텍스처 포함해둔 상태
+
+    const emitter = this.scene.add.particles(x, y, "particle_circle", {
+      // 한 번에 여러 개 뿌리기
+      quantity: { min: 1, max: 1 },
+
+      // 속도 (멀리 튀는 애 + 가까이 있는 애)
+      speed: { min: 10, max: 100 },
+      angle: { min: 240, max: 360 },
+
+      // 중력 (밑으로 빨려 내려감)
+      gravityY: -100,
+
+      // 생존 시간
+      lifespan: { min: 400, max: 700 },
+
+      // 크기 → 큰 거 + 작은 거 섞임
+      scale: { start: 2, end: 0 },
+
+      // 투명도 → 서서히 사라짐
+      alpha: { start: 1, end: 0 },
+
+      // 회전은 필요 없음 (원형이라 의미X)
+      rotate: 0,
+
+      // 한 번만 발사
+      emitting: false,
+    });
+
+    // 💥 폭발 실행
+    emitter.explode(Phaser.Math.Between(8, 15));
+
+    // 2초 뒤 정리
+    this.scene.time.delayedCall(1500, () => emitter.destroy());
+  }
+  createWallLeftJumpParticle(x: number, y: number) {
+    this.ensureParticleTexture(); // circle 텍스처 포함해둔 상태
+
+    const emitter = this.scene.add.particles(x, y, "particle_circle", {
+      // 한 번에 여러 개 뿌리기
+      quantity: { min: 1, max: 2 },
+
+      // 속도 (멀리 튀는 애 + 가까이 있는 애)
+      speed: { min: 10, max: 100 },
+      angle: { min: 90, max: 180 },
+
+      // 중력 (밑으로 빨려 내려감)
+      gravityY: -100,
+
+      // 생존 시간
+      lifespan: { min: 400, max: 700 },
+
+      // 크기 → 큰 거 + 작은 거 섞임
+      scale: { start: 2, end: 0 },
+
+      // 투명도 → 서서히 사라짐
+      alpha: { start: 1, end: 0 },
+
+      // 회전은 필요 없음 (원형이라 의미X)
+      rotate: 0,
+
+      // 한 번만 발사
+      emitting: false,
+    });
+
+    // 💥 폭발 실행
+    emitter.explode(Phaser.Math.Between(8, 15));
+
+    // 2초 뒤 정리
+    this.scene.time.delayedCall(1500, () => emitter.destroy());
+  }
+  createWallRightJumpParticle(x: number, y: number) {
+    this.ensureParticleTexture(); // circle 텍스처 포함해둔 상태
+
+    const emitter = this.scene.add.particles(x, y, "particle_circle", {
+      // 한 번에 여러 개 뿌리기
+      quantity: { min: 1, max: 2 },
+
+      // 속도 (멀리 튀는 애 + 가까이 있는 애)
+      speed: { min: 10, max: 100 },
+      angle: { min: 270, max: 360 },
+
+      // 중력 (밑으로 빨려 내려감)
+      gravityY: -100,
+
+      // 생존 시간
+      lifespan: { min: 400, max: 700 },
+
+      // 크기 → 큰 거 + 작은 거 섞임
+      scale: { start: 2, end: 0 },
+
+      // 투명도 → 서서히 사라짐
+      alpha: { start: 1, end: 0 },
+
+      // 회전은 필요 없음 (원형이라 의미X)
+      rotate: 0,
+
+      // 한 번만 발사
+      emitting: false,
+    });
+
+    // 💥 폭발 실행
+    emitter.explode(Phaser.Math.Between(8, 15));
+
+    // 2초 뒤 정리
+    this.scene.time.delayedCall(1500, () => emitter.destroy());
+  }
   // 사각형 파티클 텍스처 생성
   private ensureParticleTexture() {
     // 이미 circle 텍스처가 있으면 다시 안만듦
@@ -84,7 +192,7 @@ export class ParticleSystem {
 
     // 기본 파티클 (랜덤색상용)
     graphics.clear();
-    graphics.fillStyle(0xff6644, 1);
+    graphics.fillStyle(0xee9841, 1);
     graphics.fillCircle(5, 5, 5);
     graphics.generateTexture("particle_circle", 10, 10);
 
