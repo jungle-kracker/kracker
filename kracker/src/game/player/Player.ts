@@ -9,6 +9,8 @@ import {
   WallGrabState,
 } from "../types/player.types";
 
+import { ParticleSystem } from "../particle";
+
 import {
   createCharacter,
   destroyCharacter,
@@ -40,6 +42,8 @@ import { Bullet } from "../bullet";
 export default class Player {
   // Phaser scene
   private scene: any;
+
+  private particleSystem!: ParticleSystem;
 
   // 그래픽 참조
   private gfx!: GfxRefs;
@@ -123,6 +127,7 @@ export default class Player {
 
     this.colorPreset = preset;
     this.colors = (CHARACTER_PRESETS as any)[preset] as CharacterColors;
+    this.particleSystem = new ParticleSystem(this.scene, false);
 
     console.log(`🎮 플레이어 생성 중... 위치: (${x}, ${y})`);
 
@@ -370,6 +375,7 @@ export default class Player {
         this.isJumping = true;
         this.isGrounded = false;
         this.wobble += 1;
+        this.particleSystem.createJumpParticle(this.x, this.y + 25);
       }
     } else {
       // 벽점프 입력
@@ -399,9 +405,13 @@ export default class Player {
         this.isJumping = true;
         this.wobble += 2.0;
         this.shootRecoil += 1.0;
-
-        // 연출(선택): 카메라 흔들기
-        this.scene.cameras?.main?.shake?.(90, 0.006);
+        if (this.wall.wallGrabDirection === "left") {
+          this.particleSystem.createWallLeftJumpParticle(this.x, this.y + 25);
+        } else if (this.wall.wallGrabDirection === "right") {
+          this.particleSystem.createWallRightJumpParticle(this.x, this.y + 25);
+        }
+        // // 연출(선택): 카메라 흔들기
+        // this.scene.cameras?.main?.shake?.(90, 0.006);
       }
     }
 
