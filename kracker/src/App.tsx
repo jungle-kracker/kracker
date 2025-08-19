@@ -7,9 +7,9 @@ import {
   Link,
   NavLink,
   Router,
+  Navigate,
 } from "react-router-dom";
 import "./App.css";
-import ModalTest from "./pages/ModalTest";
 import Home from "./pages/Home";
 import GameLobby from "./pages/GameLobby";
 import Game from "./components/RoundsGame";
@@ -36,7 +36,6 @@ function App() {
           />
         </div>
         <Routes>
-          <Route path="/test" element={<ModalTest />} />
           <Route path="/" element={<Home />} />
           <Route path="/lobby" element={<GameLobby />} />
           <Route path="/game" element={<Game />} />
