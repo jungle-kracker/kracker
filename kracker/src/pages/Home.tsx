@@ -11,9 +11,7 @@ import SearchRoomModal from "../components/modals/SearchRoomModal";
 import SettingModal from "../components/modals/SettingModal";
 
 import hoverSfx from "../assets/sfx/main1.mp3";
-
-const hoverAudio = new Audio(hoverSfx);
-hoverAudio.volume = 0.4;
+import { useAudio } from "../providers/BgmProvider";
 
 const Home: React.FC = () => {
   const [createRoomOpen, setCreateRoomOpen] = useState(false);
@@ -21,7 +19,8 @@ const Home: React.FC = () => {
   const [SettingOpen, setSettingOpen] = useState(false);
 
   const navigate = useNavigate();
-  const nickname = localStorage.getItem("nickname") || "Player";
+  const { playSfx } = useAudio();
+  const nickname = localStorage.getItem("userNickname") || "Player";
 
   return (
     <>
@@ -31,30 +30,21 @@ const Home: React.FC = () => {
           <Divider />
           <Menu>
             <MenuBtn
-              onMouseEnter={() => {
-                hoverAudio.currentTime = 0;
-                hoverAudio.play().catch(() => { });
-              }}
+              onMouseEnter={() => playSfx(hoverSfx)}
               onClick={() => setCreateRoomOpen(true)}
             >
               방 만들기
             </MenuBtn>
 
             <MenuBtn
-              onMouseEnter={() => {
-                hoverAudio.currentTime = 0;
-                hoverAudio.play().catch(() => { });
-              }}
+              onMouseEnter={() => playSfx(hoverSfx)}
               onClick={() => setsearchRoomOpen(true)}
             >
               게임 찾기
             </MenuBtn>
 
             <MenuBtn
-              onMouseEnter={() => {
-                hoverAudio.currentTime = 0;
-                hoverAudio.play().catch(() => { });
-              }}
+              onMouseEnter={() => playSfx(hoverSfx)}
               onClick={() => setSettingOpen(true)}
             >
               게임 설정
@@ -82,7 +72,7 @@ const Home: React.FC = () => {
                 gameMode: data.gameMode ?? "팀전",
                 players: (data.currentPlayers ?? []).map(p => ({
                   id: p.id,
-                  nickname: p.nick,
+                  nickname: p.nick ?? "Player",
                   ready: p.ready,
                   team: 1,
                   color: undefined,

@@ -12,3 +12,22 @@ export type RoomSummary = {
   visibility: "public" | "private";
   gameMode: string;
 };
+
+export type SafeRoomPlayer = {
+  id: string;
+  nickname: string;
+  color: string;             // ← string '#RRGGBB'
+  team: 'A' | 'B';
+  ready: boolean;
+};
+
+export type SafeRoomState = {
+  roomId: string;
+  max: number;
+  status: 'waiting' | 'playing' | 'ended';
+  visibility: 'public' | 'private';
+  roomName: string;
+  gameMode: string;
+  createdAt: number;
+  players: SafeRoomPlayer[];
+};

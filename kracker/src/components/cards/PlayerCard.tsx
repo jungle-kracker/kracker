@@ -56,8 +56,9 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
     setActive(idx);
     setOpen(false); // 선택 즉시 닫힘 → 화살표 복구
   };
-
-  return (
+  
+const clickable = !!onCardClick && editable;
+  return (  
     <Card
       className={className}
       aria-label={`${team ? `${team}팀` : ""} - ${name}`}

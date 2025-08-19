@@ -128,7 +128,7 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (audio.paused) {
       audio.muted = false; // just in case
-      audio.play().then(() => setIsBgmPlaying(true)).catch(() => {});
+      audio.play().then(() => setIsBgmPlaying(true)).catch(() => { });
     }
     // if already playing → no-op
   };
@@ -157,6 +157,16 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fadeAnimationIdRef.current = null;
     }
   };
+
+  // BgmProvider.tsx
+  useEffect(() => {
+    // master/sfx 변동 → 모든 SFX 채널 실시간 반영
+    const linear = mixToLinear(masterVolume, sfxVolume);
+    const pool = sfxChannelPoolRef.current;
+    for (const ch of pool) {
+      try { ch.volume = clamp01(linear); } catch { }
+    }
+  }, [masterVolume, sfxVolume]);
 
   // Page change → set first track via autoplay path (muted + src + load)
   useEffect(() => {
@@ -253,7 +263,7 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     channel.currentTime = 0;
     channel.muted = false;
     channel.volume = clamp01(linearVol);
-    channel.play().catch(() => {});
+    channel.play().catch(() => { });
   };
 
   // Public value (API 유지)
