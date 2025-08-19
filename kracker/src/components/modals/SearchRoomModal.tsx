@@ -60,10 +60,10 @@ const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
       if (res.ok) {
         // 서버에서 내려준 방 리스트를 SearchRoom[] 형식으로 매핑
         setRooms(
-          res.rooms.map((r: any) => ({
+          (res.rooms ?? []).map((r: any) => ({
             id: r.roomId,
-            isPublic: r.visibility === "public",
-            name: r.roomName ?? `방(${r.players.length}/${r.max})`,
+            isPublic: r.visibility === "public" || r.isPublic === true,
+            name: r.roomName ?? `방(${(r.players?.length ?? 0)}/${r.max ?? r.maxPlayers ?? "-"})`,
           }))
         );
       }

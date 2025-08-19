@@ -80,6 +80,13 @@ const Home: React.FC = () => {
                 roomName: data.roomName,
                 visibility: data.visibility ?? "public",
                 gameMode: data.gameMode ?? "팀전",
+                players: (data.currentPlayers ?? []).map(p => ({
+                  id: p.id,
+                  nickname: p.nick,
+                  ready: p.ready,
+                  team: 1,
+                  color: undefined,
+                }))
               },
             },
           });
@@ -106,6 +113,13 @@ const Home: React.FC = () => {
                     ? (room.isPublic ? "public" : "private")
                     : "public"),
                 gameMode: room.gameMode ?? "팀전",
+                players: (room.players ?? []).map((p: any) => ({
+                  id: p.id,
+                  nickname: p.nickname ?? p.nick ?? "Player",
+                  ready: !!p.ready,
+                  team: typeof p.team === "number" ? p.team : 1,
+                  color: p.color,
+                }))
               },
             },
           });

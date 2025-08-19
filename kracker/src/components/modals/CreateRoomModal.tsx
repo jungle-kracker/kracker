@@ -79,7 +79,13 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
 
     socket.emit(
       "room:create",
-      { nickname: nickname.trim() || "Player", max: wantMax },
+      { 
+        nickname: nickname.trim() || "Player", 
+        max: wantMax,
+        visibility,
+        roomName: roomName.trim() || "ROOM",
+        gameMode: gameMode.trim() || "팀전",
+      },
       (res: Ack<{ room: SafeRoomState }>) => {
         // 서버 ack 처리
         if (!res || !("ok" in res) || !res.ok || !res.room) {

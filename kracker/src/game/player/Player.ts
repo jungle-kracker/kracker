@@ -16,6 +16,7 @@ import {
   destroyCharacter,
   setBodyColor,
 } from "../render/character.core";
+
 import { updatePose } from "../render/character.pose";
 import { drawLimbs } from "../render/limbs";
 import { getGunPosition as computeGunPos } from "../render/gun";
