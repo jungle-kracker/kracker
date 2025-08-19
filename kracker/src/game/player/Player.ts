@@ -34,8 +34,6 @@ import {
   performWallJump,
 } from "../mechanics/wallgrab";
 
-import { canShoot, doShoot } from "../bullet";
-
 // 기존 config / Bullet 의존성은 유지
 import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../config";
 import { Bullet } from "../bullet";
@@ -83,8 +81,8 @@ export default class Player {
   // 웅크리기
   private isCrouching = false;
   private crouchHeight = 0;
-  private crouchTransitionSpeed = 0.15;
-  private baseCrouchOffset = 20;
+  private crouchTransitionSpeed = 0.3;
+  private baseCrouchOffset = 3;
 
   // 애니메이션 파라미터
   private lastMovementState: "idle" | "walking" | "crouching" | "wallgrab" =
@@ -119,7 +117,7 @@ export default class Player {
   private lastFalloutAt = 0;
 
   // Player 클래스 필드들 근처에 추가
-  private hpBarShowTimerMs = 0;       // >0 이면 머리 위 HP바 표시
+  private hpBarShowTimerMs = 0; // >0 이면 머리 위 HP바 표시
 
   constructor(
     scene: any,
@@ -148,7 +146,6 @@ export default class Player {
     // 포인터 (왼클릭 시 사격)
     this.pointerHandle = setupPointer(this.scene, {
       getCamera: () => this.scene.cameras?.main,
-      onShoot: () => this.tryShoot(),
     });
 
     // 총알 리소스
@@ -199,96 +196,6 @@ export default class Player {
     return k;
   }
 
-  private tryShoot() {
-    const now = Date.now();
-    if (!canShoot(this.lastShotTime, this.shootCooldown, now)) return;
-
-    console.log(`🔫 tryShoot 시작`);
-    console.log(`   플레이어: (${this.x}, ${this.y})`);
-    console.log(`   마우스: (${this.mouseX}, ${this.mouseY})`);
-
-    const gunPos = this.getGunPosition();
-
-    console.log(
-      `🔫 사용할 총구 위치: (${gunPos.x.toFixed(2)}, ${gunPos.y.toFixed(2)})`
-    );
-
-    // 🔥 추가 검증: 총구 위치가 합리적인지 확인
-    const distanceFromPlayer = Math.sqrt(
-      Math.pow(gunPos.x - this.x, 2) + Math.pow(gunPos.y - this.y, 2)
-    );
-
-    console.log(
-      `🔍 플레이어로부터 총구까지 거리: ${distanceFromPlayer.toFixed(1)}px`
-    );
-
-    if (distanceFromPlayer < 20 || distanceFromPlayer > 100) {
-      console.warn(
-        `⚠️  총구 거리가 이상함: ${distanceFromPlayer.toFixed(1)}px`
-      );
-    }
-
-    // 마우스 방향 검증
-    const expectedAngle = Math.atan2(
-      this.mouseY - this.y,
-      this.mouseX - this.x
-    );
-    const actualAngle = gunPos.angle;
-    const angleDiff = (Math.abs(expectedAngle - actualAngle) * 180) / Math.PI;
-
-    console.log(
-      `🔍 각도 검증: 예상=${((expectedAngle * 180) / Math.PI).toFixed(
-        1
-      )}도, 실제=${((actualAngle * 180) / Math.PI).toFixed(
-        1
-      )}도, 차이=${angleDiff.toFixed(1)}도`
-    );
-
-    const shot = doShoot({
-      scene: this.scene,
-      gunX: gunPos.x,
-      gunY: gunPos.y,
-      targetX: this.mouseX,
-      targetY: this.mouseY,
-      platforms: this.platforms,
-      speed: 900,
-      cooldownMs: this.shootCooldown,
-      lastShotTime: this.lastShotTime,
-      recoilBase: 1.5,
-      wobbleBase: 0.3,
-      collisionSystem: this.collisionSystem,
-    });
-
-    // 🔥 발사 직후 총알 위치 확인
-    console.log(`🚀 총알 생성됨: ID=${shot.bullet.id}`);
-    console.log(
-      `   총알 시작 위치: (${shot.bullet.x.toFixed(2)}, ${shot.bullet.y.toFixed(
-        2
-      )})`
-    );
-
-    // 100ms 후 총알 상태 확인
-    setTimeout(() => {
-      if (shot.bullet.active) {
-        console.log(
-          `📊 100ms 후 총알 위치: (${shot.bullet.x.toFixed(
-            2
-          )}, ${shot.bullet.y.toFixed(2)})`
-        );
-        const velocity = shot.bullet.getVelocity();
-        console.log(
-          `📊 총알 속도: (${velocity.x.toFixed(1)}, ${velocity.y.toFixed(1)})`
-        );
-      }
-    }, 100);
-
-    this.lastShotTime = shot.lastShotTime;
-    this.shootRecoil += shot.recoilAdd;
-    this.wobble += shot.wobbleAdd;
-    this.isShooting = true;
-    this.bullets.push(shot.bullet);
-  }
-
   private updateInvulnerability(deltaMs: number) {
     if (!this.invulnerable) {
       // 알파 원복
@@ -334,7 +241,7 @@ export default class Player {
     const dt = deltaMs / 1000;
 
     // 1) 무적 처리
-    this.updateInvulnerability(deltaMs*3);
+    this.updateInvulnerability(deltaMs * 3);
 
     // 2) 입력 스냅샷
     const key = this.readInputs();
@@ -824,7 +731,7 @@ export default class Player {
     if (now - this.lastFalloutAt < this.falloutCooldownMs) return; // 중복 방지
 
     const dmg = Math.max(1, Math.round(this.maxHealth * damageRatio));
-    this.takeDamage(dmg);   // ← 여기서 HP바 타이머가 켜짐
+    this.takeDamage(dmg); // ← 여기서 HP바 타이머가 켜짐
 
     this.velocityY = -Math.abs(bounceSpeed); // 위로 튕김
     this.isGrounded = false;

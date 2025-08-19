@@ -154,14 +154,14 @@ export function createCrouchIdleAnimation(facing: FacingDirection): Animation {
           ...baseCrouchKeyframe.leftLeg,
           hip: {
             ...baseCrouchKeyframe.leftLeg.hip,
-            y: baseCrouchKeyframe.leftLeg.hip.y - 0.3,
+            y: baseCrouchKeyframe.leftLeg.hip.y + 3,
           },
         },
         rightLeg: {
           ...baseCrouchKeyframe.rightLeg,
           hip: {
             ...baseCrouchKeyframe.rightLeg.hip,
-            y: baseCrouchKeyframe.rightLeg.hip.y - 0.3,
+            y: baseCrouchKeyframe.rightLeg.hip.y + 3,
           },
         },
       },

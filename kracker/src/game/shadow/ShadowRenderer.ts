@@ -1,4 +1,4 @@
-// src/game/shadow/ShadowRenderer.ts - 수정된 렌더링 로직
+// src/game/shadow/ShadowRenderer.ts - 블렌드 완전 제거 + 긴 사다리꼴
 import { Platform } from "../config";
 import { ShadowCalculator } from "./ShadowCalculator";
 import {
@@ -6,6 +6,7 @@ import {
   DEFAULT_SHADOW_CONFIG,
   CameraInfo,
   LightConfig,
+  ShadowPolygon,
 } from "./ShadowTypes";
 
 export class ShadowRenderer {
@@ -14,30 +15,82 @@ export class ShadowRenderer {
   private calculator: ShadowCalculator;
   private config: ShadowRendererConfig;
 
+  // 🎯 블렌드 완전 제거: 단일 통합 패스 렌더링
+  private shadowCanvas: HTMLCanvasElement | null = null;
+  private shadowCtx: CanvasRenderingContext2D | null = null;
+  private shadowTexture: Phaser.Textures.CanvasTexture | null = null;
+  private shadowImage: Phaser.GameObjects.Image | null = null;
+
   // 성능 최적화
   private lastUpdateTime: number = 0;
-  private updateThrottle: number = 33; // ~30fps
+  private updateThrottle: number = 100;
   private lastCameraHash: string = "";
 
   constructor(scene: Phaser.Scene, config?: Partial<ShadowRendererConfig>) {
     this.scene = scene;
-    this.config = { ...DEFAULT_SHADOW_CONFIG, ...config };
 
-    // Graphics 객체 생성
+    this.config = {
+      ...DEFAULT_SHADOW_CONFIG,
+      ...config,
+      light: {
+        ...DEFAULT_SHADOW_CONFIG.light,
+        angle: 90,
+        color: 0x1a1f26,
+        maxLength: 1500, // 🔧 더 긴 그림자
+        ...config?.light,
+      },
+    };
+
+    // 기본 Graphics 객체 (호환성)
     this.graphics = scene.add.graphics();
     this.graphics.setDepth(this.config.depth);
-
-    // 🔧 수정: scrollFactor를 1,1로 설정하여 카메라와 함께 움직이도록
     this.graphics.setScrollFactor(1, 1);
+
+    // 🎯 Canvas 기반 통합 그림자 시스템 초기화
+    this.initializeCanvasShadowSystem();
 
     // 계산기 생성
     this.calculator = new ShadowCalculator(this.config.light);
 
-    console.log("ShadowRenderer created with config:", this.config);
-    console.log("Graphics depth:", this.graphics.depth);
+    console.log("🎨 No-Blend Shadow Renderer created");
   }
 
-  /** 그림자 업데이트 (메인 호출 메서드) */
+  /** 🎯 Canvas 기반 블렌드 없는 그림자 시스템 */
+  private initializeCanvasShadowSystem(): void {
+    const width = this.scene.sys.game.canvas.width;
+    const height = this.scene.sys.game.canvas.height;
+
+    // Canvas 생성
+    this.shadowCanvas = document.createElement("canvas");
+    this.shadowCanvas.width = width;
+    this.shadowCanvas.height = height;
+    this.shadowCtx = this.shadowCanvas.getContext("2d");
+
+    if (!this.shadowCtx) {
+      console.error("❌ Canvas context 생성 실패");
+      return;
+    }
+
+    // Phaser 텍스처로 등록
+    const textureKey = "unified_shadow_texture";
+    if (this.scene.textures.exists(textureKey)) {
+      this.scene.textures.remove(textureKey);
+    }
+
+    this.shadowTexture = this.scene.textures.addCanvas(
+      textureKey,
+      this.shadowCanvas
+    );
+
+    // 그림자 이미지 생성
+    this.shadowImage = this.scene.add.image(0, 0, textureKey);
+    this.shadowImage.setOrigin(0, 0);
+    this.shadowImage.setDepth(this.config.depth);
+    this.shadowImage.setScrollFactor(0, 0); // 화면 고정
+    this.shadowImage.setAlpha(0.5); // 🔧 적절한 투명도
+  }
+
+  /** 그림자 업데이트 */
   public update(platforms: Platform[], camera: CameraInfo): void {
     if (!this.config.enabled || platforms.length === 0) {
       this.clear();
@@ -51,90 +104,134 @@ export class ShadowRenderer {
       now - this.lastUpdateTime < this.updateThrottle &&
       cameraHash === this.lastCameraHash
     ) {
-      return; // 스킵
+      return;
     }
 
     this.lastUpdateTime = now;
     this.lastCameraHash = cameraHash;
 
     const norm = platforms.map((p) => this.normalizePlatform(p as any));
-    this.renderShadows(norm, camera);
+    this.renderUnifiedShadows(norm, camera);
   }
 
-  /** 강제 업데이트 (맵 변경, 리사이즈 등) */
+  /** 강제 업데이트 */
   public forceUpdate(platforms: Platform[], camera: CameraInfo): void {
     if (!this.config.enabled) {
       this.clear();
       return;
     }
 
-    this.lastUpdateTime = 0; // throttle 리셋
+    this.lastUpdateTime = 0;
     this.lastCameraHash = "";
 
     const norm = platforms.map((p) => this.normalizePlatform(p as any));
-    this.renderShadows(norm, camera);
+    this.renderUnifiedShadows(norm, camera);
   }
 
-  /** 실제 그림자 렌더링 */
-  private renderShadows(platforms: Platform[], camera: CameraInfo): void {
-    // 기존 그림자 지우기
-    this.clear();
-
-    // 그림자 계산
-    const result = this.calculator.calculateShadows(platforms, camera);
-
-    if (result.polygons.length === 0) {
-      console.log("❌ 렌더링할 그림자가 없음");
+  /** 🎯 블렌드 완전 제거 통합 그림자 렌더링 */
+  private renderUnifiedShadows(
+    platforms: Platform[],
+    camera: CameraInfo
+  ): void {
+    if (!this.shadowCtx || !this.shadowTexture || !this.shadowImage) {
       return;
     }
 
-    // 🔧 수정: 더 진한 그림자로 변경
-    const shadowAlpha = 0.4;
-    this.graphics.fillStyle(this.config.light.color, shadowAlpha);
+    // 그림자 계산
+    const result = this.calculator.calculateShadows(platforms, camera);
+    if (result.polygons.length === 0) {
+      this.clear();
+      return;
+    }
 
-    // 각 그림자 폴리곤 그리기
+    // 🎯 Step 1: Canvas 클리어
+    this.shadowCtx.clearRect(
+      0,
+      0,
+      this.shadowCanvas!.width,
+      this.shadowCanvas!.height
+    );
+
+    // 🎯 Step 2: 단일 패스로 모든 그림자를 하나의 모양으로 그리기
+    this.shadowCtx.fillStyle = "#ffffff"; // 흰색 마스크
+    this.shadowCtx.globalCompositeOperation = "source-over"; // 기본 합성
+
+    // 🔧 방법 1: 모든 그림자를 한 번에 그리기 (블렌드 없음)
+    this.shadowCtx.beginPath();
+
+    let pathStarted = false;
     let renderedCount = 0;
-    for (let i = 0; i < result.polygons.length; i++) {
-      const polygon = result.polygons[i];
 
-      try {
-        if (polygon.points.length >= 8) {
-          // 🔧 수정: fillPath를 사용한 더 안정적인 렌더링
-          this.graphics.beginPath();
-          this.graphics.moveTo(polygon.points[0], polygon.points[1]);
+    for (const polygon of result.polygons) {
+      if (polygon.points.length >= 8) {
+        // 카메라 오프셋 적용
+        const offsetX = -camera.x;
+        const offsetY = -camera.y;
 
-          for (let j = 2; j < polygon.points.length; j += 2) {
-            this.graphics.lineTo(polygon.points[j], polygon.points[j + 1]);
-          }
-
-          this.graphics.closePath();
-          this.graphics.fillPath();
-
-          renderedCount++;
+        if (!pathStarted) {
+          this.shadowCtx.moveTo(
+            polygon.points[0] + offsetX,
+            polygon.points[1] + offsetY
+          );
+          pathStarted = true;
         } else {
-          console.warn(`폴리곤 ${i} 점 수 부족:`, polygon.points.length);
+          // 새로운 서브패스 시작
+          this.shadowCtx.moveTo(
+            polygon.points[0] + offsetX,
+            polygon.points[1] + offsetY
+          );
         }
-      } catch (error) {
-        console.error(`폴리곤 ${i} 렌더링 실패:`, error, polygon);
+
+        // 폴리곤 그리기
+        for (let j = 2; j < polygon.points.length; j += 2) {
+          this.shadowCtx.lineTo(
+            polygon.points[j] + offsetX,
+            polygon.points[j + 1] + offsetY
+          );
+        }
+
+        this.shadowCtx.closePath();
+        renderedCount++;
       }
     }
+
+    // 한 번에 모든 그림자 채우기
+    this.shadowCtx.fill();
+
+    // 🎯 Step 3: 텍스처 업데이트 및 색상 적용
+    this.shadowTexture.refresh();
+
+    // 그림자 색상 틴트 적용
+    this.shadowImage.setTint(this.config.light.color);
+    this.shadowImage.setVisible(true);
   }
 
   /** 그림자 지우기 */
   public clear(): void {
     this.graphics.clear();
+
+    if (this.shadowCtx && this.shadowCanvas) {
+      this.shadowCtx.clearRect(
+        0,
+        0,
+        this.shadowCanvas.width,
+        this.shadowCanvas.height
+      );
+      this.shadowTexture?.refresh();
+    }
+
+    if (this.shadowImage) {
+      this.shadowImage.setVisible(false);
+    }
   }
 
-  /** 빛 각도 변경 (동적 변경용) */
+  /** 빛 각도 변경 */
   public setLightAngle(angle: number): void {
     this.calculator.setLightAngle(angle);
     this.config.light.angle = angle;
 
-    // 즉시 업데이트 트리거
     this.lastUpdateTime = 0;
     this.lastCameraHash = "";
-
-    console.log(`Light angle changed to: ${angle}°`);
   }
 
   /** 빛 설정 변경 */
@@ -142,13 +239,10 @@ export class ShadowRenderer {
     this.config.light = { ...this.config.light, ...newConfig };
     this.calculator.updateLightConfig(this.config.light);
 
-    // 색상이 변경된 경우 즉시 반영
     if (newConfig.color !== undefined) {
       this.lastUpdateTime = 0;
       this.lastCameraHash = "";
     }
-
-    console.log("Light config updated:", this.config.light);
   }
 
   /** 그림자 시스템 활성화/비활성화 */
@@ -158,28 +252,49 @@ export class ShadowRenderer {
     if (!enabled) {
       this.clear();
     } else {
-      // 활성화할 때 즉시 업데이트
       this.lastUpdateTime = 0;
       this.lastCameraHash = "";
     }
 
-    console.log(`Shadow system ${enabled ? "enabled" : "disabled"}`);
+    if (this.shadowImage) {
+      this.shadowImage.setVisible(enabled);
+    }
+  }
+
+  /** 화면 크기 변경 처리 */
+  public handleResize(width: number, height: number): void {
+    // Canvas 크기 조정
+    if (this.shadowCanvas) {
+      this.shadowCanvas.width = width;
+      this.shadowCanvas.height = height;
+    }
+
+    // 그림자 이미지 위치 재조정
+    if (this.shadowImage) {
+      this.shadowImage.setPosition(0, 0);
+    }
+
+    this.lastUpdateTime = 0;
+    this.lastCameraHash = "";
   }
 
   /** 렌더링 depth 변경 */
   public setDepth(depth: number): void {
     this.config.depth = depth;
     this.graphics.setDepth(depth);
-    console.log(`Shadow depth changed to: ${depth}`);
+
+    if (this.shadowImage) {
+      this.shadowImage.setDepth(depth);
+    }
   }
 
+  // ===== 헬퍼 메서드들 =====
+
   private getCameraHash(camera: CameraInfo): string {
-    // 20픽셀 단위로 반올림해서 미세한 움직임 무시
     const x = Math.round(camera.x / 20) * 20;
     const y = Math.round(camera.y / 20) * 20;
     const w = Math.round(camera.width / 20) * 20;
     const h = Math.round(camera.height / 20) * 20;
-
     return `${x},${y},${w},${h}`;
   }
 
@@ -202,7 +317,6 @@ export class ShadowRenderer {
     return { ...p, x, y, width, height } as Platform;
   }
 
-  /** 현재 설정 반환 */
   public getConfig(): ShadowRendererConfig {
     return { ...this.config };
   }
@@ -212,6 +326,18 @@ export class ShadowRenderer {
     if (this.graphics) {
       this.graphics.destroy();
     }
-    console.log("ShadowRenderer destroyed");
+
+    if (this.shadowImage) {
+      this.shadowImage.destroy();
+      this.shadowImage = null;
+    }
+
+    if (this.shadowTexture) {
+      this.scene.textures.remove("unified_shadow_texture");
+      this.shadowTexture = null;
+    }
+
+    this.shadowCanvas = null;
+    this.shadowCtx = null;
   }
 }
