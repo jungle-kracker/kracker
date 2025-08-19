@@ -34,7 +34,7 @@ import {
   performWallJump,
 } from "../mechanics/wallgrab";
 
-import { canShoot, doShoot } from "../combat/shooting";
+import { canShoot, doShoot } from "../bullet";
 
 // 기존 config / Bullet 의존성은 유지
 import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../config";
@@ -114,6 +114,13 @@ export default class Player {
   private invulnerable = false;
   private invulnerabilityTimer = 0;
 
+  // 쿨다운(연속 판정 방지)
+  private falloutCooldownMs = 600;
+  private lastFalloutAt = 0;
+
+  // Player 클래스 필드들 근처에 추가
+  private hpBarShowTimerMs = 0;       // >0 이면 머리 위 HP바 표시
+
   constructor(
     scene: any,
     x: number,
@@ -159,6 +166,7 @@ export default class Player {
       health: this.health,
       maxHealth: this.maxHealth,
       isWallGrabbing: this.wall.isWallGrabbing,
+      showHeadHpBar: this.hpBarShowTimerMs > 0,
     });
 
     console.log(`✅ 플레이어 생성 완료`);
@@ -326,7 +334,7 @@ export default class Player {
     const dt = deltaMs / 1000;
 
     // 1) 무적 처리
-    this.updateInvulnerability(deltaMs);
+    this.updateInvulnerability(deltaMs*3);
 
     // 2) 입력 스냅샷
     const key = this.readInputs();
@@ -352,6 +360,11 @@ export default class Player {
     this.velocityX = wallStateOut.velocityX;
     this.velocityY = wallStateOut.velocityY;
     this.isGrounded = wallStateOut.isGrounded;
+
+    //Hp바 표시 타이머 감소
+    if (this.hpBarShowTimerMs > 0) {
+      this.hpBarShowTimerMs = Math.max(0, this.hpBarShowTimerMs - deltaMs);
+    }
 
     // 4) 웅크리기
     this.updateCrouch(key);
@@ -497,6 +510,7 @@ export default class Player {
       health: this.health,
       maxHealth: this.maxHealth,
       isWallGrabbing: this.wall.isWallGrabbing,
+      showHeadHpBar: this.hpBarShowTimerMs > 0,
     });
 
     drawLimbs(this.gfx, {
@@ -579,6 +593,7 @@ export default class Player {
       health: this.health,
       maxHealth: this.maxHealth,
       isWallGrabbing: this.wall.isWallGrabbing,
+      showHeadHpBar: this.hpBarShowTimerMs > 0,
     });
   }
 
@@ -626,9 +641,10 @@ export default class Player {
     this.health = Math.min(this.health, maxHealth);
   }
   public takeDamage(damage: number): void {
-    if (this.invulnerable) return;
+    if (this.invulnerable || damage <= 0) return;
     this.health = Math.max(0, this.health - damage);
     this.wobble += 1;
+    this.hpBarShowTimerMs = 5000; // 어떤 원인이든 실제로 HP가 감소했다면 5초간 HP바 표시
     this.setInvulnerable(1000);
   }
   public getHealth(): number {
@@ -800,6 +816,21 @@ export default class Player {
 
     this.bullets.forEach((b) => b.destroy());
     this.bullets = [];
+  }
+
+  // 화면 바닥 경계에 닿았을 때 호출
+  public applyBottomBoundaryHit(damageRatio = 0.3, bounceSpeed = 900): void {
+    const now = Date.now();
+    if (now - this.lastFalloutAt < this.falloutCooldownMs) return; // 중복 방지
+
+    const dmg = Math.max(1, Math.round(this.maxHealth * damageRatio));
+    this.takeDamage(dmg);   // ← 여기서 HP바 타이머가 켜짐
+
+    this.velocityY = -Math.abs(bounceSpeed); // 위로 튕김
+    this.isGrounded = false;
+    this.isJumping = true;
+
+    this.lastFalloutAt = now;
   }
 
   destroy(): void {

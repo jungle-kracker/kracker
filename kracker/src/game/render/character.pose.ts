@@ -66,10 +66,11 @@ export function updatePose(
     health: number;
     maxHealth: number;
     isWallGrabbing?: boolean;
+    showHeadHpBar?: boolean;              // Hp바
     scaleOverride?: { x: number; y: number }; // 옵션
   }
 ) {
-  const { body } = refs;
+  const { body, hpBarBg, hpBarFill } = refs;
   const {
     x,
     y,
@@ -81,6 +82,7 @@ export function updatePose(
     health,
     maxHealth,
     isWallGrabbing,
+    showHeadHpBar = false,
     scaleOverride,
   } = params;
 
@@ -102,4 +104,26 @@ export function updatePose(
 
   // 얼굴도 갱신
   updateFace(refs, { x, y, health, maxHealth, isWallGrabbing });
+
+  // ★ HP바 갱신 ----------------------------------------------------------
+  if (hpBarBg && hpBarFill) {
+    const visible = !!showHeadHpBar;
+    hpBarBg.setVisible(visible);
+    hpBarFill.setVisible(visible);
+
+    hpBarBg.clear();
+    hpBarFill.clear();
+
+    if (visible) {
+      const ratio = Math.max(0, Math.min(1, health / maxHealth));
+      const w = 48;
+      const h = 6;
+      const headOffsetY = -38;            // 머리 위 살짝
+      const left = x - w / 2;
+      const top = y + headOffsetY - h;
+
+      hpBarBg.fillStyle(0x000000, 0.55).fillRoundedRect(left, top, w, h, 3);
+      hpBarFill.fillStyle(0xff4d4d, 1).fillRoundedRect(left + 1, top + 1, (w - 2) * ratio, h - 2, 2);
+    }
+  }
 }

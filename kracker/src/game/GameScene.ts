@@ -647,6 +647,16 @@ export default class GameScene extends Phaser.Scene {
   ): void {
     const p: any = this.player;
 
+    // 바닥 경계 Y
+    const bottomY = mapSize.height - PLAYER_CONSTANTS.SIZE.HALF_HEIGHT;
+
+    // 바닥에 닿은 순간: 데미지 + 위로 튕김, 그리고 경계선 바로 안쪽으로 위치 조정
+    if (py >= bottomY) {
+      (this.player as any).applyBottomBoundaryHit?.(0.3, 600); // 30%, 600px/s 튕김
+      this.setPlayerPosition(px, bottomY - 1);                  // 경계선 살짝 위로
+      return;                                                   // 아래 '속도 0' 로직 건너뜀
+    }
+
     if (p.body) {
       // Phaser Physics Body
       if (px <= PLAYER_CONSTANTS.SIZE.HALF_WIDTH && p.body.velocity.x < 0) {
