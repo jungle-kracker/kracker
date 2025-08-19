@@ -4,13 +4,14 @@ import { ReactComponent as CaretIcon } from "../../assets/images/mdi_triangle.sv
 import BgBase from "../../assets/images/titleBackground.svg";
 
 type PlayerCardProps = {
-    team: number;
-    numTeams: number;
-    onTeamChange?: (n: number) => void;
-    name: string;
-    className?: string;
-    onCardClick?: () => void;
-    playerColor?: string;
+  team: number;
+  numTeams: number;
+  onTeamChange?: (n: number) => void;
+  name: string;
+  className?: string;
+  onCardClick?: () => void;
+  playerColor?: string;
+  editable?: boolean;
 };
 
 const CARD_W = 346;
@@ -19,126 +20,130 @@ const RADIUS = 30;
 const BORDER = 5;
 
 const PlayerCard: React.FC<PlayerCardProps> = ({
-    team, numTeams, onTeamChange, name, className, onCardClick, playerColor
+  team, numTeams, onTeamChange, name, className, onCardClick, playerColor, editable = true,
 }) => {
-    const [open, setOpen] = useState(false);
-    const [active, setActive] = useState<number>(Math.max(0, team - 1));
-    const wrapRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState<number>(Math.max(0, team - 1));
+  const wrapRef = useRef<HTMLDivElement>(null);
 
-    const options = Array.from({ length: Math.max(0, numTeams) }, (_, i) => i + 1);
+  const options = Array.from({ length: Math.max(0, numTeams) }, (_, i) => i + 1);
 
-    useEffect(() => {
-        const onDoc = (e: MouseEvent) => {
-            if (!wrapRef.current || wrapRef.current.contains(e.target as Node)) return;
-            setOpen(false);
-        };
-        document.addEventListener("mousedown", onDoc);
-        return () => document.removeEventListener("mousedown", onDoc);
-    }, []);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current || wrapRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
 
-    const onKeyDown: React.KeyboardEventHandler<HTMLButtonElement> = (e) => {
-        if (!open && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
-            e.preventDefault(); setOpen(true); return;
+  const onKeyDown: React.KeyboardEventHandler<HTMLButtonElement> = (e) => {
+    if (!open && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
+      e.preventDefault(); setOpen(true); return;
+    }
+    if (!open) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(options.length - 1, a + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
+    else if (e.key === "Enter") { e.preventDefault(); selectAt(active); }
+    else if (e.key === "Escape" || e.key === "Tab") { setOpen(false); }
+  };
+
+  const selectAt = (idx: number) => {
+    if (!editable) return;
+    const n = options[idx];
+    if (!n) return;
+    onTeamChange?.(n);
+    setActive(idx);
+    setOpen(false); // 선택 즉시 닫힘 → 화살표 복구
+  };
+
+  return (
+    <Card
+      className={className}
+      aria-label={`${team ? `${team}팀` : ""} - ${name}`}
+      role={onCardClick ? "button" : undefined}
+      tabIndex={onCardClick ? 0 : -1}
+      onClick={() => onCardClick?.()}
+      onKeyDown={(e) => {                           // ✅ Enter/Space로도 동작
+        if (!onCardClick) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onCardClick();
         }
-        if (!open) return;
-        if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(options.length - 1, a + 1)); }
-        else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
-        else if (e.key === "Enter") { e.preventDefault(); selectAt(active); }
-        else if (e.key === "Escape" || e.key === "Tab") { setOpen(false); }
-    };
-
-    const selectAt = (idx: number) => {
-        const n = options[idx];
-        if (!n) return;
-        onTeamChange?.(n);
-        setActive(idx);
-        setOpen(false); // 선택 즉시 닫힘 → 화살표 복구
-    };
-
-    return (
-        <Card
-            className={className}
-            aria-label={`${team ? `${team}팀` : ""} - ${name}`}
-            role={onCardClick ? "button" : undefined}
-            tabIndex={onCardClick ? 0 : -1}
-            onClick={() => onCardClick?.()}
-            onKeyDown={(e) => {                           // ✅ Enter/Space로도 동작
-                if (!onCardClick) return;
-                if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onCardClick();
-                }
-            }}
-            $clickable={!!onCardClick}
+      }}$clickable={!!onCardClick}
+      
+    >
+      {numTeams >= 2 && (
+        <TeamChip
+          onMouseDown={(e) => e.stopPropagation()} //카드 클릭 방지
+          onClick={(e) => e.stopPropagation()}     //카드 클릭 방지
+          style={{
+            pointerEvents: editable ? "auto" : "none", // 다른 카드에서 드롭다운 안 열림
+          }}
         >
-            {numTeams >= 2 && (
-                <TeamChip
-                    onMouseDown={(e) => e.stopPropagation()} //카드 클릭 방지
-                    onClick={(e) => e.stopPropagation()}     //카드 클릭 방지
+          {/* 1) 진짜 select는 시각적으로 숨김(값/접근성 유지) */}
+          <NativeSelect
+            value={String(team)}
+            onChange={(e) => { 
+              editable &&
+              onTeamChange?.(parseInt(e.target.value, 10));
+            }}
+            aria-label="팀 선택"
+            tabIndex={-1}
+          >
+            {options.map((n) => (
+              <option key={n} value={n}>{n}팀</option>
+            ))}
+          </NativeSelect>
+
+          {/* 2) 보이는 칩 버튼 */}
+          <ChipButton
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            onClick={() => editable && setOpen((o) => !o)}
+            onKeyDown={(e) => { if (editable) onKeyDown(e); }}
+          >
+            <ChipText>{team}팀</ChipText>
+            <ArrowIcon aria-hidden focusable="false" $open={open} />
+          </ChipButton>
+
+          {/* 3) 커스텀 옵션 리스트 (여기가 '옵션 리스트' 부분) */}
+          {open && (
+            <Menu role="listbox" aria-label="팀 선택">
+              {options.map((n, idx) => (
+                <MenuRow
+                  key={n}
+                  role="option"
+                  aria-selected={team === n}
+                  $selected={team === n}
+                  $active={idx === active}
+                  onMouseEnter={() => setActive(idx)}
+                  onClick={() => selectAt(idx)}
                 >
-                    {/* 1) 진짜 select는 시각적으로 숨김(값/접근성 유지) */}
-                    <NativeSelect
-                        value={String(team)}
-                        onChange={(e) => {
-                            onTeamChange?.(parseInt(e.target.value, 10));
-                            setOpen(false);
-                        }}
-                        aria-label="팀 선택"
-                        tabIndex={-1}
-                    >
-                        {options.map((n) => (
-                            <option key={n} value={n}>{n}팀</option>
-                        ))}
-                    </NativeSelect>
+                  {n}팀
+                </MenuRow>
+              ))}
+            </Menu>
+          )}
+        </TeamChip>
+      )}
+      <AvatarWrap aria-hidden>
+        <MiniFace $color={playerColor ?? "#888"}>
+          <MiniEyeWrap $side="left">
+            <MiniPupil />
+            <MiniHighlight />
+          </MiniEyeWrap>
+          <MiniEyeWrap $side="right">
+            <MiniPupil />
+            <MiniHighlight />
+          </MiniEyeWrap>
+        </MiniFace>
+      </AvatarWrap>
 
-                    {/* 2) 보이는 칩 버튼 */}
-                    <ChipButton
-                        type="button"
-                        aria-haspopup="listbox"
-                        aria-expanded={open}
-                        onClick={() => setOpen((o) => !o)}
-                        onKeyDown={onKeyDown}
-                    >
-                        <ChipText>{team}팀</ChipText>
-                        <ArrowIcon aria-hidden focusable="false" $open={open} />
-                    </ChipButton>
-
-                    {/* 3) 커스텀 옵션 리스트 (여기가 '옵션 리스트' 부분) */}
-                    {open && (
-                        <Menu role="listbox" aria-label="팀 선택">
-                            {options.map((n, idx) => (
-                                <MenuRow
-                                    key={n}
-                                    role="option"
-                                    aria-selected={team === n}
-                                    $selected={team === n}
-                                    $active={idx === active}
-                                    onMouseEnter={() => setActive(idx)}
-                                    onClick={() => selectAt(idx)}
-                                >
-                                    {n}팀
-                                </MenuRow>
-                            ))}
-                        </Menu>
-                    )}
-                </TeamChip>
-            )}
-            <AvatarWrap aria-hidden>
-                <MiniFace $color={playerColor ?? "#888"}>
-                    <MiniEyeWrap $side="left">
-                        <MiniPupil />
-                        <MiniHighlight />
-                    </MiniEyeWrap>
-                    <MiniEyeWrap $side="right">
-                        <MiniPupil />
-                        <MiniHighlight />
-                    </MiniEyeWrap>
-                </MiniFace>
-            </AvatarWrap>
-
-            <NameBar><Name>{name}</Name></NameBar>
-        </Card>
-    );
+      <NameBar><Name>{name}</Name></NameBar>
+    </Card>
+  );
 };
 
 export default PlayerCard;
@@ -158,8 +163,8 @@ const Card = styled.div<{ $clickable?: boolean }>`
 
   &:hover { 
   ${(p) => p.$clickable &&
-        "transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.35);"
-    }
+    "transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,.35);"
+  }
   &:focus-visible {
     outline: 3px solid rgba(255,255,255,.5);
     outline-offset: 2px;
@@ -247,8 +252,8 @@ const MenuRow = styled.button<{ $active?: boolean; $selected?: boolean }>`
   text-align: left;
   background:
     ${({ $selected, $active }) =>
-        $selected ? "rgba(255,255,255,0.16)" :
-            $active ? "rgba(255,255,255,0.10)" : "transparent"};
+    $selected ? "rgba(255,255,255,0.16)" :
+      $active ? "rgba(255,255,255,0.10)" : "transparent"};
   color: #e9ecf3;
   border: 0;
   cursor: pointer;

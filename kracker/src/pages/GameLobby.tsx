@@ -31,6 +31,10 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
 
   const [room, setRoom] = useState<RoomSummary | null>(location.state?.room ?? null);
 
+  const DEFAULT_SKIN = "#888888";
+
+  const [myId, setMyId] = useState<string | null>(socket.id ?? null);
+
   // 네비게이션 state로 전달된 players를 string color로 정규화하여 초기화
   const [players, setPlayers] = useState<Player[]>(
     () =>
@@ -41,20 +45,26 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
         color:
           typeof p.color === "string" && p.color.length > 0
             ? p.color
-            : toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary),
+            : DEFAULT_SKIN,
       })) ?? []
   );
 
   // 공통 정규화 함수(서버 응답/이벤트 수신 시 사용)
   const normalizePlayer = useCallback((p: any): Player => {
+    const toNumTeam = (t: any) => {
+      if (typeof t === "number") return t;
+      if (t === "A") return 1;
+      if (t === "B") return 2;
+      return 1;
+    };
     return {
       id: String(p.id),
-      team: Number.isFinite(p.team) ? p.team : 1,
+      team: toNumTeam(p.team),
       name: p.nickname ?? p.name ?? "Player",
       color:
         typeof p.color === "string" && p.color.length > 0
           ? p.color
-          : toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary),
+          : DEFAULT_SKIN,
     };
   }, []);
 
@@ -73,6 +83,10 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
   }, [players]);
 
   const overCapacity = isTeamMode && Object.values(teamCounts).some((c) => c > TEAM_CAP);
+
+  const allColored =
+    players.length > 0 &&
+    players.every((p) => typeof p.color === "string" && p.color.length > 0 && p.color !== DEFAULT_SKIN);
 
   // ===== 새로고침(서버 재조회) 함수 =====
   const fetchRoomInfo = useCallback(() => {
@@ -98,6 +112,15 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
     setSelected(p);
     setModalOpen(true);
   };
+
+  const team1Players = useMemo(
+    () => (NUM_TEAMS >= 2 ? players.filter(p => p.team === 1) : players),
+    [players, NUM_TEAMS]
+  );
+  const team2Players = useMemo(
+    () => (NUM_TEAMS >= 2 ? players.filter(p => p.team === 2) : []),
+    [players, NUM_TEAMS]
+  );
 
   // 로비 진입 시 room 캐시/복원
   useEffect(() => {
@@ -149,8 +172,25 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
 
   const handleTeamChange = (id: string, nextTeam: number) => {
     if (NUM_TEAMS < 2) return; // 개인전이면 무시
+    if (id !== myId) return;
+
+    const me = players.find(p => p.id === id);
+    if (!me) return;
+
+    // 이미 같은 팀이면 무시
+    if (me.team === nextTeam) return;
+
+    // 팀 정원 체크 (예: 3명)
+    const nextCount = teamCounts[nextTeam] ?? 0;
+    if (nextCount >= TEAM_CAP) {
+      alert(`${nextTeam}팀은 최대 ${TEAM_CAP}명까지 가능합니다.`);
+      return;
+    }
+
     setPlayers((prev) => prev.map((p) => (p.id === id ? { ...p, team: nextTeam } : p)));
-    // 필요 시 서버에도 반영: socket.emit("player:setTeam", { roomId: room?.roomId, playerId: id, team: nextTeam })
+    // 필요 시 서버에도 반영: 
+
+    socket.emit("player:setTeam", { roomId: room?.roomId, playerId: id, team: nextTeam === 1 ? "A" : "B" })
   };
 
   const handleExit = () => {
@@ -176,7 +216,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
     navigate('/game');
   }
 
-  const isDisabled = overCapacity
+  const isDisabled = overCapacity || !allColored;
 
   // ===== blockedColors: 반드시 string[]로 보장 =====
   const blockedColors = useMemo(
@@ -209,33 +249,74 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
       )}
 
       <OuterCard>
-        <SlotGrid>
-          {players.slice(0, 3).map((p) => (
-            <PlayerCard
-              key={p.id}
-              name={p.name}
-              team={p.team}
-              numTeams={NUM_TEAMS}
-              onTeamChange={(n) => handleTeamChange(p.id, n)}
-              onCardClick={() => openColorPicker(p)}
-              playerColor={p.color}
-            />
-          ))}
-        </SlotGrid>
-        <InnerDivider />
-        <SlotGrid>
-          {players.slice(3, 6).map((p) => (
-            <PlayerCard
-              key={p.id}
-              name={p.name}
-              team={p.team}
-              numTeams={NUM_TEAMS}
-              onTeamChange={(n) => handleTeamChange(p.id, n)}
-              onCardClick={() => openColorPicker(p)}
-              playerColor={p.color}
-            />
-          ))}
-        </SlotGrid>
+        {NUM_TEAMS >= 2 ? (
+          <>
+            <SlotGrid>
+              {team1Players.map((p) => (
+                <PlayerCard
+                  key={p.id}
+                  name={p.name}
+                  team={p.team}
+                  numTeams={NUM_TEAMS}
+                  editable={p.id === myId}
+                  onTeamChange={p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined}
+                  onCardClick={p.id === myId ? () => openColorPicker(p) : undefined}
+                  playerColor={p.color}
+                />
+              ))}
+            </SlotGrid>
+
+            <InnerDivider />
+
+            <SlotGrid>
+              {team2Players.map((p) => (
+                <PlayerCard
+                  key={p.id}
+                  name={p.name}
+                  team={p.team}
+                  numTeams={NUM_TEAMS}
+                  editable={p.id === myId}
+                  onTeamChange={p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined}
+                  onCardClick={() => openColorPicker(p)}
+                  playerColor={p.color}
+                />
+              ))}
+            </SlotGrid>
+          </>
+        ) : (
+          // 개인전 등 팀전이 아닐 때는 기존 형태 유지(원하면 제거 가능)
+          <>
+            <SlotGrid>
+              {players.slice(0, 3).map((p) => (
+                <PlayerCard
+                  key={p.id}
+                  name={p.name}
+                  team={p.team}
+                  numTeams={NUM_TEAMS}
+                  onTeamChange={(n) => handleTeamChange(p.id, n)}
+                  onCardClick={() => openColorPicker(p)}
+                  playerColor={p.color}
+                />
+              ))}
+            </SlotGrid>
+
+            <InnerDivider />
+
+            <SlotGrid>
+              {players.slice(3, 6).map((p) => (
+                <PlayerCard
+                  key={p.id}
+                  name={p.name}
+                  team={p.team}
+                  numTeams={NUM_TEAMS}
+                  onTeamChange={(n) => handleTeamChange(p.id, n)}
+                  onCardClick={() => openColorPicker(p)}
+                  playerColor={p.color}
+                />
+              ))}
+            </SlotGrid>
+          </>
+        )}
       </OuterCard>
 
       <ActionButton

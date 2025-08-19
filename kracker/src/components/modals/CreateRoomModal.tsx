@@ -9,6 +9,10 @@ export type PlayerSummary = { id: string; nick: string; ready: boolean }; // 기
 export type RoomStatus = "waiting" | "playing" | "ended";
 type Step = "select" | "form";
 
+type RoomCreateOk = { ok: true; room: SafeRoomState };
+type RoomCreateErr = { ok: false; error?: string; max?: number };
+type RoomCreateAck = RoomCreateOk | RoomCreateErr;
+
 export interface CreateRoomPayload {
   roomId: string;
   roomName: string;
@@ -79,22 +83,26 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
 
     socket.emit(
       "room:create",
-      { 
-        nickname: nickname.trim() || "Player", 
+      {
+        nickname: nickname.trim() || "Player",
         max: wantMax,
         visibility,
         roomName: roomName.trim() || "ROOM",
         gameMode: gameMode.trim() || "팀전",
       },
-      (res: Ack<{ room: SafeRoomState }>) => {
+      (res: RoomCreateAck) => {
         // 서버 ack 처리
-        if (!res || !("ok" in res) || !res.ok || !res.room) {
-          console.warn("방 생성 실패:", res);
-          onClose();
+        if (!res || !res.ok) {
+          if ((res as RoomCreateErr).error === "ROOM_LIMIT") {
+            alert(`현재 방은 최대 ${(res as RoomCreateErr).max ?? 5}개까지만 생성할 수 있습니다.`);
+          } else {
+            alert("방 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+          }
           return;
         }
 
         const srv = res.room;
+
         // 우리 UI용 payload로 매핑
         onCreate?.({
           roomId: srv.roomId,
