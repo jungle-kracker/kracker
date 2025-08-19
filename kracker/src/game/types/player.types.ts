@@ -51,6 +51,10 @@ export interface GfxRefs {
   leftLeg: any; // Phaser.GameObjects.Graphics
   rightLeg: any; // Phaser.GameObjects.Graphics
   gun: any; // Phaser.GameObjects.Graphics
+  
+  //머리 위 HP바
+  hpBarBg?: any;
+  hpBarFill?: any;
 }
 
 // 벽잡기 상태 블록(모듈 간 전달용, 필요 시 확장)

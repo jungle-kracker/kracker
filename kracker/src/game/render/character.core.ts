@@ -23,6 +23,12 @@ export function createCharacter(
   const body = scene.add.circle(x, y, 20, colors.head);
   const face = scene.add.graphics();
 
+  // HP바 그래픽
+  const hpBarBg = scene.add.graphics();
+  const hpBarFill = scene.add.graphics();
+  hpBarBg.setVisible(false);
+  hpBarFill.setVisible(false);
+
   // Depth (원본과 동일)
   body.setDepth(-3);
   face.setDepth(-3);
@@ -31,6 +37,8 @@ export function createCharacter(
   leftLeg.setDepth(-5);
   rightLeg.setDepth(-5);
   gun.setDepth(-5);
+  hpBarBg.setDepth(-2);
+  hpBarFill.setDepth(-2);
 
   const refs: GfxRefs = {
     body,
@@ -40,6 +48,8 @@ export function createCharacter(
     leftLeg,
     rightLeg,
     gun,
+    hpBarBg,
+    hpBarFill,
   };
 
   return refs;
@@ -56,6 +66,8 @@ export function destroyCharacter(refs: GfxRefs): void {
   tryDestroy(refs.rightLeg);
   tryDestroy(refs.face);
   tryDestroy(refs.body);
+  tryDestroy(refs.hpBarBg);
+  tryDestroy(refs.hpBarFill);
 }
 
 function tryDestroy(obj: any) {
