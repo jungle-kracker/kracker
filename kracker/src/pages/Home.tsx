@@ -33,7 +33,7 @@ const Home: React.FC = () => {
             <MenuBtn
               onMouseEnter={() => {
                 hoverAudio.currentTime = 0;
-                hoverAudio.play().catch(() => {});
+                hoverAudio.play().catch(() => { });
               }}
               onClick={() => setCreateRoomOpen(true)}
             >
@@ -43,7 +43,7 @@ const Home: React.FC = () => {
             <MenuBtn
               onMouseEnter={() => {
                 hoverAudio.currentTime = 0;
-                hoverAudio.play().catch(() => {});
+                hoverAudio.play().catch(() => { });
               }}
               onClick={() => setsearchRoomOpen(true)}
             >
@@ -53,7 +53,7 @@ const Home: React.FC = () => {
             <MenuBtn
               onMouseEnter={() => {
                 hoverAudio.currentTime = 0;
-                hoverAudio.play().catch(() => {});
+                hoverAudio.play().catch(() => { });
               }}
               onClick={() => setSettingOpen(true)}
             >
@@ -78,6 +78,8 @@ const Home: React.FC = () => {
                 maxPlayers: data.maxPlayers,
                 status: data.status,
                 roomName: data.roomName,
+                visibility: data.visibility ?? "public",
+                gameMode: data.gameMode ?? "팀전",
               },
             },
           });
@@ -95,8 +97,15 @@ const Home: React.FC = () => {
             state: {
               room: {
                 roomId: room.roomId,
-                maxPlayers: room.max,
+                maxPlayers: room.max ?? room.maxPlayers,
                 status: room.status,
+                roomName: room.roomName ?? room.name,
+                visibility:
+                  room.visibility ??
+                  (typeof room.isPublic === "boolean"
+                    ? (room.isPublic ? "public" : "private")
+                    : "public"),
+                gameMode: room.gameMode ?? "팀전",
               },
             },
           });

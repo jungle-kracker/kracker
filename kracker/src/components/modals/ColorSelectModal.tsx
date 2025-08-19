@@ -1,4 +1,3 @@
-// src/components/modals/ColorSelectModal.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 
@@ -9,186 +8,198 @@ import { PLAYER_CONSTANTS } from "../../game/config/GameConstants";
 type Player = { id: string; team: number; name: string; color: string };
 
 interface ColorSelectModalProps {
-    open: boolean;
-    player: Player | null;
-    numTeams?: number;
-    onClose: () => void;
-    onConfirm: (next: Player) => void;
-    palette?: string[];
+  open: boolean;
+  player: Player | null;
+  numTeams?: number;
+  onClose: () => void;
+  onConfirm: (next: Player) => void;
+  palette?: string[];
+  blockedColors?: string[];
 }
 
 // 0xRRGGBB → "#RRGGBB"
 const toCssHex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 
 const DEFAULT_PALETTE: string[] = [
-    toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary),
-    toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.주황색.primary),
-    toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.초록색.primary),
-    toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.파란색.primary),
-    toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.보라색.primary),
-    toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.핑크색.primary),
+  toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary),
+  toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.주황색.primary),
+  toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.초록색.primary),
+  toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.파란색.primary),
+  toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.보라색.primary),
+  toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.핑크색.primary),
 ];
 
-// === 방향 보정/스무딩 계수 ===
-// DIR_BIAS: 0(완전한 개별 추적) ~ 1(양쪽 눈이 같은 전역 방향으로 시선 고정)
-const DIR_BIAS = 0.45;     // 0=개별 눈만 추적, 1=전역 방향만 추적
-const PIVOT_SHIFT = 0.12;  // 눈 중심에서 아래로 내릴 비율 (눈 높이 대비)
-const DEADZONE = 0.08;     // 중심 데드존(타원 반경 대비 비율)
-const SMOOTH = 0.20;       // 위치 스무딩 정도 (0~1)
-
-// 원활한 가감속(중심에서 벗어날수록 더 멀리)
-const easeOut = (t: number) => 1 - Math.pow(1 - t, 2);
-
-// 각도 보간(랩어라운드 대응)
-const mixAngle = (a: number, b: number, t: number) => {
-    let d = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    return a + d * t;
-};
+// 전역 방향 기반 하이라이트 이동 튜닝
+const DEADZONE = 0.06;  // 중심 흔들림 방지 구간(0~1)
+const SMOOTH = 0.18;  // 위치 보간(0~1), 낮을수록 더 부드러움
+const easeOut = (t: number) => 1 - (1 - t) * (1 - t);
 
 const ColorSelectModal: React.FC<ColorSelectModalProps> = ({
-    open,
-    player,
-    numTeams = 0,
-    onClose,
-    onConfirm,
-    palette = DEFAULT_PALETTE,
+  open,
+  player,
+  numTeams = 0,
+  onClose,
+  onConfirm,
+  palette = DEFAULT_PALETTE,
+  blockedColors = [],
 }) => {
-    const safePlayer = useMemo(
-        () => player ?? { id: "", team: 0, name: "", color: palette[0] },
-        [player, palette]
-    );
-    const [picked, setPicked] = useState<string>(safePlayer.color);
+  const safePlayer = useMemo(
+    () => player ?? { id: "", team: 0, name: "", color: palette[0] },
+    [player, palette]
+  );
+  const [picked, setPicked] = useState<string>(safePlayer.color);
 
-    // ========= 마우스 트래킹 & 하이라이트 위치 =========
-    const faceRef = useRef<HTMLDivElement>(null);
-    const leftEyeRef = useRef<HTMLDivElement>(null);
-    const rightEyeRef = useRef<HTMLDivElement>(null);
+  // ===== 마우스 추적 & 하이라이트(동일 방향) 이동 =====
+  const faceRef = useRef<HTMLDivElement>(null);
+  const leftEyeRef = useRef<HTMLDivElement>(null);
+  const rightEyeRef = useRef<HTMLDivElement>(null);
+  const leftPupilRef = useRef<HTMLDivElement>(null);
+  const rightPupilRef = useRef<HTMLDivElement>(null);
 
-    const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
-    const [hlL, setHlL] = useState<{ leftPct: number; topPct: number }>({ leftPct: 30, topPct: 30 });
-    const [hlR, setHlR] = useState<{ leftPct: number; topPct: number }>({ leftPct: 30, topPct: 30 });
+  const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null);
+  const [hlL, setHlL] = useState<{ leftPct: number; topPct: number }>({ leftPct: 30, topPct: 30 });
+  const [hlR, setHlR] = useState<{ leftPct: number; topPct: number }>({ leftPct: 30, topPct: 30 });
 
-    useEffect(() => {
-        if (!mouse) return;
+  useEffect(() => {
+    if (!mouse) return;
 
-        // 전역(얼굴) 기준 방향 각도 계산
-        let globalAngle = 0;
-        const faceRect = faceRef.current?.getBoundingClientRect();
-        if (faceRect) {
-            const gcx = faceRect.left + faceRect.width / 2;
-            const gcy = faceRect.top + faceRect.height / 2;
-            globalAngle = Math.atan2(mouse.y - gcy, mouse.x - gcx);
-        }
+    const face = faceRef.current?.getBoundingClientRect();
+    if (!face) return;
 
-        type Pt = { leftPct: number; topPct: number };
+    // 전역(얼굴 중심) → 마우스 방향 단위벡터 (양쪽 눈에 동일 적용)
+    const fcx = face.left + face.width / 2;
+    const fcy = face.top + face.height / 2;
+    const vx = mouse.x - fcx;
+    const vy = mouse.y - fcy;
+    const vlen = Math.hypot(vx, vy) || 1;
+    const ux = vx / vlen;
+    const uy = vy / vlen;
 
-        const calc = (eyeEl: HTMLDivElement | null, prev: Pt): Pt => {
-            if (!eyeEl) return prev;
+    // 거리 기반 강도 (멀수록 더 바깥쪽)
+    const maxDist = face.width / 2;
+    let frac = Math.min(1, Math.max(0, Math.hypot(vx, vy) / maxDist));
+    if (frac < DEADZONE) frac = 0;
+    else frac = easeOut((frac - DEADZONE) / (1 - DEADZONE));
 
-            const rect = eyeEl.getBoundingClientRect();
+    type Pt = { leftPct: number; topPct: number };
 
-            // 기준점을 눈 중심에서 아래로 살짝 내림(PIVOT_SHIFT)
-            const cx = rect.left + rect.width / 2;
-            const cy = rect.top + rect.height / 2 + rect.height * PIVOT_SHIFT;
+    const calc = (pupilEl: HTMLDivElement | null, prev: Pt): Pt => {
+      if (!pupilEl) return prev;
 
-            // 하이라이트 반지름 r = (눈 가로의 1/3)/2 = w/6
-            const r = rect.width / 6;
+      const rect = pupilEl.getBoundingClientRect();
 
-            // 하이라이트가 밖으로 나가지 않도록 r만큼 축소된 타원 반경
-            const a = Math.max(1, rect.width / 2 - r);
-            const b = Math.max(1, rect.height / 2 - r);
+      // 하이라이트 반지름 r = (눈 가로의 1/3)/2 = w/6
+      const r = rect.width / 6;
 
-            // 로컬(해당 눈) 기준 마우스 벡터
-            const dx = mouse.x - cx;
-            const dy = mouse.y - cy;
+      // 하이라이트가 안 벗어나도록 r만큼 축소된 타원 반경
+      const a = Math.max(1, rect.width / 2 - r);
+      const b = Math.max(1, rect.height / 2 - r);
 
-            // (1) 개별 눈의 방향 각도
-            const localAngle = Math.atan2(dy, dx);
-            // (2) 전역(얼굴) 방향 각도
-            const angle = mixAngle(localAngle, globalAngle, DIR_BIAS);
+      // 동일 방향(ux,uy)으로 타원 경계까지 가능한 스케일
+      const boundaryScale = 1 / Math.sqrt((ux * ux) / (a * a) + (uy * uy) / (b * b));
 
-            // 보정된 단위 방향벡터
-            const ux = Math.cos(angle);
-            const uy = Math.sin(angle);
+      // 목표 좌표(중심 기준)
+      const hx = ux * boundaryScale * frac;
+      const hy = uy * boundaryScale * frac;
 
-            // 타원 계량 거리(중심=0, 경계=1 근사)
-            const radial = Math.sqrt((dx * dx) / (a * a) + (dy * dy) / (b * b));
-            // 데드존 → 이징
-            let frac = Math.min(1, Math.max(0, radial));
-            if (frac < DEADZONE) frac = 0;
-            else frac = (frac - DEADZONE) / (1 - DEADZONE);
-            frac = easeOut(frac);
+      // 퍼센트 좌표로 변환
+      const targetLeft = ((hx + rect.width / 2) / rect.width) * 100;
+      const targetTop = ((hy + rect.height / 2) / rect.height) * 100;
 
-            // 현재 방향으로 타원 경계까지의 스케일 (경계=1)
-            const boundaryScale = 1 / Math.sqrt((ux * ux) / (a * a) + (uy * uy) / (b * b));
+      // 스무딩
+      const leftPct = prev.leftPct + (targetLeft - prev.leftPct) * SMOOTH;
+      const topPct = prev.topPct + (targetTop - prev.topPct) * SMOOTH;
 
-            // 최종 목표 좌표(중심 기준)
-            const hx = ux * boundaryScale * frac;
-            const hy = uy * boundaryScale * frac;
-
-            // 퍼센트 좌표로 변환
-            const targetLeft = ((hx + rect.width / 2) / rect.width) * 100;
-            const targetTop = ((hy + rect.height / 2) / rect.height) * 100;
-
-            // 스무딩
-            const leftPct = prev.leftPct + (targetLeft - prev.leftPct) * SMOOTH;
-            const topPct = prev.topPct + (targetTop - prev.topPct) * SMOOTH;
-
-            return { leftPct, topPct };
-        };
-
-        setHlL(prev => calc(leftEyeRef.current, prev));
-        setHlR(prev => calc(rightEyeRef.current, prev));
-    }, [mouse]);
-
-    if (!open || !player) return null;
-
-    const handleConfirm = () => {
-        onConfirm({ ...safePlayer, color: picked });
-        onClose();
+      return { leftPct, topPct };
     };
 
-    return (
-        <Overlay role="dialog" aria-modal="true" onMouseMove={(e) => setMouse({ x: e.clientX, y: e.clientY })}>
-            <TopBar>
-                <TextBackButton onClick={handleConfirm} aria-label="나가기(확정)">
-                    나가기
-                </TextBackButton>
-            </TopBar>
+    setHlL(prev => calc(leftPupilRef.current, prev));
+    setHlR(prev => calc(rightPupilRef.current, prev));
+  }, [mouse]);
 
-            <PreviewWrap>
-                <Palette>
-                    {palette.map((c) => (
-                        <Swatch
-                            key={c}
-                            $color={c}
-                            $active={picked === c}
-                            onClick={() => setPicked(c)}
-                            aria-label={`색상 ${c}`}
-                        />
-                    ))}
-                </Palette>
+  // 사용 중 색 집합(소문자 비교)
+  const blockedSet = useMemo(
+    () => new Set((blockedColors ?? []).map(c => c.toLowerCase())),
+    [blockedColors]
+  );
 
-                <Face ref={faceRef} $color={picked}>
-                    {/* 눈 크기/비율/위치는 기존 파일 그대로 유지 */}
-                    <EyeWrap ref={leftEyeRef} $side="left">
-                        <Pupil />
-                        <Highlight style={{ left: `${hlL.leftPct}%`, top: `${hlL.topPct}%` }} />
-                    </EyeWrap>
+  const selfColorLower = safePlayer.color.toLowerCase();
 
-                    <EyeWrap ref={rightEyeRef} $side="right">
-                        <Pupil />
-                        <Highlight style={{ left: `${hlR.leftPct}%`, top: `${hlR.topPct}%` }} />
-                    </EyeWrap>
-                </Face>
-            </PreviewWrap>
-        </Overlay>
-    );
+  // 사용할 수 있는 첫 번째 색 (자기 색은 항상 허용)
+  const firstAvailable = useMemo(() => {
+    const found = palette.find(col => {
+      const l = col.toLowerCase();
+      return l === selfColorLower || !blockedSet.has(l);
+    });
+    return found ?? safePlayer.color;
+  }, [palette, blockedSet, selfColorLower, safePlayer.color]);
+
+  
+  // 현재 선택(picked)이 막힌 색이면 자동 보정
+  useEffect(() => {
+    const l = picked.toLowerCase();
+    if (blockedSet.has(l) && l !== selfColorLower) {
+      setPicked(firstAvailable);
+    }
+  }, [blockedSet, picked, selfColorLower, firstAvailable]);
+
+  if (!open || !player) return null;
+
+  const handleConfirm = () => {
+    const l = picked.toLowerCase();
+    const finalColor = (blockedSet.has(l) && l !== selfColorLower) ? firstAvailable : picked;
+    onConfirm({ ...safePlayer, color: finalColor });
+    onClose();
+  };
+
+  return (
+    <Overlay role="dialog" aria-modal="true" onMouseMove={(e) => setMouse({ x: e.clientX, y: e.clientY })}>
+      <TopBar>
+        <TextBackButton onClick={handleConfirm} aria-label="나가기(확정)">
+          나가기
+        </TextBackButton>
+      </TopBar>
+
+      <PreviewWrap>
+        <Palette>
+          {palette.map((c) => {
+            const lower = c.toLowerCase();
+            const isBlocked = blockedSet.has(lower) && lower !== selfColorLower;
+
+            return (
+              <Swatch
+                key={c}
+                $color={c}
+                $active={picked === c}
+                onClick={() => {if (!isBlocked) setPicked(c) }}
+              aria-label={`색상 ${c}`}
+              />
+            );
+          })}
+        </Palette>
+
+        <Face ref={faceRef} $color={picked}>
+          {/* 눈: 하이라이트가 '같은 방향'으로 이동 */}
+          <EyeWrap ref={leftEyeRef} $side="left">
+            <Pupil ref={leftPupilRef}>
+              <Highlight style={{ left: `${hlL.leftPct}%`, top: `${hlL.topPct}%` }} />
+            </Pupil>
+          </EyeWrap>
+
+          <EyeWrap ref={rightEyeRef} $side="right">
+            <Pupil ref={rightPupilRef}>
+              <Highlight style={{ left: `${hlR.leftPct}%`, top: `${hlR.topPct}%` }} />
+            </Pupil>
+          </EyeWrap>
+        </Face>
+      </PreviewWrap>
+    </Overlay>
+  );
 };
 
 export default ColorSelectModal;
 
-/* ====== styles (UI 건드리지 않음, 네 파일 그대로) ====== */
+/* ================= styles (UI 변경 없음) ================= */
 const Overlay = styled.div`
   position: fixed;
   inset: 0;
@@ -210,16 +221,15 @@ const Overlay = styled.div`
 const TopBar = styled.div`
   position: relative;
   height: 150px;
-  padding: 20px 0;
+  padding: 20px 0px;
   display: grid;
   place-items: center;
 `;
 
 const TextBackButton = styled(BackButton)`
   position: absolute;
-  left: clamp(24px, 5vw, 96px);
-  top: clamp(24px, 6vh, 72px);
-  transform: none;
+  left: clamp(64px, 5vw, 96px);
+  top: 50%;
   width: 175px;
   height: 60px;
   align-items: center;
@@ -229,8 +239,8 @@ const TextBackButton = styled(BackButton)`
   border: none;
   cursor: pointer;
   color: #8f8f8f;
-  font-size: 40px;
-  font-weight: 300;
+  font-size: 50px;
+  font-weight: 400;
 
   &:hover { color: #fff; }
   &:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255,255,255,0.45); border-radius: 8px; }
@@ -287,6 +297,7 @@ const Face = styled.div<{ $color: string }>`
   }
 `;
 
+/* 눈 비율/위치 그대로 */
 const EyeWrap = styled.div<{ $side: "left" | "right" }>`
   position: absolute;
   top: 22%;
@@ -302,13 +313,13 @@ const Pupil = styled.div`
   inset: 0;
   background: #000;
   border-radius: 50%;
-  overflow: hidden;
+  overflow: hidden; /* 하이라이트 클리핑 */
 `;
 
 const Highlight = styled.div`
   position: absolute;
-  width: 32%;
-  height: 16%;
+  width: 33%;
+  height: 16.5%;
   border-radius: 50%;
   background: #fff;
   transform: translate(-50%, -50%);

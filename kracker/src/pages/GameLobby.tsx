@@ -4,27 +4,21 @@ import styled from "styled-components";
 
 import BgBase from "../assets/images/titleBackground.svg";
 
+import { RoomSummary } from "../types/gameRoom";
 import BackButton from "../components/buttons/BackButton";
 import ActionButton from "../components/buttons/ActionButton";
 import PlayerCard from "../components/cards/PlayerCard";
 import { PLAYER_CONSTANTS } from "../game/config/GameConstants";
 import ColorSelectModal from "../components/modals/ColorSelectModal";
 
-// ===== 모드 설정 =====
-const IS_TEAM_MODE = true;       // 팀전/개인전 전환용 (추후 룸 데이터에 연동)
-const NUM_TEAMS = IS_TEAM_MODE ? 2 : 0; // 3v3 => 2팀, 개인전 => 0이면 드롭다운 숨김
 
 const toCssHex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
 // ===== 더미 플레이어 (team을 숫자로) =====
 type Player = { id: string; team: number; name: string; color: string };
 
 const initialPlayers: Player[] = [
-  { id: "p1", team: 1, name: "진짜로",    color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary) },
-  { id: "p2", team: 1, name: "코딩이",    color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.주황색.primary) },
-  { id: "p3", team: 1, name: "너무어려워요", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.초록색.primary) },
-  { id: "p4", team: 2, name: "매일밤을",  color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.파란색.primary) },
-  { id: "p5", team: 2, name: "새고있어요", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.보라색.primary) },
-  { id: "p6", team: 2, name: "다들화이팅", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.핑크색.primary) },
+  { id: "p1", team: 1, name: "Player1", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.빨간색.primary) },
+  { id: "p2", team: 2, name: "Player2", color: toCssHex(PLAYER_CONSTANTS.COLOR_PRESETS.주황색.primary) },
 ];
 
 interface GameLobbyProps {
@@ -34,13 +28,30 @@ interface GameLobbyProps {
 
 const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) => {
   const navigate = useNavigate();
-  const location = useLocation() as { state?: { room?: any } };
-  
+  const location = useLocation() as { state?: { room?: RoomSummary } };
+
   const [selected, setSelected] = useState<Player | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const [room, setRoom] = useState<any>(location.state?.room ?? null);
+  const [room, setRoom] = useState<RoomSummary | null>(location.state?.room ?? null);
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
+
+  // 방 정보가 있으면 그걸 신뢰, 없으면 기존 기본값으로 폴백
+  const isTeamMode = room?.gameMode ? room.gameMode === "팀전" : true;
+  const NUM_TEAMS = isTeamMode ? 2 : 0;
+
+  const TEAM_CAP = 3;
+
+  const codeToShow = room?.roomId ?? roomCode;
+
+  // 팀 카운트/시작 버튼 조건도 팀전일 때만
+  const teamCounts = useMemo(() => {
+    const acc: Record<number, number> = {};
+    for (const p of players) acc[p.team] = (acc[p.team] ?? 0) + 1;
+    return acc;
+  }, [players]);
+
+  const overCapacity = isTeamMode && Object.values(teamCounts).some(c => c > TEAM_CAP);
 
   const applyPlayerChange = (next: Player) => {
     setPlayers(prev => prev.map(p => (p.id === next.id ? next : p)));
@@ -60,12 +71,16 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
     }
   }, [room]);
 
-  const codeToShow = room?.roomId ?? roomCode;
-
   const handleTeamChange = (id: string, nextTeam: number) => {
     if (NUM_TEAMS < 2) return; // 개인전이면 무시
     setPlayers(prev => prev.map(p => p.id === id ? { ...p, team: nextTeam } : p));
   };
+
+  const handleGameStart = () => {
+    navigate('/game');
+  }
+
+  const isDisabled = overCapacity
 
   return (
     <Wrap>
@@ -85,6 +100,11 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
           numTeams={NUM_TEAMS}
           onClose={() => setModalOpen(false)}
           onConfirm={(next) => applyPlayerChange(next)}
+          blockedColors={
+            selected
+              ? players.filter(p => p.id !== selected.id).map(p => p.color)
+              : players.map(p => p.color)
+          }
         />
       )}
 
@@ -98,6 +118,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
               numTeams={NUM_TEAMS}
               onTeamChange={(n) => handleTeamChange(p.id, n)}
               onCardClick={() => openColorPicker(p)}
+              playerColor={p.color}
             />
           ))}
         </SlotGrid>
@@ -111,13 +132,24 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "ABCDEFGH", onExit }) 
               numTeams={NUM_TEAMS}
               onTeamChange={(n) => handleTeamChange(p.id, n)}
               onCardClick={() => openColorPicker(p)}
+              playerColor={p.color}
             />
           ))}
         </SlotGrid>
       </OuterCard>
 
-      <ActionButton>시작하기</ActionButton>
-    </Wrap>
+      <ActionButton
+        disabled={isDisabled}
+        onClick={handleGameStart} // '/game'으로 이동
+        style={{
+          opacity: isDisabled ? 0.45 : 1,
+          color: isDisabled ? '#8f8f8f' : '#ffffff',
+          cursor: isDisabled ? "not-allowed" : "pointer",
+        }}
+      >
+        시작하기
+      </ActionButton>
+    </Wrap >
   );
 };
 
@@ -137,6 +169,7 @@ const Wrap = styled.main`
     inset: 0;
     background: url(${BgBase}) center/cover no-repeat;
     opacity: 0.1;
+    pointer-events: none;
   }
 `;
 
@@ -145,7 +178,7 @@ const TitleSection = styled.header`
   display: grid;
   place-items: center;
   min-height: 120px;
-  padding: 40px clamp(24px, 5vw, 64px);
+  padding: 10px clamp(24px, 5vw, 64px);
 `;
 
 const TextBackButton = styled(BackButton)`
@@ -186,11 +219,11 @@ const Label = styled.span`
 `;
 
 const Code = styled.h2`
-  margin: 0;
+  margin: 0 0 10px 0;
   font-weight: 900;
   letter-spacing: 2px;
   color: #fff;
-  font-size: 100px;
+  font-size: 80px;
   line-height: 1;
 `;
 
