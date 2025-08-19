@@ -1,16 +1,25 @@
-// src/game/systems/CollisionSystem.ts - 총알과 플랫폼 충돌 관리 (수정됨)
-import { Bullet } from "../bullet";
+// src/game/systems/CollisionSystem.ts - 벽 관통 방지 개선
 import Rectangle = Phaser.Geom.Rectangle;
 import Line = Phaser.Geom.Line;
 import Intersects = Phaser.Geom.Intersects;
+
+type ArcadeImage = Phaser.Physics.Arcade.Image;
+type StaticBody = Phaser.Physics.Arcade.StaticBody;
 
 export class CollisionSystem {
   private scene: Phaser.Scene;
   private bulletGroup: Phaser.Physics.Arcade.Group;
   private platformGroup: Phaser.Physics.Arcade.StaticGroup;
   private collider?: Phaser.Physics.Arcade.Collider;
+
+  // Reusable geometry objects
   private _ccdLine: Phaser.Geom.Line = new Line();
   private _rect: Phaser.Geom.Rectangle = new Rectangle();
+
+  // 🔥 벽 관통 방지를 위한 더 엄격한 설정
+  private readonly MIN_DELTA = 0.05; // 더 작은 최소 이동량
+  private readonly EPS = 0.1; // 더 큰 여유값
+  private readonly SPAWN_SAFETY_DISTANCE = 10; // 스폰 시 안전 거리
 
   constructor(
     scene: Phaser.Scene,
@@ -20,263 +29,314 @@ export class CollisionSystem {
     this.scene = scene;
     this.bulletGroup = bulletGroup;
     this.platformGroup = platformGroup;
+
+    console.log("🎯 CollisionSystem 생성됨 (개선된 벽 관통 방지)");
+
+    // CCD 스윕은 매 프레임 update에서 수행
     this.scene.events.on("update", this._ccdSweep, this);
+
+    // 일반 Arcade 충돌도 유지
     this.setupCollisions();
   }
-  private _ccdSweep() {
-    const bullets =
-      this.bulletGroup.getChildren() as Phaser.Physics.Arcade.Image[];
-    if (!bullets.length) return;
 
-    const platforms = this.platformGroup.getChildren();
-    if (!platforms.length) return;
-
-    for (const b of bullets) {
-      if (!b.active || !b.body) continue;
-
-      const body = b.body as Phaser.Physics.Arcade.Body;
-
-      // 💬 속도 디버그 로그
-      const velocity = body.velocity;
-      const speed = velocity.length();
-      console.debug(
-        `[총알 디버그] 위치 (${b.x.toFixed(1)}, ${b.y.toFixed(
-          1
-        )}), 속도: ${speed.toFixed(2)}`
-      );
-
-      // ⚠️ 속도 0이면 무의미한 총알 → 제거
-      if (speed < 1) {
-        console.warn(
-          `⚠️ 정지된 총알 제거됨: 위치 (${b.x.toFixed(1)}, ${b.y.toFixed(1)})`
-        );
-        b.destroy();
-        continue;
-      }
-
-      const prevX = (b as any).data?.get?.("__prevX") ?? b.x;
-      const prevY = (b as any).data?.get?.("__prevY") ?? b.y;
-      const curX = b.x;
-      const curY = b.y;
-
-      // 🛑 위치가 안 바뀐 총알 → 패스
-      if (prevX === curX && prevY === curY) {
-        (b as any).setData?.("__prevX", curX);
-        (b as any).setData?.("__prevY", curY);
-        continue;
-      }
-
-      this._ccdLine.setTo(prevX, prevY, curX, curY);
-
-      let hitFound = false;
-      for (const p of platforms) {
-        const body = (p as any).body as
-          | Phaser.Physics.Arcade.StaticBody
-          | undefined;
-        if (!body) continue;
-
-        this._rect.setTo(
-          body.left,
-          body.top,
-          body.right - body.left,
-          body.bottom - body.top
-        );
-
-        if (Intersects.LineToRectangle(this._ccdLine, this._rect)) {
-          this.onBulletHitPlatform(b, p);
-          hitFound = true;
-          break;
-        }
-      }
-
-      if (!hitFound) {
-        (b as any).setData?.("__prevX", curX);
-        (b as any).setData?.("__prevY", curY);
-      }
-    }
+  public getBulletGroup(): Phaser.Physics.Arcade.Group {
+    return this.bulletGroup;
   }
 
-  /** 충돌 감지 설정 */
-  private setupCollisions(): void {
-    // ⭐ 타입 수정: 정확한 콜백 시그니처 사용
-    this.collider = this.scene.physics.add.collider(
-      this.bulletGroup,
-      this.platformGroup,
-      (object1, object2) => {
-        // object1이 총알, object2가 플랫폼일 수도 있고 그 반대일 수도 있음
-        let bulletSprite: Phaser.Physics.Arcade.Image | undefined;
-        let platformSprite: Phaser.GameObjects.GameObject | undefined;
-
-        // 어느 것이 총알인지 확인
-        if (
-          object1 instanceof Phaser.Physics.Arcade.Image &&
-          this.bulletGroup.contains(object1)
-        ) {
-          bulletSprite = object1;
-          platformSprite = object2 as Phaser.GameObjects.GameObject;
-        } else if (
-          object2 instanceof Phaser.Physics.Arcade.Image &&
-          this.bulletGroup.contains(object2)
-        ) {
-          bulletSprite = object2;
-          platformSprite = object1 as Phaser.GameObjects.GameObject;
-        }
-
-        if (bulletSprite && platformSprite) {
-          this.onBulletHitPlatform(bulletSprite, platformSprite);
-        }
-      },
-      undefined, // processCallback
-      this // 콜백 컨텍스트
-    );
-
-    console.log("🎯 Collision system initialized: bullets vs platforms");
+  public getPlatformGroup(): Phaser.Physics.Arcade.StaticGroup {
+    return this.platformGroup;
   }
 
-  /** 총알이 플랫폼에 부딪혔을 때 호출되는 콜백 */
-  private onBulletHitPlatform = (
-    bulletSprite: Phaser.Physics.Arcade.Image,
-    platformSprite: Phaser.GameObjects.GameObject
-  ): void => {
-    // 총알 스프라이트에서 Bullet 인스턴스 찾기
-    const bullet = this.findBulletBySprite(bulletSprite);
-
-    if (bullet) {
-      console.log(
-        `💥 Bullet hit platform at (${bulletSprite.x.toFixed(
-          1
-        )}, ${bulletSprite.y.toFixed(1)})`
-      );
-
-      // 충돌 지점에서 폭발 효과와 함께 총알 제거
-      bullet.hitAndExplode(bulletSprite.x, bulletSprite.y);
-    } else {
-      console.warn(
-        "⚠️ Could not find bullet instance for sprite:",
-        bulletSprite
-      );
-
-      // 안전장치: 스프라이트만이라도 제거
-      if (bulletSprite && bulletSprite.scene) {
-        bulletSprite.destroy();
-      }
-    }
-  };
-
-  /** ⭐ 스프라이트로부터 Bullet 인스턴스 찾기 (타입 안전) */
-  private findBulletBySprite(
-    sprite: Phaser.Physics.Arcade.Image
-  ): Bullet | null {
-    try {
-      // ⭐ getData 메서드 사용 (removeData 대신)
-      const bulletInstance = sprite.getData("bullet") as Bullet;
-
-      if (bulletInstance && bulletInstance.active) {
-        return bulletInstance;
-      }
-
-      // 폴백: 이미 destroy된 bullet이거나 데이터가 없는 경우
-      console.warn("No valid bullet data found on sprite");
-      return null;
-    } catch (error) {
-      console.warn("Error retrieving bullet data:", error);
-      return null;
-    }
-  }
-
-  /** 총알 그룹에 새 총알 추가 */
-  public addBullet(bullet: Bullet): void {
-    if (!bullet?.sprite) return;
-
-    bullet.sprite.setData("bullet", bullet);
-
-    if (!this.bulletGroup.contains(bullet.sprite)) {
-      this.bulletGroup.add(bullet.sprite);
-    }
-
-    // 동적 바디 보증
-    const body = bullet.sprite.body as Phaser.Physics.Arcade.Body;
-    body.setAllowGravity(true); // ✅ 중력 허용으로 변경
-    body.setImmovable(false);
-    body.setDrag(0, 0); // ✅ 드래그 명시적으로 0 설정
-    body.setBounce(0, 0); // ✅ 바운스도 0으로
-    (body as any).moves = true;
-  }
-
-  /** 총알 그룹에서 총알 제거 */
-  public removeBullet(bullet: Bullet): void {
-    if (bullet.sprite && this.bulletGroup.contains(bullet.sprite)) {
-      // ⭐ 데이터 정리 (removeData 메서드가 없을 수 있으므로 안전하게)
-      try {
-        if (typeof bullet.sprite.setData === "function") {
-          bullet.sprite.setData("bullet", null);
-        }
-      } catch (error) {
-        console.warn("Could not clear bullet data:", error);
-      }
-
-      // 그룹에서 제거
-      this.bulletGroup.remove(bullet.sprite, true, true);
-
-      console.log(
-        `🗑️ Removed bullet from collision system (remaining: ${this.bulletGroup.children.size})`
-      );
-    }
-  }
-
-  /** 모든 총알 제거 */
-  public clearAllBullets(): void {
-    // 모든 총알의 데이터 정리
-    this.bulletGroup.children.entries.forEach((sprite) => {
-      if (sprite instanceof Phaser.Physics.Arcade.Image) {
-        const bullet = sprite.getData("bullet") as Bullet;
-        if (bullet) {
-          bullet.destroy();
-        } else {
-          sprite.destroy();
-        }
-      }
-    });
-
-    this.bulletGroup.clear(true, true);
-    console.log("🧹 Cleared all bullets from collision system");
-  }
-
-  /** 충돌 시스템 활성화/비활성화 */
-  public setEnabled(enabled: boolean): void {
-    if (this.collider) {
-      this.collider.active = enabled;
-      console.log(`🎯 Collision system ${enabled ? "enabled" : "disabled"}`);
-    }
-  }
-
-  /** 디버그 정보 */
-  public getDebugInfo(): {
-    bulletCount: number;
-    platformCount: number;
-    colliderActive: boolean;
-  } {
-    return {
-      bulletCount: this.bulletGroup.children.size,
-      platformCount: this.platformGroup.children.size,
-      colliderActive: this.collider?.active ?? false,
-    };
-  }
-
-  /** 충돌 시스템 정리 */
-  public destroy(): void {
-    console.log("🧽 Destroying collision system...");
-
-    // 모든 총알 정리
-    this.clearAllBullets();
-
-    // 충돌 감지 제거
+  destroy() {
+    console.log("🧹 CollisionSystem 정리 중...");
+    this.scene.events.off("update", this._ccdSweep, this);
     if (this.collider) {
       this.collider.destroy();
       this.collider = undefined;
     }
-    this.scene.events.off("update", this._ccdSweep, this);
-
-    console.log("✅ Collision system destroyed");
+    console.log("✅ CollisionSystem 정리 완료");
   }
+
+  private setupCollisions() {
+    this.collider = this.scene.physics.add.collider(
+      this.bulletGroup,
+      this.platformGroup,
+      ((obj1: any, obj2: any) => {
+        let bulletSprite: ArcadeImage | null = null;
+        let platformSprite: Phaser.GameObjects.GameObject | null = null;
+
+        if ((obj1 as any)?.body?.isCircle) {
+          bulletSprite = obj1 as ArcadeImage;
+          platformSprite = obj2 as Phaser.GameObjects.GameObject;
+        } else if ((obj2 as any)?.body?.isCircle) {
+          bulletSprite = obj2 as ArcadeImage;
+          platformSprite = obj1 as Phaser.GameObjects.GameObject;
+        } else {
+          if ((obj1 as any)?.getData?.("__isBullet"))
+            bulletSprite = obj1 as ArcadeImage;
+          if ((obj2 as any)?.getData?.("__isBullet"))
+            bulletSprite = obj2 as ArcadeImage;
+          platformSprite =
+            bulletSprite === obj1 ? (obj2 as any) : (obj1 as any);
+        }
+
+        if (!bulletSprite) return;
+
+        if (bulletSprite.getData("__hitThisFrame")) {
+          bulletSprite.setData("__hitThisFrame", false);
+          return;
+        }
+
+        bulletSprite.setData("__hitThisFrame", true);
+        this.onBulletHitPlatform(bulletSprite, platformSprite);
+      }) as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
+      undefined,
+      this
+    );
+
+    console.log("🔗 충돌 감지 설정 완료");
+  }
+
+  /**
+   * 🔥 개선된 CCD 스윕 - 벽 관통 방지 강화
+   */
+  private _ccdSweep = () => {
+    const bullets = this.bulletGroup.getChildren() as ArcadeImage[];
+    const platforms = this.platformGroup.getChildren();
+
+    for (const b of bullets) {
+      if (!b.active) continue;
+
+      const curX = b.x;
+      const curY = b.y;
+
+      let prevX = b.getData("__prevX") as number | undefined;
+      let prevY = b.getData("__prevY") as number | undefined;
+
+      // 🔥 초기 스폰 시 안전성 검사
+      if (prevX === undefined || prevY === undefined) {
+        // 스폰 위치가 벽 내부인지 확인
+        if (this.isInsideAnyPlatform(curX, curY, this.getBulletRadius(b))) {
+          console.warn(
+            `⚠️ 총알이 벽 내부에서 스폰됨! 즉시 제거: (${curX.toFixed(
+              1
+            )}, ${curY.toFixed(1)})`
+          );
+          b.setData("__hitThisFrame", true);
+          this.onBulletHitPlatform(b, null);
+          continue;
+        }
+
+        b.setData("__prevX", curX);
+        b.setData("__prevY", curY);
+        continue;
+      }
+
+      // 이동량 체크
+      const deltaX = Math.abs(curX - prevX);
+      const deltaY = Math.abs(curY - prevY);
+      if (deltaX < this.MIN_DELTA && deltaY < this.MIN_DELTA) {
+        b.setData("__prevX", curX);
+        b.setData("__prevY", curY);
+        continue;
+      }
+
+      // 이미 처리된 프레임 스킵
+      if (b.getData("__hitThisFrame")) {
+        b.setData("__prevX", curX);
+        b.setData("__prevY", curY);
+        b.setData("__hitThisFrame", false);
+        continue;
+      }
+
+      // 🔥 더 정밀한 스윕 검사
+      const radius = this.getBulletRadius(b);
+      let hitFound = false;
+
+      // 🔥 다중 세그먼트 스윕 (빠른 총알도 놓치지 않음)
+      const segments = this.calculateSweptSegments(
+        prevX,
+        prevY,
+        curX,
+        curY,
+        radius
+      );
+
+      for (const segment of segments) {
+        for (const p of platforms) {
+          if (this.checkSegmentPlatformCollision(segment, p, radius)) {
+            b.setData("__hitThisFrame", true);
+            this.onBulletHitPlatform(b, p);
+            hitFound = true;
+            break;
+          }
+        }
+        if (hitFound) break;
+      }
+
+      // 충돌이 없었을 때만 prev 갱신
+      if (!hitFound) {
+        b.setData("__prevX", curX);
+        b.setData("__prevY", curY);
+      }
+    }
+  };
+
+  /**
+   * 🔥 총알 반지름 정확히 계산
+   */
+  private getBulletRadius(bullet: ArcadeImage): number {
+    const diameterData = bullet.getData("diameter") as number | undefined;
+    if (diameterData !== undefined) {
+      return Math.max(1, diameterData * 0.5);
+    }
+
+    const body = bullet.body as Phaser.Physics.Arcade.Body;
+    if (body && body.isCircle) {
+      return Math.max(1, body.radius);
+    }
+
+    return Math.max(1, bullet.displayWidth * 0.5);
+  }
+
+  /**
+   * 🔥 점이 어떤 플랫폼 내부에 있는지 확인
+   */
+  private isInsideAnyPlatform(x: number, y: number, radius: number): boolean {
+    const platforms = this.platformGroup.getChildren();
+
+    for (const p of platforms) {
+      const body = (p as any).body as StaticBody | undefined;
+      if (!body) continue;
+
+      const left = (body as any).left ?? body.x;
+      const right = (body as any).right ?? body.x + body.width;
+      const top = (body as any).top ?? body.y;
+      const bottom = (body as any).bottom ?? body.y + body.height;
+
+      // 총알 중심이 플랫폼 내부에 있으면서 충분한 여유가 없으면 내부로 판단
+      if (
+        x > left + radius &&
+        x < right - radius &&
+        y > top + radius &&
+        y < bottom - radius
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 🔥 스윕 경로를 여러 세그먼트로 분할 (빠른 총알 관통 방지)
+   */
+  private calculateSweptSegments(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    radius: number
+  ): Array<{ startX: number; startY: number; endX: number; endY: number }> {
+    const distance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+
+    // 거리가 총알 반지름의 2배보다 크면 세그먼트로 분할
+    const maxSegmentLength = radius * 2;
+    const numSegments = Math.max(1, Math.ceil(distance / maxSegmentLength));
+
+    const segments = [];
+    for (let i = 0; i < numSegments; i++) {
+      const t1 = i / numSegments;
+      const t2 = (i + 1) / numSegments;
+
+      segments.push({
+        startX: startX + (endX - startX) * t1,
+        startY: startY + (endY - startY) * t1,
+        endX: startX + (endX - startX) * t2,
+        endY: startY + (endY - startY) * t2,
+      });
+    }
+
+    return segments;
+  }
+
+  /**
+   * 🔥 세그먼트와 플랫폼 충돌 검사
+   */
+  private checkSegmentPlatformCollision(
+    segment: { startX: number; startY: number; endX: number; endY: number },
+    platform: any,
+    radius: number
+  ): boolean {
+    const body = platform.body as StaticBody | undefined;
+    if (!body) return false;
+
+    const left = (body as any).left ?? body.x;
+    const right = (body as any).right ?? body.x + body.width;
+    const top = (body as any).top ?? body.y;
+    const bottom = (body as any).bottom ?? body.y + body.height;
+
+    // 플랫폼을 총알 반지름만큼 확장
+    const expandedRect = new Rectangle(
+      left - radius - this.EPS,
+      top - radius - this.EPS,
+      right - left + (radius + this.EPS) * 2,
+      bottom - top + (radius + this.EPS) * 2
+    );
+
+    // 세그먼트 선분 생성
+    this._ccdLine.setTo(
+      segment.startX,
+      segment.startY,
+      segment.endX,
+      segment.endY
+    );
+
+    // 🔥 시작점이 내부가 아니고, 교차하거나 끝점이 내부면 충돌
+    const startInside = expandedRect.contains(segment.startX, segment.startY);
+    const endInside = expandedRect.contains(segment.endX, segment.endY);
+    const lineIntersects = Intersects.LineToRectangle(
+      this._ccdLine,
+      expandedRect
+    );
+
+    // 시작점이 이미 내부면 관통 중이므로 무시 (탈출 허용)
+    if (startInside) {
+      return false;
+    }
+
+    // 선분이 사각형과 교차하거나 끝점이 내부로 들어가면 충돌
+    return lineIntersects || endInside;
+  }
+
+  /**
+   * 총알이 플랫폼에 맞았을 때 처리
+   */
+  private onBulletHitPlatform = (
+    bulletSprite: ArcadeImage,
+    platformSprite: Phaser.GameObjects.GameObject | null
+  ) => {
+    if (!bulletSprite.active) return;
+    if (bulletSprite.getData("__handled")) return;
+    bulletSprite.setData("__handled", true);
+
+    console.log(
+      `💥 총알-플랫폼 충돌! 위치: (${bulletSprite.x.toFixed(
+        1
+      )}, ${bulletSprite.y.toFixed(1)})`
+    );
+
+    // 총알 파괴
+    try {
+      const bulletData = bulletSprite.getData("__bulletRef");
+      if (bulletData && typeof bulletData.hit === "function") {
+        bulletData.hit(bulletSprite.x, bulletSprite.y);
+      } else {
+        bulletSprite.destroy(true);
+      }
+    } catch (error) {
+      console.warn("총알 파괴 중 오류:", error);
+    }
+  };
 }
+
+export default CollisionSystem;

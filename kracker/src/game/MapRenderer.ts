@@ -20,6 +20,7 @@ export default class MapRenderer {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.graphics = scene.add.graphics();
+
     this.backgroundGraphics = scene.add.graphics();
 
     // ⭐ 플랫폼 물리 그룹 생성

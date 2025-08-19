@@ -1,4 +1,4 @@
-// src/game/player/Player.ts - CollisionSystem 연결 수정
+// src/game/player/Player.ts - 수정된 플레이어 사격 시스템
 import {
   CharacterPreset,
   CharacterColors,
@@ -61,7 +61,7 @@ export default class Player {
   // 플랫폼
   private platforms: Platform[];
 
-  // ⭐ CollisionSystem 참조 추가
+  // ⭐ CollisionSystem 참조
   private collisionSystem?: any;
 
   // 벽잡기/벽점프 상태
@@ -124,6 +124,8 @@ export default class Player {
     this.colorPreset = preset;
     this.colors = (CHARACTER_PRESETS as any)[preset] as CharacterColors;
 
+    console.log(`🎮 플레이어 생성 중... 위치: (${x}, ${y})`);
+
     // 그래픽 생성
     this.gfx = createCharacter(this.scene, this.x, this.y, this.colors);
 
@@ -152,9 +154,11 @@ export default class Player {
       maxHealth: this.maxHealth,
       isWallGrabbing: this.wall.isWallGrabbing,
     });
+
+    console.log(`✅ 플레이어 생성 완료`);
   }
 
-  // ⭐ CollisionSystem 설정 메서드 추가
+  // ⭐ CollisionSystem 설정 메서드
   public setCollisionSystem(collisionSystem: any): void {
     this.collisionSystem = collisionSystem;
     console.log("✅ CollisionSystem이 Player에 연결되었습니다.");
@@ -185,15 +189,21 @@ export default class Player {
     const now = Date.now();
     if (!canShoot(this.lastShotTime, this.shootCooldown, now)) return;
 
-    // ⭐ CollisionSystem 체크
-    if (!this.collisionSystem) {
-      console.warn(
-        "❌ CollisionSystem이 연결되지 않았습니다. 총알이 플랫폼과 충돌하지 않을 수 있습니다."
-      );
-    }
+    console.log(
+      `🎯 총 발사 시도... CollisionSystem: ${
+        this.collisionSystem ? "✅" : "❌"
+      }`
+    );
 
-    const { x: gunX, y: gunY, angle } = this.getGunPosition();
+    const { x: gunX, y: gunY } = this.getGunPosition();
 
+    console.log(
+      `🔫 총구 위치: (${gunX.toFixed(1)}, ${gunY.toFixed(
+        1
+      )}), 마우스: (${this.mouseX.toFixed(1)}, ${this.mouseY.toFixed(1)})`
+    );
+
+    // 🔥 수정된 doShoot 호출
     const shot = doShoot({
       scene: this.scene,
       gunX,
@@ -215,12 +225,7 @@ export default class Player {
     this.isShooting = true;
     this.bullets.push(shot.bullet);
 
-    // ⭐ 디버그 로그
-    console.log(
-      `🔫 총알 발사! 위치: (${gunX.toFixed(1)}, ${gunY.toFixed(
-        1
-      )}), CollisionSystem: ${this.collisionSystem ? "✅ 연결됨" : "❌ 미연결"}`
-    );
+    console.log(`🚀 총알 발사 완료! ID: ${shot.bullet.id}`);
   }
 
   private updateInvulnerability(deltaMs: number) {
@@ -451,7 +456,7 @@ export default class Player {
       velocityX: this.velocityX,
       colors: this.colors,
       shootRecoil: this.shootRecoil,
-      // 🆕 새로 추가된 파라미터들
+      // 새로 추가된 파라미터들
       currentTime: Date.now() / 1000,
       currentFacing: this.facingDirection,
     });
@@ -518,6 +523,7 @@ export default class Player {
       isWallGrabbing: this.wall.isWallGrabbing,
     });
   }
+
   public getBounds(): {
     x: number;
     y: number;
@@ -526,7 +532,7 @@ export default class Player {
     radius: number;
   } {
     const radius = 25;
-    const heightReduction = this.crouchHeight * 10; // 원본 getBounds 로직과 일치
+    const heightReduction = this.crouchHeight * 10;
     const crouchYOffset = this.crouchHeight * 15;
 
     const width = 50;
@@ -703,12 +709,18 @@ export default class Player {
   }
 
   destroy(): void {
+    console.log("🧹 플레이어 정리 중...");
+
     // 포인터 핸들러 해제
     this.pointerHandle?.destroy?.();
+
     // 총알 정리
     this.bullets.forEach((b) => b.destroy());
     this.bullets = [];
+
     // 그래픽 제거
     destroyCharacter(this.gfx);
+
+    console.log("✅ 플레이어 정리 완료");
   }
 }

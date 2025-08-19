@@ -1,437 +1,625 @@
-// src/game/bullet.ts - 총알 멈춤 문제 해결
+// src/game/bullet.ts - 완전히 수정된 총알 시스템
 import Phaser from "phaser";
-import { GAME_CONFIG } from "./config";
 
-// --------- 유틸: 로컬 오프셋 -> 월드 좌표 ----------
-function toWorldPoint(
-  go: Phaser.GameObjects.GameObject & {
-    getWorldTransformMatrix?: any;
-    displayOriginX?: number;
-    displayOriginY?: number;
-  },
-  localX: number,
-  localY: number,
-  out: Phaser.Math.Vector2 = new Phaser.Math.Vector2()
-) {
-  const m = (go as any).getWorldTransformMatrix?.();
-  if (!m) {
-    const rot = (go as any).rotation ?? 0;
-    const cos = Math.cos(rot),
-      sin = Math.sin(rot);
-    const ox = (go as any).x ?? 0,
-      oy = (go as any).y ?? 0;
-    out.x = ox + (localX * cos - localY * sin);
-    out.y = oy + (localX * sin + localY * cos);
-    return out;
-  }
-  const displayOriginX = (go as any).displayOriginX ?? 0;
-  const displayOriginY = (go as any).displayOriginY ?? 0;
-  return m.transformPoint(
-    displayOriginX + localX,
-    displayOriginY + localY,
-    out
-  );
-}
-
-// --------- config에서 총알 기본값 읽기 ----------
-type BulletGlobalCfg = {
+export interface BulletConfig {
   speed?: number;
-  gravityX?: number;
-  gravityY?: number;
-  useWorldGravity?: boolean;
-  alignToVelocity?: boolean;
-  tailEnabled?: boolean;
+  damage?: number;
   radius?: number;
-  diameter?: number;
-};
-
-function readBulletCfg(): BulletGlobalCfg {
-  const cfg: any = GAME_CONFIG as any;
-  return {
-    speed: cfg?.bullet?.speed ?? cfg?.bulletSpeed ?? 1200,
-    gravityX: cfg?.bullet?.gravityX ?? cfg?.bulletGravityX ?? 0,
-    gravityY: cfg?.bullet?.gravityY ?? cfg?.bulletGravityY ?? 0,
-    useWorldGravity:
-      cfg?.bullet?.useWorldGravity ?? cfg?.bulletUseWorldGravity ?? false,
-    alignToVelocity:
-      cfg?.bullet?.alignToVelocity ?? cfg?.bulletAlignToVelocity ?? true,
-    tailEnabled: cfg?.bullet?.tailEnabled ?? cfg?.bulletTailEnabled ?? true,
-    radius: cfg?.bullet?.radius ?? cfg?.bulletRadius,
-    diameter: cfg?.bullet?.diameter ?? cfg?.bulletDiameter,
-  };
+  color?: number;
+  tailColor?: number;
+  tailLength?: number;
+  gravity?: { x: number; y: number };
+  useWorldGravity?: boolean;
+  lifetime?: number; // ms
 }
 
-export type BulletOptions = {
-  speed?: number;
-  textureKey?: string;
-  explosionTextureKey?: string;
-  ttl?: number;
-
-  // 물리/중력/정렬
-  bodyRadius?: number;
-  useWorldGravity?: boolean;
-  gravityX?: number;
-  gravityY?: number;
-  alignToVelocity?: boolean;
-
-  // 꼬리(테일) - 그라디언트 이미지
-  tailEnabled?: boolean;
-  visualScale?: number;
-
-  // 몸통(원)
-  bodyEnabled?: boolean;
-  bodyVisualScale?: number;
-  bodyColor?: number;
-};
+export interface BulletEvents {
+  onHit?: (x: number, y: number) => void;
+  onDestroy?: () => void;
+}
 
 export class Bullet {
-  readonly scene: Phaser.Scene;
-  readonly sprite: Phaser.Physics.Arcade.Image;
-  private alive = true;
+  private scene: Phaser.Scene;
+  public sprite!: Phaser.Physics.Arcade.Image;
+  private tail!: Phaser.GameObjects.Graphics;
+  private config: Required<BulletConfig>;
+  private events: BulletEvents;
+  private _active: boolean = true;
+  private _id: string;
+  private createdTime: number;
 
-  // 보이는 총알 요소들
-  private tail?: Phaser.GameObjects.Image;
-  private bodyCircle?: Phaser.GameObjects.Arc;
-  private tailScaleX = 0.5;
-  private tailAlpha = 0.95;
-  private tailVisualScale = 1;
-  private bodyVisualScale = 1;
-  private bodyColor = 0xffffff;
+  // 테일 효과를 위한 위치 히스토리
+  private positionHistory: Array<{ x: number; y: number; time: number }> = [];
+  private maxHistoryLength: number = 8;
 
-  private explosionTex: string;
-  private _alignToVelocity = true;
-
-  // 사이즈 캐시
-  private baseRadius = 10;
-  // 그룹 참조
-  private bulletGroup?: Phaser.Physics.Arcade.Group;
+  // 시각적 효과
+  private bodyCircle!: Phaser.GameObjects.Arc;
+  private glowEffect!: Phaser.GameObjects.Arc;
 
   constructor(
     scene: Phaser.Scene,
+    bulletGroup: Phaser.Physics.Arcade.Group,
     x: number,
     y: number,
-    angleOrLegacy?: any,
-    opts: BulletOptions = {},
-    bulletGroup?: Phaser.Physics.Arcade.Group
+    angle: number,
+    config: BulletConfig = {},
+    events: BulletEvents = {}
   ) {
     this.scene = scene;
-    this.bulletGroup = bulletGroup;
+    this.events = events;
+    this._id = `bullet_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    this.createdTime = Date.now();
 
-    const gcfg = readBulletCfg();
-    const speed = opts.speed ?? gcfg.speed ?? 1200;
-    const bulletTex = opts.textureKey ?? "bullet";
-    this.explosionTex = opts.explosionTextureKey ?? "particle";
-    const ttl = opts.ttl ?? 2000;
-
-    // 반지름 설정
-    const radius =
-      opts.bodyRadius ??
-      gcfg.radius ??
-      (gcfg.diameter ? gcfg.diameter / 2 : 10);
-    this.baseRadius = radius;
-
-    // 시각 배율/색상
-    this.tailVisualScale = opts.visualScale ?? 1;
-    this.bodyVisualScale = opts.bodyVisualScale ?? 1;
-    this.bodyColor = opts.bodyColor ?? 0xffffff;
-
-    const initialAngle = typeof angleOrLegacy === "number" ? angleOrLegacy : 0;
-
-    // 1) 총알 본체(물리/충돌 전용) — 화면에선 숨김
-    this.sprite = scene.physics.add.image(x, y, bulletTex);
-    this.sprite.setOrigin(0.1, 0.1).setDepth(20).setRotation(initialAngle);
-    this.sprite.setCircle(
-      radius,
-      this.sprite.width * 0.1 - radius,
-      this.sprite.height * 0.1 - radius
-    );
-    this.sprite.setCollideWorldBounds(false);
-    this.sprite.setVelocity(
-      Math.cos(initialAngle) * speed,
-      Math.sin(initialAngle) * speed
-    );
-    this.sprite.setVisible(false);
-
-    // 그룹에 추가
-    if (this.bulletGroup) {
-      this.bulletGroup.add(this.sprite);
-    }
-
-    // 🔥 중력 설정 수정 - 기본적으로 월드 중력을 사용하지 않음
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    const useWorld = opts.useWorldGravity ?? gcfg.useWorldGravity ?? false;
-    const gx = opts.gravityX ?? gcfg.gravityX ?? 0;
-    const gy = opts.gravityY ?? gcfg.gravityY ?? 300; // 🔥 기본 중력값 추가
-
-    // 🔥 드래그와 바운스를 명확히 제거
-    body.setDrag(0, 0);
-    body.setBounce(0, 0);
-    body.setImmovable(false); // 🔥 움직일 수 있도록 설정
-
-    // 🔥 중력 설정 로직 개선
-    if (useWorld) {
-      body.setAllowGravity(true);
-      console.log(`🌍 총알이 월드 중력 사용: ${scene.physics.world.gravity.y}`);
-    } else if (gx !== 0 || gy !== 0) {
-      body.setAllowGravity(true);
-      body.setGravity(gx, gy);
-      console.log(`🎯 총알 개별 중력 설정: (${gx}, ${gy})`);
-    } else {
-      // 🔥 기본적으로는 약간의 중력을 적용하여 자연스러운 포물선 궤적
-      body.setAllowGravity(true);
-      body.setGravity(0, 300); // 기본 중력
-      console.log(`📉 총알 기본 중력 적용: (0, 300)`);
-    }
-
-    // 🔥 물리 바디가 올바르게 움직이는지 확인
-    (body as any).moves = true;
-    body.setSize(radius * 2, radius * 2);
-
-    this._alignToVelocity =
-      opts.alignToVelocity ?? gcfg.alignToVelocity ?? true;
-
-    // 2) 꼬리(그라디언트 이미지)
-    const tailEnabled = opts.tailEnabled ?? gcfg.tailEnabled ?? true;
-    if (tailEnabled) {
-      Bullet.ensureTailTexture(scene);
-      this.tail = scene.add.image(x, y, "__bullet_tail");
-      this.tail.setOrigin(0.5, 0.5);
-      this.tail.setBlendMode(Phaser.BlendModes.ADD);
-      this.tail.setDepth(this.sprite.depth - 1);
-      this.tail.setAlpha(this.tailAlpha);
-      this.tail.setScrollFactor(
-        (this.sprite as any).scrollFactorX ?? 1,
-        (this.sprite as any).scrollFactorY ?? 1
-      );
-    }
-
-    // 3) 몸통(원형)
-    const bodyEnabled = opts.bodyEnabled ?? true;
-    if (bodyEnabled) {
-      const circleR = Math.max(
-        2,
-        Math.floor(this.baseRadius * this.bodyVisualScale)
-      );
-      this.bodyCircle = scene.add.circle(x, y, circleR, this.bodyColor, 1);
-      this.bodyCircle.setBlendMode(Phaser.BlendModes.ADD);
-      this.bodyCircle.setDepth(this.sprite.depth);
-      this.bodyCircle.setScrollFactor(
-        (this.sprite as any).scrollFactorX ?? 1,
-        (this.sprite as any).scrollFactorY ?? 1
-      );
-    }
-
-    // 업데이트 루프 등록
-    if (this.tail) {
-      this.scene.events.on("update", this.syncTailAndBody, this);
-    } else if (this.bodyCircle) {
-      this.scene.events.on("update", this.syncBodyOnly, this);
-    } else {
-      this.scene.events.on("update", this.syncRotationOnly, this);
-    }
-
-    // TTL
-    if (ttl > 0) {
-      scene.time.delayedCall(ttl, () => this.destroy(false));
-    }
-
-    // 🔥 디버그 로그 추가
     console.log(
-      `🚀 총알 생성: 위치(${x.toFixed(1)}, ${y.toFixed(
+      `🚀 총알 생성 시작: ID=${this._id}, 위치=(${x.toFixed(1)}, ${y.toFixed(
         1
-      )}), 속도: ${speed}, 중력: (${gx}, ${gy}), 월드중력: ${useWorld}`
-    );
-  }
-
-  // ----- 호환 API -----
-  get active() {
-    return this.alive;
-  }
-
-  fire(from: Phaser.Math.Vector2, to: Phaser.Math.Vector2, speed = 1200) {
-    const ang = Phaser.Math.Angle.Between(from.x, from.y, to.x, to.y);
-    this.sprite.setPosition(from.x, from.y);
-    this.sprite.setRotation(ang);
-
-    // 🔥 속도 설정 시 디버그 로그 추가
-    const vx = Math.cos(ang) * speed;
-    const vy = Math.sin(ang) * speed;
-
-    console.log(
-      `🎯 총알 발사: 각도 ${((ang * 180) / Math.PI).toFixed(
-        1
-      )}°, 속도벡터 (${vx.toFixed(1)}, ${vy.toFixed(1)})`
+      )}), 각도=${((angle * 180) / Math.PI).toFixed(1)}도`
     );
 
-    // 🔥 물리 바디 상태 확인
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    console.log(
-      `⚙️ 물리 바디 상태: moves=${(body as any).moves}, allowGravity=${
-        body.allowGravity
-      }, gravity=(${body.gravity.x}, ${body.gravity.y})`
-    );
+    // 기본 설정 병합
+    this.config = {
+      speed: 800,
+      damage: 25,
+      radius: 6,
+      color: 0xffaa00,
+      tailColor: 0xff6600,
+      tailLength: 80,
+      gravity: { x: 0, y: 300 },
+      useWorldGravity: false,
+      lifetime: 8000,
+      ...config,
+    };
 
-    return this;
+    console.log(`🎯 총알 설정:`, this.config);
+
+    this.createBulletAssets(x, y, angle, bulletGroup);
+    this.setupPhysics(angle);
+    this.setupLifetime();
+
+    console.log(`✅ 총알 생성 완료: ${this._id}`);
   }
 
-  // ⭐ 충돌 시 호출되는 메서드
-  hitAndExplode(contactX?: number, contactY?: number) {
-    if (!this.alive) return;
-    const ex = contactX ?? this.sprite.x;
-    const ey = contactY ?? this.sprite.y;
-    this.makeExplosion(ex, ey);
-    this.destroy(true);
-  }
+  /**
+   * 총알 에셋 생성 (스프라이트, 테일, 시각 효과)
+   */
+  private createBulletAssets(
+    x: number,
+    y: number,
+    angle: number,
+    bulletGroup: Phaser.Physics.Arcade.Group
+  ): void {
+    console.log(`🎨 총알 에셋 생성 중... 위치: (${x}, ${y})`);
 
-  private makeExplosion(x: number, y: number) {
-    const emitter: any = this.scene.add.particles(x, y, this.explosionTex, {
-      speed: { min: 150, max: 380 },
-      quantity: 28,
-      lifespan: { min: 220, max: 420 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 0.8, end: 0 },
-      alpha: { start: 1, end: 0 },
-      emitting: false,
-    });
-    emitter.explode(28, x, y);
-    this.scene.time.delayedCall(350, () => emitter.destroy());
-  }
+    // 1) 물리 본체 생성
+    const key = this.createBulletTexture();
+    this.sprite = this.scene.physics.add.image(x, y, key);
 
-  // ----- 동기화 루프 -----
-  /** 꼬리 + 몸통 동시 동기화 */
-  private syncTailAndBody() {
-    if (!this.alive) return;
-
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body | null;
-
-    // 🔥 바디가 없거나 속도가 0이면 디버그 로그
-    if (!body) {
-      console.warn("⚠️ 총알 바디가 없습니다!");
+    if (!this.sprite) {
+      console.error("❌ 총알 스프라이트 생성 실패!");
       return;
     }
 
+    this.sprite.setRotation(angle);
+    this.sprite.setDepth(100);
+
+    // 2) 충돌 시스템 인식용 세팅
+    bulletGroup.add(this.sprite);
+    this.sprite.setData("__isBullet", true);
+    this.sprite.setData("__bulletRef", this); // 🔥 자기 참조 추가
+
+    const radius = this.config.radius;
+    const diameter = radius * 2;
+    this.sprite.setData("diameter", diameter);
+
+    // 🔥 중요: 물리 바디 설정을 더 명확하게
+    this.sprite.setCircle(radius);
+
+    // 3) 비주얼 이펙트들
+    this.tail = this.scene.add.graphics().setDepth(99);
+
+    this.bodyCircle = this.scene.add
+      .circle(x, y, radius, this.config.color, 1)
+      .setDepth(101)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    this.glowEffect = this.scene.add
+      .circle(x, y, radius * 1.5, this.config.color, 0.3)
+      .setDepth(100)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    // 4) 위치 기록
+    this.addToHistory(x, y);
+
+    console.log(`✅ 총알 에셋 생성 완료`);
+  }
+
+  private createBulletTexture(): string {
+    const key = `bullet_texture_${this._id}`;
+
+    // 텍스처가 이미 존재하는지 확인
+    if (this.scene.textures.exists(key)) {
+      return key;
+    }
+
+    try {
+      // Canvas 방식으로 안전하게 텍스처 생성
+      const size = this.config.radius * 2;
+      const canvas = this.scene.textures.createCanvas(key, size, size);
+
+      if (canvas) {
+        const ctx = canvas.getContext();
+        if (ctx) {
+          // 원 그리기
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(
+            this.config.radius,
+            this.config.radius,
+            this.config.radius,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+          canvas.refresh();
+        }
+      }
+    } catch (error) {
+      console.warn("Canvas texture creation failed, using fallback:", error);
+
+      // 폴백: Graphics로 텍스처 생성
+      try {
+        const graphics = this.scene.add.graphics();
+        graphics.fillStyle(0xffffff, 1);
+        graphics.fillCircle(
+          this.config.radius,
+          this.config.radius,
+          this.config.radius
+        );
+        graphics.generateTexture(
+          key,
+          this.config.radius * 2,
+          this.config.radius * 2
+        );
+        graphics.destroy();
+      } catch (fallbackError) {
+        console.error("Fallback texture creation failed:", fallbackError);
+        return "__DEFAULT";
+      }
+    }
+
+    return key;
+  }
+
+  /**
+   * 물리 엔진 설정 - 개선된 버전
+   */
+  private setupPhysics(angle: number): void {
+    if (!this.sprite.body) {
+      console.error("❌ 총알 물리 바디가 생성되지 않았습니다!");
+      return;
+    }
+
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    console.log(
+      `⚡ 물리 설정 중... 각도: ${((angle * 180) / Math.PI).toFixed(1)}도`
+    );
+
+    // 속도 설정
+    const vx = Math.cos(angle) * this.config.speed;
+    const vy = Math.sin(angle) * this.config.speed;
+    this.sprite.setVelocity(vx, vy);
+
+    console.log(`🎯 초기 속도 설정: (${vx.toFixed(1)}, ${vy.toFixed(1)})`);
+
+    // 중력 설정 개선
+    if (this.config.useWorldGravity) {
+      // 월드 중력만 사용
+      body.setGravity(0, 0);
+      body.setAllowGravity(true);
+      console.log(`🌍 월드 중력 사용`);
+    } else {
+      // 개별 중력만 사용
+      body.setAllowGravity(false); // 월드 중력 비활성화
+      body.setGravity(this.config.gravity.x, this.config.gravity.y);
+      console.log(
+        `🎯 개별 중력 설정: (${this.config.gravity.x}, ${this.config.gravity.y})`
+      );
+    }
+
+    // 물리 속성 명시적 설정
+    body.setDrag(0, 0);
+    body.setBounce(0, 0);
+    body.setFriction(0, 0);
+    body.setImmovable(false);
+    body.setCollideWorldBounds(false);
+
+    // 바디가 움직일 수 있도록 설정
+    (body as any).moves = true;
+    body.enable = true;
+
+    // 바디 크기 정확히 설정
+    body.setSize(this.config.radius * 2, this.config.radius * 2);
+    body.updateFromGameObject();
+
+    console.log(`✅ 물리 설정 완료`);
+
+    // 100ms 후 상태 체크
+    this.scene.time.delayedCall(100, () => {
+      this.checkPhysicsStatus();
+    });
+  }
+
+  /**
+   * 물리 상태 체크
+   */
+  private checkPhysicsStatus(): void {
+    if (!this.sprite || !this.sprite.body) return;
+
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    const currentSpeed = body.velocity.length();
+
+    console.log(`📊 100ms 후 총알 상태:`);
+    console.log(`   - 속도: ${currentSpeed.toFixed(1)}`);
+    console.log(
+      `   - 위치: (${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`
+    );
+    console.log(`   - 중력: (${body.gravity.x}, ${body.gravity.y})`);
+    console.log(`   - 월드중력허용: ${body.allowGravity}`);
+
+    if (currentSpeed < 50) {
+      console.warn(`⚠️ 총알이 비정상적으로 느려졌습니다!`);
+      this.debugPhysics();
+    }
+  }
+
+  /**
+   * 수명 설정
+   */
+  private setupLifetime(): void {
+    this.scene.time.delayedCall(this.config.lifetime, () => {
+      if (this._active) {
+        console.log(`⏰ 총알 수명 만료: ${this._id}`);
+        this.destroy(false);
+      }
+    });
+  }
+
+  /**
+   * 총알 업데이트 (매 프레임)
+   */
+  public update(): void {
+    if (!this._active || !this.sprite || !this.sprite.body) return;
+
+    const x = this.sprite.x;
+    const y = this.sprite.y;
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+
+    // 위치 히스토리 업데이트
+    this.addToHistory(x, y);
+
+    // 시각적 요소들 위치 동기화
+    if (this.bodyCircle && this.bodyCircle.scene) {
+      this.bodyCircle.setPosition(x, y);
+    }
+    if (this.glowEffect && this.glowEffect.scene) {
+      this.glowEffect.setPosition(x, y);
+    }
+
+    // 속도에 따른 회전
+    if (body.velocity.x !== 0 || body.velocity.y !== 0) {
+      const angle = Math.atan2(body.velocity.y, body.velocity.x);
+      this.sprite.setRotation(angle);
+    }
+
+    // 테일 그리기
+    this.updateTail();
+
+    // 속도 기반 시각적 효과
+    this.updateVisualEffects();
+
+    // 화면 밖으로 나갔는지 체크
+    this.checkBounds();
+  }
+
+  /**
+   * 위치 히스토리에 추가
+   */
+  private addToHistory(x: number, y: number): void {
+    const now = Date.now();
+    this.positionHistory.push({ x, y, time: now });
+
+    // 히스토리 길이 제한
+    if (this.positionHistory.length > this.maxHistoryLength) {
+      this.positionHistory.shift();
+    }
+
+    // 오래된 히스토리 제거 (시간 기준)
+    const cutoffTime = now - 300; // 0.3초
+    this.positionHistory = this.positionHistory.filter(
+      (pos) => pos.time > cutoffTime
+    );
+  }
+
+  /**
+   * 테일 업데이트
+   */
+  private updateTail(): void {
+    if (!this.tail || !this.tail.scene) return;
+
+    this.tail.clear();
+
+    if (this.positionHistory.length < 2) return;
+
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     const speed = body.velocity.length();
 
-    // 🔥 속도가 비정상적으로 낮으면 경고
-    if (speed < 10) {
-      console.warn(
-        `⚠️ 총알 속도가 너무 낮습니다: ${speed.toFixed(
-          2
-        )}, 위치: (${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`
+    // 속도가 낮으면 테일 표시 안 함
+    if (speed < 50) return;
+
+    // 테일 그라디언트 그리기
+    const positions = this.positionHistory.slice();
+
+    for (let i = 1; i < positions.length; i++) {
+      const prev = positions[i - 1];
+      const curr = positions[i];
+
+      // 알파값 계산 (뒤쪽일수록 투명)
+      const alpha = (i / positions.length) * 0.8;
+
+      // 두께 계산 (앞쪽일수록 두껍게)
+      const thickness = Math.max(
+        1,
+        (i / positions.length) * this.config.radius * 0.5
       );
+
+      // 색상 계산 (속도에 따라 변화)
+      const speedFactor = Math.min(1, speed / 1000);
+      const color = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(this.config.tailColor),
+        Phaser.Display.Color.ValueToColor(0xffffff),
+        1,
+        speedFactor
+      );
+
+      this.tail.lineStyle(thickness, color.color, alpha);
+      this.tail.beginPath();
+      this.tail.moveTo(prev.x, prev.y);
+      this.tail.lineTo(curr.x, curr.y);
+      this.tail.strokePath();
+    }
+  }
+
+  /**
+   * 속도 기반 시각적 효과
+   */
+  private updateVisualEffects(): void {
+    if (!this.bodyCircle || !this.glowEffect) return;
+
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    const speed = body.velocity.length();
+
+    // 속도에 따른 크기 변화
+    const scale = Math.max(0.8, Math.min(1.5, 0.8 + (speed / 1000) * 0.7));
+    this.bodyCircle.setScale(scale);
+
+    // 글로우 효과 강도
+    const glowAlpha = Math.max(0.2, Math.min(0.6, 0.2 + (speed / 1000) * 0.4));
+    this.glowEffect.setAlpha(glowAlpha);
+
+    // 색상 변화 (속도가 빠르면 더 밝게)
+    if (speed > 500) {
+      const intensity = Math.min(1, (speed - 500) / 500);
+      const brightColor = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(this.config.color),
+        Phaser.Display.Color.ValueToColor(0xffffff),
+        1,
+        intensity * 0.3
+      );
+      this.bodyCircle.setFillStyle(brightColor.color);
+    } else {
+      this.bodyCircle.setFillStyle(this.config.color);
+    }
+  }
+
+  /**
+   * 화면 경계 체크
+   */
+  private checkBounds(): void {
+    const camera = this.scene.cameras.main;
+    const buffer = 300; // 화면 밖 여유 공간
+
+    const x = this.sprite.x;
+    const y = this.sprite.y;
+
+    if (
+      x < camera.scrollX - buffer ||
+      x > camera.scrollX + camera.width + buffer ||
+      y < camera.scrollY - buffer ||
+      y > camera.scrollY + camera.height + buffer
+    ) {
       console.log(
-        `   - 속도벡터: (${body.velocity.x.toFixed(
-          2
-        )}, ${body.velocity.y.toFixed(2)})`
+        `🗑️ 총알이 화면 밖으로 나가 제거됨: (${x.toFixed(1)}, ${y.toFixed(1)})`
       );
-      console.log(
-        `   - 중력설정: allowGravity=${body.allowGravity}, gravity=(${body.gravity.x}, ${body.gravity.y})`
+      this.destroy(false);
+    }
+  }
+
+  /**
+   * 충돌 처리
+   */
+  public hit(contactX?: number, contactY?: number): void {
+    if (!this._active) return;
+
+    const hitX = contactX ?? this.sprite.x;
+    const hitY = contactY ?? this.sprite.y;
+
+    console.log(`💥 총알 충돌! 위치: (${hitX.toFixed(1)}, ${hitY.toFixed(1)})`);
+
+    // 충돌 이벤트 호출
+    this.events.onHit?.(hitX, hitY);
+
+    // 폭발 효과 생성
+    this.createSafeExplosionEffect(hitX, hitY);
+
+    // 총알 제거
+    this.destroy(true);
+  }
+
+  /**
+   * 안전한 폭발 효과 생성
+   */
+  private createSafeExplosionEffect(x: number, y: number): void {
+    try {
+      // 간단한 플래시 효과
+      const flash = this.scene.add.circle(
+        x,
+        y,
+        this.config.radius * 3,
+        0xffffff,
+        0.8
       );
-      console.log(`   - 드래그: (${body.drag.x}, ${body.drag.y})`);
-    }
+      flash.setDepth(150);
+      flash.setBlendMode(Phaser.BlendModes.ADD);
 
-    // 진행 방향으로 회전
-    if (this._alignToVelocity && body && (body.velocity.x || body.velocity.y)) {
-      const ang = Math.atan2(body.velocity.y, body.velocity.x);
-      this.sprite.setRotation(ang);
-      if (this.tail) this.tail.setRotation(ang);
-    } else if (this.tail) {
-      this.tail.rotation = this.sprite.rotation;
-    }
-
-    // 위치 동기화
-    if (this.tail) {
-      this.tail.x = this.sprite.x;
-      this.tail.y = this.sprite.y;
-    }
-    if (this.bodyCircle) {
-      this.bodyCircle.x = this.sprite.x;
-      this.bodyCircle.y = this.sprite.y;
-    }
-
-    // 꼬리 길이/두께 (속도 기반)
-    if (this.tail) {
-      const targetLen = Phaser.Math.Clamp((speed / 700) * 0.2, 0.1, 0.3);
-      this.tailScaleX = Phaser.Math.Linear(this.tailScaleX, targetLen, 0.22);
-      const scaleY = Phaser.Math.Clamp(0.38 + (speed / 1600) * 0.5, 0.38, 1.5);
-      this.tail.setScale(this.tailScaleX, scaleY * this.tailVisualScale);
-      this.tail.setAlpha(this.tailAlpha);
+      this.scene.tweens.add({
+        targets: flash,
+        scaleX: 2,
+        scaleY: 2,
+        alpha: 0,
+        duration: 200,
+        ease: "Power2",
+        onComplete: () => {
+          if (flash && flash.scene) {
+            flash.destroy();
+          }
+        },
+      });
+    } catch (error) {
+      console.warn("폭발 효과 생성 실패:", error);
     }
   }
 
-  /** 꼬리 없이 몸통만 동기화 */
-  private syncBodyOnly() {
-    if (!this.alive || !this.bodyCircle) return;
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body | null;
+  /**
+   * 총알 제거
+   */
+  public destroy(wasHit: boolean = false): void {
+    if (!this._active) return;
 
-    if (this._alignToVelocity && body && (body.velocity.x || body.velocity.y)) {
-      const ang = Math.atan2(body.velocity.y, body.velocity.x);
-      this.sprite.setRotation(ang);
+    this._active = false;
+    console.log(`🗑️ 총알 제거됨 (충돌: ${wasHit}, ID: ${this._id})`);
+
+    // 이벤트 호출
+    this.events.onDestroy?.();
+
+    // 시각적 요소들 안전하게 제거
+    try {
+      if (this.tail && this.tail.scene) {
+        this.tail.destroy();
+      }
+      if (this.bodyCircle && this.bodyCircle.scene) {
+        this.bodyCircle.destroy();
+      }
+      if (this.glowEffect && this.glowEffect.scene) {
+        this.glowEffect.destroy();
+      }
+    } catch (error) {
+      console.warn("시각적 요소 제거 중 오류:", error);
     }
 
-    this.bodyCircle.x = this.sprite.x;
-    this.bodyCircle.y = this.sprite.y;
-  }
-
-  private syncRotationOnly() {
-    if (!this.alive || !this._alignToVelocity) return;
-    const body = this.sprite.body as Phaser.Physics.Arcade.Body | null;
-    if (body && (body.velocity.x || body.velocity.y)) {
-      const ang = Math.atan2(body.velocity.y, body.velocity.x);
-      this.sprite.setRotation(ang);
-    }
-  }
-
-  // ⭐ destroy 메서드
-  destroy(_silent = false) {
-    if (!this.alive) return;
-    this.alive = false;
-
-    // 이벤트 리스너 제거
-    this.scene.events.off("update", this.syncTailAndBody, this);
-    this.scene.events.off("update", this.syncBodyOnly, this);
-    this.scene.events.off("update", this.syncRotationOnly, this);
-
-    // 시각 오브젝트 제거
-    this.tail?.destroy();
-    this.bodyCircle?.destroy();
-
-    // 데이터 정리
-    if (this.sprite) {
-      try {
-        if (typeof this.sprite.setData === "function") {
-          this.sprite.setData("bullet", null);
+    // 메인 스프라이트 제거
+    if (this.sprite && this.sprite.scene) {
+      // 텍스처 정리
+      const textureKey = `bullet_texture_${this._id}`;
+      if (this.scene.textures.exists(textureKey)) {
+        try {
+          this.scene.textures.remove(textureKey);
+        } catch (error) {
+          console.warn("텍스처 제거 중 오류:", error);
         }
-      } catch (error) {
-        console.warn("Could not clear bullet data on destroy:", error);
       }
-    }
 
-    // 그룹에서 제거 후 스프라이트 제거
-    if (this.bulletGroup && this.sprite) {
-      try {
-        this.bulletGroup.remove(this.sprite, true, true);
-      } catch {
-        this.sprite.destroy();
-      }
-    } else if (this.sprite) {
       this.sprite.destroy();
     }
+
+    // 히스토리 정리
+    this.positionHistory = [];
   }
 
-  // ⭐ 그룹 설정 메서드
-  public setGroup(group: Phaser.Physics.Arcade.Group): void {
-    if (this.bulletGroup) {
-      this.bulletGroup.remove(this.sprite);
-    }
-    this.bulletGroup = group;
-    group.add(this.sprite);
+  // ===== Getter 메서드들 =====
+
+  public get active(): boolean {
+    return this._active;
   }
 
-  // 🔥 물리 바디 상태 확인 메서드 추가
+  public get id(): string {
+    return this._id;
+  }
+
+  public get x(): number {
+    return this.sprite?.x ?? 0;
+  }
+
+  public get y(): number {
+    return this.sprite?.y ?? 0;
+  }
+
+  public get age(): number {
+    return Date.now() - this.createdTime;
+  }
+
+  public getVelocity(): { x: number; y: number } {
+    const body = this.sprite?.body as Phaser.Physics.Arcade.Body;
+    return body ? { x: body.velocity.x, y: body.velocity.y } : { x: 0, y: 0 };
+  }
+
+  public getSpeed(): number {
+    const vel = this.getVelocity();
+    return Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+  }
+
+  public getConfig(): Readonly<Required<BulletConfig>> {
+    return { ...this.config };
+  }
+
+  // ===== 정적 메서드들 =====
+
+  /**
+   * 프리로드용 메서드
+   */
+  public static preload(scene: Phaser.Scene): void {
+    console.log("💡 Bullet system preloaded");
+  }
+
+  /**
+   * 기본 설정 반환
+   */
+  public static getDefaultConfig(): Required<BulletConfig> {
+    return {
+      speed: 800,
+      damage: 25,
+      radius: 6,
+      color: 0xffaa00,
+      tailColor: 0xff6600,
+      tailLength: 80,
+      gravity: { x: 0, y: 300 },
+      useWorldGravity: false,
+      lifetime: 8000,
+    };
+  }
+
+  /**
+   * 디버깅용 물리 상태 출력
+   */
   public debugPhysics(): void {
+    if (!this.sprite || !this.sprite.body) {
+      console.log(`🔍 총알 ${this._id}: 물리 바디 없음`);
+      return;
+    }
+
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    console.log(`🔍 총알 물리 디버그:`, {
+    console.log(`🔍 총알 ${this._id} 물리 상태:`, {
       position: `(${this.sprite.x.toFixed(1)}, ${this.sprite.y.toFixed(1)})`,
       velocity: `(${body.velocity.x.toFixed(1)}, ${body.velocity.y.toFixed(
         1
@@ -439,144 +627,11 @@ export class Bullet {
       speed: body.velocity.length().toFixed(1),
       allowGravity: body.allowGravity,
       gravity: `(${body.gravity.x}, ${body.gravity.y})`,
-      worldGravity: `(${this.scene.physics.world.gravity.x}, ${this.scene.physics.world.gravity.y})`,
       drag: `(${body.drag.x}, ${body.drag.y})`,
       bounce: `(${body.bounce.x}, ${body.bounce.y})`,
       moves: (body as any).moves,
+      enable: body.enable,
       immovable: body.immovable,
     });
-  }
-
-  // ----- 리소스 생성 -----
-  static preload(scene: Phaser.Scene) {
-    // 충돌 바디용 원형 텍스처(안 보임)
-    if (!scene.textures.exists("bullet")) {
-      const cfg = readBulletCfg();
-      const diameter = (cfg.diameter ?? (cfg.radius ? cfg.radius * 2 : 8)) | 0;
-      const r = Math.max(1, Math.floor(diameter / 2));
-      const g = scene.add.graphics({ x: 0, y: 0 }).setVisible(false);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(r, r, r);
-      g.generateTexture("bullet", diameter, diameter);
-      g.destroy();
-    }
-    // 폭발 파티클용 점
-    if (!scene.textures.exists("particle")) {
-      const g = scene.add.graphics({ x: 0, y: 0 }).setVisible(false);
-      g.fillStyle(0xffffff, 1);
-      g.fillCircle(20, 20, 20);
-      g.generateTexture("particle", 16, 16);
-      g.destroy();
-    }
-    // 꼬리(테어드롭) 텍스처
-    Bullet.ensureTailTexture(scene);
-  }
-
-  /** 테어드롭(그라디언트) 텍스처 생성 */
-  static ensureTailTexture(scene: Phaser.Scene) {
-    if (scene.textures.exists("__bullet_tail")) return;
-
-    const w = 192,
-      h = 48;
-    const tex = scene.textures.createCanvas(
-      "__bullet_tail",
-      w,
-      h
-    ) as Phaser.Textures.CanvasTexture | null;
-
-    const fallbackWithGraphics = () => {
-      const g = scene.add.graphics({ x: 0, y: 0 }).setVisible(false);
-      g.destroy();
-    };
-
-    if (!tex) {
-      fallbackWithGraphics();
-      return;
-    }
-
-    const ctx = tex.getContext();
-    if (!ctx) {
-      scene.textures.remove("__bullet_tail");
-      fallbackWithGraphics();
-      return;
-    }
-
-    ctx.clearRect(0, 0, w, h);
-
-    const headX = Math.floor(w * 0.5),
-      headY = h / 2;
-    const tailX = Math.floor(w * 0.005),
-      tailY = h / 2;
-    const half = Math.floor(h * 0.22);
-
-    // 실루엣
-    ctx.beginPath();
-    ctx.moveTo(tailX, tailY);
-    ctx.quadraticCurveTo(w * 0.5, tailY - half * 0.9, headX, headY);
-    ctx.quadraticCurveTo(w * 0.5, tailY + half * 0.9, tailX, tailY);
-    ctx.closePath();
-
-    const lg = ctx.createLinearGradient(tailX, tailY, headX, headY);
-    lg.addColorStop(0.0, "rgba(255,180,0,0.00)");
-    lg.addColorStop(0.35, "rgba(255,180,0,0.45)");
-    lg.addColorStop(0.75, "rgba(255,200,40,0.85)");
-    lg.addColorStop(1.0, "rgba(255,255,255,1.00)");
-    ctx.fillStyle = lg;
-    ctx.fill();
-
-    // 머리 코어(래디얼)
-    const rg = ctx.createRadialGradient(headX, headY, 2, headX, headY, 16);
-    rg.addColorStop(0.0, "rgba(255,255,255,1.0)");
-    rg.addColorStop(0.5, "rgba(255,220,80,0.9)");
-    rg.addColorStop(1.0, "rgba(255,180,0,0.0)");
-    ctx.fillStyle = rg;
-    ctx.beginPath();
-    ctx.arc(headX, headY, 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 코어 라인
-    ctx.strokeStyle = "rgba(255,255,255,0.65)";
-    ctx.lineWidth = 0.1;
-    ctx.beginPath();
-    ctx.moveTo(tailX, tailY);
-    ctx.quadraticCurveTo(w * 0.2, tailY, headX, headY);
-    ctx.stroke();
-
-    tex.refresh();
-  }
-
-  // ----- 유틸 -----
-  static fireFromMuzzle(
-    scene: Phaser.Scene,
-    gun: Phaser.GameObjects.GameObject & { rotation?: number },
-    muzzleOffset: Phaser.Math.Vector2,
-    options: BulletOptions & { angleAdjustDeg?: number } = {},
-    bulletGroup?: Phaser.Physics.Arcade.Group
-  ) {
-    const world = toWorldPoint(gun as any, muzzleOffset.x, muzzleOffset.y);
-    const angleRad =
-      (gun.rotation ?? 0) +
-      Phaser.Math.DEG_TO_RAD * (options.angleAdjustDeg ?? 0);
-    return new Bullet(scene, world.x, world.y, angleRad, options, bulletGroup);
-  }
-
-  static explodeMuzzle(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    _angleRad = 0,
-    textureKey = "particle"
-  ) {
-    const emitter: any = scene.add.particles(x, y, textureKey, {
-      speed: { min: 80, max: 220 },
-      quantity: 12,
-      lifespan: { min: 120, max: 180 },
-      angle: { min: -25, max: 25 },
-      scale: { start: 1.1, end: 0 },
-      alpha: { start: 1, end: 0 },
-      emitting: false,
-    });
-    emitter.explode(12, x, y);
-    scene.time.delayedCall(120, () => emitter.destroy());
   }
 }
