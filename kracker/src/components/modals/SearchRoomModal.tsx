@@ -62,8 +62,8 @@ const SearchRoomModal: React.FC<SearchRoomModalProps> = ({
         setRooms(
           res.rooms.map((r: any) => ({
             id: r.roomId,
-            isPublic: true,
-            name: `방(${r.players.length}/${r.max})`,
+            isPublic: r.visibility === "public",
+            name: r.roomName ?? `방(${r.players.length}/${r.max})`,
           }))
         );
       }

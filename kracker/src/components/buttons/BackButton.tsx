@@ -11,8 +11,6 @@ const BackButton: React.FC<BackButtonProps> = ({
 
     const baseStyle: React.CSSProperties = {
         position: "absolute",
-        left: 12,
-        top: "50%",
         transform: "translateY(-50%)",
         background: "transparent",
         border: "none",

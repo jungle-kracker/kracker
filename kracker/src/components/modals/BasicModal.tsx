@@ -70,6 +70,8 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                             width: 85,
                             height: 85,
                             marginLeft: 30,
+                            left: 12,
+                            top: "50%",
                         }}
                     >
                         <svg width="120" height="120" viewBox="0 0 24 24" fill="none" aria-hidden="true">

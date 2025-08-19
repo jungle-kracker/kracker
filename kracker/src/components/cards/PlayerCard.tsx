@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { ReactComponent as CaretIcon } from "../../assets/images/mdi_triangle.svg";
+import BgBase from "../../assets/images/titleBackground.svg";
 
 type PlayerCardProps = {
     team: number;
@@ -18,7 +19,7 @@ const RADIUS = 30;
 const BORDER = 5;
 
 const PlayerCard: React.FC<PlayerCardProps> = ({
-    team, numTeams, onTeamChange, name, className, onCardClick,
+    team, numTeams, onTeamChange, name, className, onCardClick, playerColor
 }) => {
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState<number>(Math.max(0, team - 1));
@@ -122,6 +123,18 @@ const PlayerCard: React.FC<PlayerCardProps> = ({
                     )}
                 </TeamChip>
             )}
+            <AvatarWrap aria-hidden>
+                <MiniFace $color={playerColor ?? "#888"}>
+                    <MiniEyeWrap $side="left">
+                        <MiniPupil />
+                        <MiniHighlight />
+                    </MiniEyeWrap>
+                    <MiniEyeWrap $side="right">
+                        <MiniPupil />
+                        <MiniHighlight />
+                    </MiniEyeWrap>
+                </MiniFace>
+            </AvatarWrap>
 
             <NameBar><Name>{name}</Name></NameBar>
         </Card>
@@ -204,7 +217,7 @@ const ArrowIcon = styled(CaretIcon) <{ $open: boolean }>`
   position: absolute;
   right: 10px;
   top: 50%;
-  transform: translateY(-50%) rotate(${p => (p.$open ? 0 : 180)}deg);
+  transform: translateY(-50%) rotate(${p => (p.$open ? 180 : 0)}deg);
   transition: transform .18s ease;
   width: 14px; height: 14px;
   pointer-events: none;
@@ -263,4 +276,64 @@ const Name = styled.div`
   font-weight: 500;
   letter-spacing: .2px;
   color: #1a1a1a;
+`;
+
+/* ==== Avatar (모달 캐릭터 축소판) ==== */
+const AvatarWrap = styled.div`
+  position: absolute;
+  left: 50%;
+  bottom: 56px;                 /* NameBar 높이와 동일하게 맞춤 */
+  transform: translateX(-50%);
+  width: 76%;                   /* 카드 너비 대비 */
+  pointer-events: none;         /* 클릭 간섭 없음 */
+  z-index: 1;                   /* NameBar(2) 아래, 카드 배경(기본) 위 */
+`;
+
+const MiniFace = styled.div<{ $color: string }>`
+  width: 80%;
+  left: 10%;
+  aspect-ratio: 1 / 0.5;
+  border-top-left-radius: 600px;
+  border-top-right-radius: 600px;
+  background: ${({ $color }) => $color};
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url(${BgBase}) center/cover no-repeat;
+    opacity: 0.1;
+    pointer-events: none;
+  }
+`;
+
+const MiniEyeWrap = styled.div<{ $side: "left" | "right" }>`
+  position: absolute;
+  top: 26%;
+  ${({ $side }) => ($side === "left" ? "left: 34%;" : "right: 34%;")}
+  width: 5%;                   /* 모달과 동일 비율 (가로 1/10) */
+  height: 25%;                  /* 세로 1/4 */
+  transform: translate(-50%, 0);
+`;
+
+const MiniPupil = styled.div`
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #000;
+  overflow: hidden;             /* 하이라이트가 밖으로 안 보이게 */
+`;
+
+/* 하이라이트: 눈 가로의 1/3, 완전한 원형 — 고정 위치 */
+const MiniHighlight = styled.div`
+  position: absolute;
+  width: 33%;
+  height: 16%;
+  border-radius: 50%;
+  background: #fff;
+  left: 70%;
+  top: 30%;
+  transform: translate(-50%, -50%);
 `;
