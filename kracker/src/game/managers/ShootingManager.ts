@@ -1,0 +1,468 @@
+// src/game/managers/ShootingManager.ts - 사격 시스템 전담 매니저
+import { ShootingSystem } from "../bullet";
+import { Debug, debugManager } from "../debug/DebugManager";
+import { LogCategory } from "../debug/Logger";
+import Player from "../player/Player";
+
+export interface ShootingManagerConfig {
+  fireRate: number;
+  damage: number;
+  accuracy: number;
+  recoil: number;
+  muzzleVelocity: number;
+  magazineSize: number;
+  reloadTime: number;
+  burstCount?: number;
+  burstDelay?: number;
+}
+
+export interface ShootingUI {
+  ammoText: Phaser.GameObjects.Text;
+  reloadText: Phaser.GameObjects.Text;
+}
+
+export class ShootingManager {
+  private scene: Phaser.Scene;
+  private shootingSystem!: ShootingSystem;
+  private ui!: ShootingUI;
+  private player?: Player;
+
+  // 설정
+  private config: Required<ShootingManagerConfig>;
+
+  // 이벤트 콜백들
+  private onShotCallback?: (recoil: number) => void;
+  private onReloadCallback?: () => void;
+  private onHitCallback?: (x: number, y: number) => void;
+
+  constructor(scene: Phaser.Scene, config: ShootingManagerConfig) {
+    this.scene = scene;
+
+    this.config = {
+      burstCount: 1,
+      burstDelay: 100,
+      ...config,
+    };
+
+    Debug.log.info(LogCategory.SCENE, "ShootingManager 생성됨", this.config);
+  }
+
+  /**
+   * 초기화
+   */
+  public initialize(): void {
+    Debug.log.info(LogCategory.SCENE, "ShootingManager 초기화 시작");
+
+    // ShootingSystem 생성
+    this.shootingSystem = new ShootingSystem(this.scene, this.config);
+
+    // 반동 효과 콜백 설정
+    this.shootingSystem.setOnShotCallback((recoil) => {
+      this.handleRecoil(recoil);
+      this.onShotCallback?.(recoil);
+    });
+
+    // UI 생성
+    this.createUI();
+
+    // 입력 이벤트 설정
+    this.setupInputEvents();
+
+    Debug.log.info(
+      LogCategory.SCENE,
+      `ShootingManager 초기화 완료 - ${this.config.magazineSize}발/${this.config.reloadTime}ms재장전`
+    );
+  }
+
+  /**
+   * UI 생성
+   */
+  private createUI(): void {
+    const uiDepth = 1000;
+    const baseX = 50;
+    const baseY = this.scene.cameras.main.height - 150;
+
+    // 탄약 표시
+    this.ui = {
+      ammoText: this.scene.add
+        .text(baseX, baseY, "", {
+          fontSize: "28px",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 3,
+          fontFamily: "Arial, sans-serif",
+        })
+        .setDepth(uiDepth)
+        .setScrollFactor(0),
+
+      reloadText: this.scene.add
+        .text(baseX, baseY + 40, "", {
+          fontSize: "20px",
+          color: "#ffaa00",
+          stroke: "#000000",
+          strokeThickness: 2,
+          fontFamily: "Arial, sans-serif",
+        })
+        .setDepth(uiDepth)
+        .setScrollFactor(0),
+    };
+
+    Debug.log.info(LogCategory.UI, "사격 UI 생성 완료");
+  }
+
+  /**
+   * 입력 이벤트 설정
+   */
+  private setupInputEvents(): void {
+    // 마우스 클릭으로 사격
+    this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      this.tryShoot(pointer.worldX, pointer.worldY);
+    });
+
+    // R키로 수동 재장전
+    const rKey = this.scene.input.keyboard?.addKey("R");
+    rKey?.on("down", () => {
+      Debug.log.info(LogCategory.INPUT, "수동 재장전 요청");
+      this.forceReload();
+    });
+
+    // 스페이스바로도 재장전 가능
+    const spaceKey = this.scene.input.keyboard?.addKey("SPACE");
+    spaceKey?.on("down", () => {
+      if (
+        this.shootingSystem.getCurrentAmmo() < this.shootingSystem.getMaxAmmo()
+      ) {
+        Debug.log.info(LogCategory.INPUT, "스페이스바 재장전");
+        this.forceReload();
+      }
+    });
+
+    Debug.log.info(LogCategory.INPUT, "사격 이벤트 설정 완료");
+  }
+
+  /**
+   * 플레이어 설정
+   */
+  public setPlayer(player: Player): void {
+    this.player = player;
+    Debug.log.debug(LogCategory.PLAYER, "ShootingManager에 플레이어 설정됨");
+  }
+
+  /**
+   * 사격 시도
+   */
+  public tryShoot(targetX: number, targetY: number): boolean {
+    if (!this.player) {
+      Debug.log.warn(LogCategory.GAME, "플레이어가 설정되지 않아 사격 불가");
+      return false;
+    }
+
+    const gunX = this.getPlayerX();
+    const gunY = this.getPlayerY();
+
+    // ShootingSystem으로 사격 시도
+    const shotFired = this.shootingSystem.tryShoot(
+      gunX,
+      gunY,
+      targetX,
+      targetY,
+      {
+        // 커스텀 총알 설정
+        color: 0xffffff,
+        tailColor: 0xffffff,
+        radius: 10,
+        speed: this.config.muzzleVelocity,
+        gravity: { x: 0, y: 500 },
+        useWorldGravity: false,
+        lifetime: 8000,
+      }
+    );
+
+    if (shotFired) {
+      const remaining = this.shootingSystem.getCurrentAmmo();
+      Debug.log.debug(
+        LogCategory.GAME,
+        `🔫 발사! 남은 탄약: ${remaining}/${this.shootingSystem.getMaxAmmo()}`
+      );
+
+      // 카메라 흔들림 효과
+      this.scene.cameras.main.shake(5000, 0.005);
+    } else {
+      this.logShootFailureReason();
+    }
+
+    return shotFired;
+  }
+
+  /**
+   * 사격 실패 이유 로깅
+   */
+  private logShootFailureReason(): void {
+    if (this.shootingSystem.isReloading()) {
+      Debug.log.debug(LogCategory.GAME, "🔄 재장전 중...");
+    } else if (this.shootingSystem.getCurrentAmmo() === 0) {
+      Debug.log.debug(LogCategory.GAME, "💥 탄약 부족! R키로 재장전");
+    } else {
+      Debug.log.debug(LogCategory.GAME, "⏰ 연사 속도 제한");
+    }
+  }
+
+  /**
+   * 반동 효과 처리
+   */
+  private handleRecoil(recoilAmount: number): void {
+    if (!this.player) return;
+
+    const player = this.player as any;
+    if (player.body) {
+      // 플레이어 뒤로 밀기
+      const pushBackForce = recoilAmount * 15;
+      const currentVelX = player.body.velocity.x;
+      const recoilX = Math.random() * pushBackForce - pushBackForce / 2;
+      player.body.setVelocityX(currentVelX + recoilX);
+    }
+
+    this.scene.cameras.main.shake(100, 0.00029);
+  }
+
+  /**
+   * 강제 재장전
+   */
+  public forceReload(): void {
+    this.shootingSystem?.forceReload();
+    this.onReloadCallback?.();
+    Debug.log.info(LogCategory.GAME, "강제 재장전 실행");
+  }
+
+  /**
+   * 충돌 시스템 설정
+   */
+  public setupCollisions(
+    platformGroup: Phaser.Physics.Arcade.StaticGroup
+  ): void {
+    const bulletGroup = this.shootingSystem.getBulletGroup();
+
+    // 총알 vs 플랫폼 충돌
+    this.scene.physics.add.collider(
+      bulletGroup,
+      platformGroup,
+      (bulletSprite: any, platform: any) => {
+        const bulletRef = bulletSprite.getData("__bulletRef");
+        if (bulletRef && typeof bulletRef.hit === "function") {
+          bulletRef.hit(bulletSprite.x, bulletSprite.y);
+          this.onHitCallback?.(bulletSprite.x, bulletSprite.y);
+          Debug.log.debug(LogCategory.GAME, "총알이 플랫폼에 명중");
+        }
+      }
+    );
+
+    Debug.log.info(LogCategory.GAME, "사격 충돌 시스템 설정 완료");
+  }
+
+  /**
+   * 업데이트 (매 프레임)
+   */
+  public update(): void {
+    if (this.shootingSystem) {
+      this.shootingSystem.updateBullets();
+    }
+
+    this.updateUI();
+  }
+
+  /**
+   * UI 업데이트
+   */
+  private updateUI(): void {
+    if (!this.shootingSystem || !this.ui.ammoText || !this.ui.reloadText)
+      return;
+
+    const currentAmmo = this.shootingSystem.getCurrentAmmo();
+    const maxAmmo = this.shootingSystem.getMaxAmmo();
+
+    // 탄약 표시 업데이트
+    this.ui.ammoText.setText(`🔫 ${currentAmmo}/${maxAmmo}`);
+
+    // 탄약 색상 변경 (적을수록 빨갛게)
+    const ammoRatio = currentAmmo / maxAmmo;
+    if (ammoRatio <= 0.3) {
+      this.ui.ammoText.setColor("#ff4444"); // 빨간색
+    } else if (ammoRatio <= 0.6) {
+      this.ui.ammoText.setColor("#ffaa44"); // 주황색
+    } else {
+      this.ui.ammoText.setColor("#ffffff"); // 흰색
+    }
+
+    // 재장전 상태 표시
+    if (this.shootingSystem.isReloading()) {
+      this.ui.reloadText.setText(
+        `🔄 재장전 중... (${this.config.reloadTime / 1000}초)`
+      );
+      this.ui.reloadText.setVisible(true);
+
+      // 깜빡이는 효과
+      const blinkAlpha = Math.sin(Date.now() * 0.01) * 0.3 + 0.7;
+      this.ui.reloadText.setAlpha(blinkAlpha);
+    } else if (currentAmmo === 0) {
+      this.ui.reloadText.setText("💥 R키로 재장전!");
+      this.ui.reloadText.setVisible(true);
+      this.ui.reloadText.setAlpha(1);
+    } else {
+      this.ui.reloadText.setVisible(false);
+    }
+  }
+
+  /**
+   * 화면 크기 변경 처리
+   */
+  public handleResize(width: number, height: number): void {
+    if (!this.ui.ammoText || !this.ui.reloadText) return;
+
+    const baseY = height - 150;
+    this.ui.ammoText.setPosition(50, baseY);
+    this.ui.reloadText.setPosition(50, baseY + 40);
+
+    Debug.log.debug(LogCategory.UI, "사격 UI 리사이즈 완료", { width, height });
+  }
+
+  // ===== 콜백 설정 메서드들 =====
+
+  public onShot(callback: (recoil: number) => void): void {
+    this.onShotCallback = callback;
+  }
+
+  public onReload(callback: () => void): void {
+    this.onReloadCallback = callback;
+  }
+
+  public onHit(callback: (x: number, y: number) => void): void {
+    this.onHitCallback = callback;
+  }
+
+  // ===== 상태 조회 메서드들 =====
+
+  public getAmmoStatus(): {
+    current: number;
+    max: number;
+    isReloading: boolean;
+  } {
+    if (!this.shootingSystem) {
+      return { current: 0, max: 0, isReloading: false };
+    }
+
+    return {
+      current: this.shootingSystem.getCurrentAmmo(),
+      max: this.shootingSystem.getMaxAmmo(),
+      isReloading: this.shootingSystem.isReloading(),
+    };
+  }
+
+  public getBulletGroup(): Phaser.Physics.Arcade.Group {
+    return this.shootingSystem.getBulletGroup();
+  }
+
+  public getShootingSystem(): ShootingSystem {
+    return this.shootingSystem;
+  }
+
+  public canShoot(): boolean {
+    return this.shootingSystem?.canShoot() || false;
+  }
+
+  public getBulletCount(): number {
+    return this.shootingSystem?.getBulletCount() || 0;
+  }
+
+  // ===== 헬퍼 메서드들 =====
+
+  private getPlayerX(): number {
+    if (!this.player) return 0;
+    if (typeof this.player.getX === "function") return this.player.getX();
+    if ((this.player as any).x !== undefined) return (this.player as any).x;
+    return 0;
+  }
+
+  private getPlayerY(): number {
+    if (!this.player) return 0;
+    if (typeof this.player.getY === "function") return this.player.getY();
+    if ((this.player as any).y !== undefined) return (this.player as any).y;
+    return 0;
+  }
+
+  // ===== 디버그 메서드들 =====
+
+  public debugInfo(): void {
+    if (!Debug.isEnabled()) return;
+
+    console.log("🔫 ShootingManager 상태:");
+    console.log("  설정:", this.config);
+    console.log("  탄약 상태:", this.getAmmoStatus());
+    console.log("  총알 수:", this.getBulletCount());
+    console.log("  사격 가능:", this.canShoot());
+
+    this.shootingSystem?.debugInfo();
+  }
+
+  public getDebugTools() {
+    if (!Debug.isEnabled()) return null;
+
+    return {
+      infiniteAmmo: () => {
+        Debug.log.warn(LogCategory.GAME, "무한 탄약 모드 활성화 (개발용)");
+        // 실제 구현시 무한 탄약 로직 추가
+      },
+
+      shootingStressTest: () => {
+        for (let i = 0; i < 20; i++) {
+          setTimeout(() => {
+            const targetX = Math.random() * 1000 + 100;
+            const targetY = Math.random() * 600 + 100;
+            this.tryShoot(targetX, targetY);
+          }, i * 100);
+        }
+        Debug.log.warn(LogCategory.PERFORMANCE, "사격 스트레스 테스트 시작");
+      },
+
+      logShootingInfo: () => {
+        this.debugInfo();
+        const bullets = this.shootingSystem?.getAllBullets() || [];
+        Debug.log.info(LogCategory.GAME, `활성 총알 수: ${bullets.length}`);
+      },
+
+      setFireRate: (rate: number) => {
+        this.config.fireRate = rate;
+        Debug.log.info(LogCategory.GAME, `연사속도 변경: ${rate}RPM`);
+      },
+
+      setMagazineSize: (size: number) => {
+        this.config.magazineSize = size;
+        Debug.log.info(LogCategory.GAME, `탄창 크기 변경: ${size}발`);
+      },
+    };
+  }
+
+  // ===== 정리 =====
+
+  public destroy(): void {
+    Debug.log.info(LogCategory.SCENE, "ShootingManager 정리 시작");
+
+    // ShootingSystem 정리
+    if (this.shootingSystem) {
+      this.shootingSystem.destroy();
+    }
+
+    // UI 정리
+    if (this.ui) {
+      this.ui.ammoText?.destroy();
+      this.ui.reloadText?.destroy();
+    }
+
+    // 참조 정리
+    this.player = undefined;
+    this.onShotCallback = undefined;
+    this.onReloadCallback = undefined;
+    this.onHitCallback = undefined;
+
+    Debug.log.info(LogCategory.SCENE, "ShootingManager 정리 완료");
+  }
+}
