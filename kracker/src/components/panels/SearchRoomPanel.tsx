@@ -22,7 +22,7 @@ const SearchRoomPanel: React.FC<SearchRoomPanelProps> = ({ rooms, onJoinRoom }) 
     <div
       style={{
         width: "max(760px, min(62.5vw, 1100px))",
-        
+        minHeight: 400,
         borderRadius: 36,
         padding: "60px 65px",
         background: "#1A181F",
