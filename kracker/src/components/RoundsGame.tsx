@@ -1,6 +1,27 @@
 import React, { useEffect, useRef, useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import GameManager from "../game/GameManager";
+
+// ★ 게임 상태 타입 정의
+interface GamePlayer {
+  id: string;
+  name: string;
+  team: number;
+  color: string;
+  isMe: boolean;
+}
+
+interface GameState {
+  players: GamePlayer[];
+  room: {
+    roomId: string;
+    gameMode: string;
+    roomName: string;
+  };
+  myPlayerId: string;
+  startTime: number;
+}
 
 // ⭐ 글로우 효과가 있는 고급 크로스헤어 컴포넌트
 const CrosshairCursor = () => {
@@ -241,24 +262,161 @@ const ErrorMessage = styled.div`
   }
 `;
 
+// ★ 플레이어 정보 표시 UI
+const PlayerListUI = styled.div`
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  font-family: Arial, sans-serif;
+  z-index: 100;
+  min-width: 200px;
+
+  h4 {
+    margin: 0 0 10px 0;
+    font-size: 16px;
+    color: #00ff00;
+  }
+
+  .player-item {
+    display: flex;
+    align-items: center;
+    margin: 5px 0;
+    font-size: 14px;
+
+    .color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+
+    .player-name {
+      flex: 1;
+    }
+
+    .team-badge {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+
+    &.is-me {
+      background: rgba(0, 255, 0, 0.1);
+      padding: 3px 6px;
+      border-radius: 4px;
+      border-left: 3px solid #00ff00;
+    }
+  }
+`;
+
 const RoundsGame: React.FC = () => {
   const gameRef = useRef<HTMLDivElement>(null);
   const gameManagerRef = useRef<GameManager | null>(null);
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [isGameReady, setIsGameReady] = React.useState(false);
+  const [gameState, setGameState] = React.useState<GameState | null>(null);
+
+  // ★ 게임 상태 로드
+  useEffect(() => {
+    // 1. location.state에서 게임 상태 가져오기
+    let loadedGameState = location.state as GameState | null;
+
+    // 2. location.state가 없으면 sessionStorage에서 시도
+    if (!loadedGameState) {
+      try {
+        const saved = sessionStorage.getItem("gameState");
+        if (saved) {
+          loadedGameState = JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn("sessionStorage에서 gameState 로드 실패:", e);
+      }
+    }
+
+    // 3. 게임 상태가 없으면 로비로 리다이렉트
+    if (!loadedGameState) {
+      console.warn("게임 상태를 찾을 수 없어 로비로 이동합니다.");
+      navigate("/", { replace: true });
+      return;
+    }
+
+    setGameState(loadedGameState);
+    console.log("게임 상태 로드 완료:", loadedGameState);
+  }, [location.state, navigate]);
 
   // 게임 초기화 함수
   const initializeGame = useCallback(async () => {
-    if (!gameRef.current || gameManagerRef.current) return;
+    if (!gameRef.current || gameManagerRef.current || !gameState) return;
 
     try {
-      console.log("게임 초기화 시작");
+      console.log("게임 초기화 시작 - 플레이어 수:", gameState.players.length);
       setIsLoading(true);
       setError(null);
 
       gameManagerRef.current = new GameManager(gameRef.current);
       await gameManagerRef.current.initialize();
+
+      // ⭐ 중요: 씬이 완전히 로드될 때까지 기다리기
+      const scene = gameManagerRef.current.getScene();
+      if (!scene) {
+        console.log("⏳ 씬 로딩 대기 중...");
+        setTimeout(() => {
+          const retryScene = gameManagerRef.current?.getScene();
+          if (retryScene && gameState) {
+            console.log("🔄 씬 준비됨, 멀티플레이어 초기화 재시도");
+
+            const gameData = {
+              players: gameState.players,
+              myPlayerId: gameState.myPlayerId,
+              room: gameState.room,
+              startTime: gameState.startTime,
+            };
+
+            console.log("🎮 멀티플레이어 데이터 전달:", gameData);
+
+            if (
+              typeof (retryScene as any).initializeMultiplayer === "function"
+            ) {
+              (retryScene as any).initializeMultiplayer(gameData);
+            } else {
+              console.error("❌ initializeMultiplayer 함수를 찾을 수 없음");
+            }
+          }
+        }, 500); // 500ms 후 재시도
+
+        setIsGameReady(true);
+        setIsLoading(false);
+        return;
+      }
+
+      // 씬이 준비되었다면 바로 초기화
+      if (scene && gameState) {
+        const gameData = {
+          players: gameState.players,
+          myPlayerId: gameState.myPlayerId,
+          room: gameState.room,
+          startTime: gameState.startTime,
+        };
+
+        console.log("🎮 게임 씬에 플레이어 데이터 전달:", gameData);
+
+        if (typeof (scene as any).initializeMultiplayer === "function") {
+          (scene as any).initializeMultiplayer(gameData);
+        } else {
+          console.error("❌ initializeMultiplayer 함수를 찾을 수 없음");
+        }
+      }
 
       setIsGameReady(true);
       setIsLoading(false);
@@ -272,7 +430,7 @@ const RoundsGame: React.FC = () => {
       );
       setIsLoading(false);
     }
-  }, []);
+  }, [gameState]);
 
   // 게임 정리 함수
   const cleanupGame = useCallback(() => {
@@ -285,29 +443,28 @@ const RoundsGame: React.FC = () => {
     }
   }, []);
 
-  // 컴포넌트 마운트 시 게임 초기화
+  // 게임 상태가 로드되면 초기화
   useEffect(() => {
-    const timer = setTimeout(initializeGame, 100);
+    if (gameState) {
+      const timer = setTimeout(initializeGame, 100);
+      return () => {
+        clearTimeout(timer);
+        cleanupGame();
+      };
+    }
+  }, [gameState, initializeGame, cleanupGame]);
 
-    return () => {
-      clearTimeout(timer);
-      cleanupGame();
-    };
-  }, [initializeGame, cleanupGame]);
-
-  // 윈도우 포커스 이벤트 처리 (백그라운드에서 돌아올 때 게임 상태 복구)
+  // 윈도우 포커스 이벤트 처리
   useEffect(() => {
     const handleFocus = () => {
       if (isGameReady && gameManagerRef.current) {
         console.log("게임 포커스 복구");
-        // 필요하다면 게임 상태 복구 로직 추가
       }
     };
 
     const handleBlur = () => {
       if (isGameReady && gameManagerRef.current) {
         console.log("게임 포커스 잃음");
-        // 필요하다면 게임 일시정지 로직 추가
       }
     };
 
@@ -320,15 +477,13 @@ const RoundsGame: React.FC = () => {
     };
   }, [isGameReady]);
 
-  // 페이지 가시성 변화 처리 (탭 전환 등)
+  // 페이지 가시성 변화 처리
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         console.log("페이지가 숨겨짐");
-        // 게임 일시정지 등의 로직
       } else {
         console.log("페이지가 보임");
-        // 게임 재개 등의 로직
       }
     };
 
@@ -346,6 +501,30 @@ const RoundsGame: React.FC = () => {
     setTimeout(initializeGame, 100);
   }, [cleanupGame, initializeGame]);
 
+  // ★ 로비로 돌아가기
+  const handleBackToLobby = useCallback(() => {
+    cleanupGame();
+    sessionStorage.removeItem("gameState");
+    navigate("/", { replace: true });
+  }, [cleanupGame, navigate]);
+
+  // ★ ESC 키로 로비 복귀
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        const confirmExit = window.confirm(
+          "게임을 종료하고 로비로 돌아가시겠습니까?"
+        );
+        if (confirmExit) {
+          handleBackToLobby();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [handleBackToLobby]);
+
   return (
     <Container>
       <GameCanvas ref={gameRef} />
@@ -353,11 +532,40 @@ const RoundsGame: React.FC = () => {
       {/* ⭐ 커스텀 크로스헤어 커서 */}
       <CrosshairCursor />
 
+      {/* ★ 플레이어 리스트 UI */}
+      {gameState && isGameReady && (
+        <PlayerListUI>
+          <h4>참가자 ({gameState.players.length}명)</h4>
+          {gameState.players.map((player) => (
+            <div
+              key={player.id}
+              className={`player-item ${player.isMe ? "is-me" : ""}`}
+            >
+              <div
+                className="color-dot"
+                style={{ backgroundColor: player.color }}
+              />
+              <span className="player-name">
+                {player.name} {player.isMe && "(나)"}
+              </span>
+              {gameState.room.gameMode === "팀전" && (
+                <span className="team-badge">팀 {player.team}</span>
+              )}
+            </div>
+          ))}
+          <div style={{ marginTop: "10px", fontSize: "12px", color: "#888" }}>
+            ESC: 로비로 돌아가기
+          </div>
+        </PlayerListUI>
+      )}
+
       <LoadingOverlay isVisible={isLoading}>
         <div>
           <div>🎮 게임 로딩 중...</div>
           <div style={{ fontSize: "14px", marginTop: "10px", opacity: 0.7 }}>
-            맵과 리소스를 불러오고 있습니다
+            {gameState
+              ? `${gameState.players.length}명의 플레이어와 함께 게임을 시작합니다`
+              : "맵과 리소스를 불러오고 있습니다"}
           </div>
         </div>
       </LoadingOverlay>
@@ -369,7 +577,8 @@ const RoundsGame: React.FC = () => {
           <button
             onClick={handleRetry}
             style={{
-              marginTop: "15px",
+              marginTop: "10px",
+              marginRight: "10px",
               padding: "8px 16px",
               backgroundColor: "#fff",
               color: "#000",
@@ -379,6 +588,20 @@ const RoundsGame: React.FC = () => {
             }}
           >
             다시 시도
+          </button>
+          <button
+            onClick={handleBackToLobby}
+            style={{
+              marginTop: "10px",
+              padding: "8px 16px",
+              backgroundColor: "#666",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            로비로 돌아가기
           </button>
         </ErrorMessage>
       )}

@@ -4,7 +4,7 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 type Team = "A" | "B";
-type Status = "waiting" | "playing" | 'ended';
+type Status = "waiting" | "playing" | "ended";
 type Visibility = "public" | "private";
 
 type Player = {
@@ -21,25 +21,34 @@ type Room = {
   max: number;
   status: Status;
   players: Record<string, Player>;
-  visibility: Visibility;        // 공개/비공개
-  roomName: string;              // 방 이름
-  gameMode: string;              // "팀전" 등
+  visibility: Visibility; // 공개/비공개
+  roomName: string; // 방 이름
+  gameMode: string; // "팀전" 등
   createdAt: number;
-  nextTeam: Team;  // 다음 배정 예정 팀 ("A" 또는 "B")
+  nextTeam: Team; // 다음 배정 예정 팀 ("A" 또는 "B")
 };
 
 const MAX_ROOMS = 5;
 const TEAM_CAP = 3;
 
-const COLOR_PRESETS = ['#D76A6A', '#EE9841', '#5A945B', '#196370', '#6C3FAF', '#DF749D'];
+const COLOR_PRESETS = [
+  "#D76A6A",
+  "#EE9841",
+  "#5A945B",
+  "#196370",
+  "#6C3FAF",
+  "#DF749D",
+];
 
 const isHexColor = (s: string) => /^#?[0-9a-fA-F]{6}$/.test(s);
-const normalizeHex = (s: string) => ('#' + s.replace('#', '')).toUpperCase();
+const normalizeHex = (s: string) => ("#" + s.replace("#", "")).toUpperCase();
 const getUsedColors = (room: Room) =>
-  new Set(Object.values(room.players).map(p => (p.color || '').toLowerCase()));
+  new Set(
+    Object.values(room.players).map((p) => (p.color || "").toLowerCase())
+  );
 const pickFirstFreeColor = (room: Room) => {
   const used = getUsedColors(room);
-  return COLOR_PRESETS.find(c => !used.has(c.toLowerCase())) ?? '#888888';
+  return COLOR_PRESETS.find((c) => !used.has(c.toLowerCase())) ?? "#888888";
 };
 
 const toSafeRoom = (room: Room) => ({
@@ -50,8 +59,12 @@ const toSafeRoom = (room: Room) => ({
   roomName: room.roomName,
   gameMode: room.gameMode,
   createdAt: room.createdAt,
-  players: Object.values(room.players).map(p => ({
-    id: p.id, nickname: p.nickname, color: p.color, team: p.team, ready: p.ready
+  players: Object.values(room.players).map((p) => ({
+    id: p.id,
+    nickname: p.nickname,
+    color: p.color,
+    team: p.team,
+    ready: p.ready,
   })),
 });
 
@@ -90,68 +103,65 @@ io.on("connection", (socket) => {
   console.log(`[CONNECT] ${socket.id}`);
 
   // 방 생성
-  socket.on(
-    "room:create",
-    (
-      payload: any,
-      ack?: Function) => {
-      // 제한 초과 시 실패 응답
-      if (rooms.size >= MAX_ROOMS) {
-        return ack?.({ ok: false, error: 'ROOM_LIMIT', max: MAX_ROOMS });
-      }
-
-      const roomId = Math.random().toString(36).slice(2, 7).toUpperCase();
-
-      const room: Room = {
-        roomId,
-        hostId: socket.id,
-        max: Math.max(2, Math.min(16, payload.max || 8)),
-        status: "waiting",
-        players: {},
-        // 기본값 지정
-        visibility: (payload?.visibility ?? 'public'),
-        roomName: String(payload?.roomName ?? 'ROOM'),
-        gameMode: String(payload?.gameMode ?? '팀전'),
-        createdAt: Date.now(),
-        nextTeam: "A", // 처음은 A로 시작
-      };
-
-      room.players[socket.id] = {
-        id: socket.id,
-        nickname: String(payload?.nickname ?? 'Player'),  // ✅ 저장
-        team: 'A',
-        ready: false,
-      };
-
-      rooms.set(roomId, room);
-
-      const player: Player = {
-        id: socket.id,
-        nickname: payload.nickname?.trim() || "Player",
-        ready: false,
-        team: "A",
-      };
-
-      rooms.set(roomId, room);
-      socket.join(roomId);
-
-      room.players[socket.id] = player;
-
-      room.nextTeam = "B";
-
-      console.log(
-        `[ROOM CREATE] ${player.nickname} (${socket.id}) -> ${roomId} (max=${room.max})`
-      );
-
-      ack?.({ ok: true, room: safeRoomState(room) });
-      io.to(roomId).emit("room:update", safeRoomState(room));
+  socket.on("room:create", (payload: any, ack?: Function) => {
+    // 제한 초과 시 실패 응답
+    if (rooms.size >= MAX_ROOMS) {
+      return ack?.({ ok: false, error: "ROOM_LIMIT", max: MAX_ROOMS });
     }
-  );
+
+    const roomId = Math.random().toString(36).slice(2, 7).toUpperCase();
+
+    const room: Room = {
+      roomId,
+      hostId: socket.id,
+      max: Math.max(2, Math.min(16, payload.max || 8)),
+      status: "waiting",
+      players: {},
+      // 기본값 지정
+      visibility: payload?.visibility ?? "public",
+      roomName: String(payload?.roomName ?? "ROOM"),
+      gameMode: String(payload?.gameMode ?? "팀전"),
+      createdAt: Date.now(),
+      nextTeam: "A", // 처음은 A로 시작
+    };
+
+    room.players[socket.id] = {
+      id: socket.id,
+      nickname: String(payload?.nickname ?? "Player"), // ✅ 저장
+      team: "A",
+      ready: false,
+    };
+
+    rooms.set(roomId, room);
+
+    const player: Player = {
+      id: socket.id,
+      nickname: payload.nickname?.trim() || "Player",
+      ready: false,
+      team: "A",
+    };
+
+    rooms.set(roomId, room);
+    socket.join(roomId);
+
+    room.players[socket.id] = player;
+
+    room.nextTeam = "B";
+
+    console.log(
+      `[ROOM CREATE] ${player.nickname} (${socket.id}) -> ${roomId} (max=${room.max})`
+    );
+
+    ack?.({ ok: true, room: safeRoomState(room) });
+    io.to(roomId).emit("room:update", safeRoomState(room));
+  });
 
   // 4) 방 목록: 공개방만 + 필드 포함
   socket.on("room:list", (_: {}, ack?: Function) => {
     const list = [...rooms.values()]
-      .filter((r) => r.visibility === "public" && r.status === "waiting").sort((a, b) => b.createdAt - a.createdAt).slice(0, 3) //서버에서도 3개 제한
+      .filter((r) => r.visibility === "public" && r.status === "waiting")
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 3) //서버에서도 3개 제한
       .map((r) => ({
         roomId: r.roomId,
         max: r.max,
@@ -174,8 +184,12 @@ io.on("connection", (socket) => {
   });
 
   function pickTeamWithAlternation(room: Room, cap: number): Team | null {
-    const countA = Object.values(room.players).filter((p) => p.team === "A").length;
-    const countB = Object.values(room.players).filter((p) => p.team === "B").length;
+    const countA = Object.values(room.players).filter(
+      (p) => p.team === "A"
+    ).length;
+    const countB = Object.values(room.players).filter(
+      (p) => p.team === "B"
+    ).length;
 
     const order: Team[] = room.nextTeam === "A" ? ["A", "B"] : ["B", "A"];
 
@@ -193,74 +207,79 @@ io.on("connection", (socket) => {
   }
 
   // 방 참가
-  socket.on(
-    "room:join",
-    (payload: any, ack?: Function) => {
-      const { roomId, nickname } = payload || {};
+  socket.on("room:join", (payload: any, ack?: Function) => {
+    const { roomId, nickname } = payload || {};
 
-      const room = rooms.get(roomId);
+    const room = rooms.get(roomId);
 
-      if (!room) {
-        console.log(`[ROOM JOIN FAIL] ${socket.id} -> ${payload.roomId} (NOT_FOUND)`);
-        return ack?.({ ok: false, error: "NOT_FOUND" });
-      }
-      if (room.status !== "waiting") {
-        console.log(`[ROOM JOIN FAIL] ${socket.id} -> ${payload.roomId} (IN_PROGRESS)`);
-        return ack?.({ ok: false, error: "IN_PROGRESS" });
-      }
-      if (Object.keys(room.players).length >= room.max) {
-        console.log(`[ROOM JOIN FAIL] ${socket.id} -> ${payload.roomId} (FULL)`);
-        return ack?.({ ok: false, error: "FULL" });
-      }
+    if (!room) {
+      console.log(
+        `[ROOM JOIN FAIL] ${socket.id} -> ${payload.roomId} (NOT_FOUND)`
+      );
+      return ack?.({ ok: false, error: "NOT_FOUND" });
+    }
+    if (room.status !== "waiting") {
+      console.log(
+        `[ROOM JOIN FAIL] ${socket.id} -> ${payload.roomId} (IN_PROGRESS)`
+      );
+      return ack?.({ ok: false, error: "IN_PROGRESS" });
+    }
+    if (Object.keys(room.players).length >= room.max) {
+      console.log(`[ROOM JOIN FAIL] ${socket.id} -> ${payload.roomId} (FULL)`);
+      return ack?.({ ok: false, error: "FULL" });
+    }
 
-      // 방 합류
-      socket.join(roomId);
+    // 방 합류
+    socket.join(roomId);
 
-      const n = (String(nickname ?? 'Player'));
-      const ex = room.players[socket.id];
+    const n = String(nickname ?? "Player");
+    const ex = room.players[socket.id];
 
-      if (ex) {
-        // 기존 입장자면 닉네임만 갱신(정책에 따라 유지해도 됨)
-        ex.nickname = n;                                        // ✅ 갱신
-      } else {
-        room.players[socket.id] = {
-          id: socket.id,
-          nickname: n,                                          // ✅ 저장
-          team: 'A',
-          ready: false,
-        };
-      }
-
-      // ✅ 새 플레이어 객체를 먼저 만든 뒤 팀 자동배정
-      const player: Player = {
+    if (ex) {
+      // 기존 입장자면 닉네임만 갱신(정책에 따라 유지해도 됨)
+      ex.nickname = n; // ✅ 갱신
+    } else {
+      room.players[socket.id] = {
         id: socket.id,
-        nickname: (payload.nickname ?? "Player").trim() || "Player",
+        nickname: n, // ✅ 저장
+        team: "A",
         ready: false,
       };
-
-      // ✅ 팀전이면: A팀이 꽉 차(TEAM_CAP) 있으면 B팀, 아니면 A팀
-      if (room.gameMode === "팀전") {
-        const team = pickTeamWithAlternation(room, TEAM_CAP);
-        if (!team) {
-          return ack?.({ ok: false, error: "FULL" });
-        }
-        player.team = team;
-      }
-
-      // 최종 등록
-      room.players[socket.id] = player;
-
-      console.log("palyer:", player);
-
-      console.log(
-        `[ROOM JOIN] ${player.nickname} (${socket.id}) -> ${payload.roomId} (${Object.keys(room.players).length}/${room.max})`
-      );
-
-      ack?.({ ok: true, room: safeRoomState(room) });
-      io.to(roomId).emit("room:update", safeRoomState(room));
-      io.to(roomId).emit('player:joined', { players: Object.values(room.players) });
     }
-  );
+
+    // ✅ 새 플레이어 객체를 먼저 만든 뒤 팀 자동배정
+    const player: Player = {
+      id: socket.id,
+      nickname: (payload.nickname ?? "Player").trim() || "Player",
+      ready: false,
+    };
+
+    // ✅ 팀전이면: A팀이 꽉 차(TEAM_CAP) 있으면 B팀, 아니면 A팀
+    if (room.gameMode === "팀전") {
+      const team = pickTeamWithAlternation(room, TEAM_CAP);
+      if (!team) {
+        return ack?.({ ok: false, error: "FULL" });
+      }
+      player.team = team;
+    }
+
+    // 최종 등록
+    room.players[socket.id] = player;
+
+    console.log("palyer:", player);
+
+    console.log(
+      `[ROOM JOIN] ${player.nickname} (${socket.id}) -> ${payload.roomId} (${
+        Object.keys(room.players).length
+      }/${room.max})`
+    );
+
+    ack?.({ ok: true, room: safeRoomState(room) });
+    io.to(roomId).emit("room:update", safeRoomState(room));
+    io.to(roomId).emit("player:joined", {
+      players: Object.values(room.players),
+    });
+  });
 
   // 방 나가기(수동)
   socket.on("room:leave", (_: {}, ack?: Function) => {
@@ -279,7 +298,8 @@ io.on("connection", (socket) => {
 
     p.ready = !p.ready;
     console.log(
-      `[READY] ${p.nickname} (${socket.id}) -> ${rid} : ${p.ready ? "ON" : "OFF"
+      `[READY] ${p.nickname} (${socket.id}) -> ${rid} : ${
+        p.ready ? "ON" : "OFF"
       }`
     );
 
@@ -319,7 +339,8 @@ io.on("connection", (socket) => {
       }
 
       console.log(
-        `[SELECT] ${p.nickname} (${socket.id}) -> room ${rid} team=${p.team ?? "-"
+        `[SELECT] ${p.nickname} (${socket.id}) -> room ${rid} team=${
+          p.team ?? "-"
         } color=${p.color ?? "-"}`
       );
 
@@ -329,31 +350,35 @@ io.on("connection", (socket) => {
   );
 
   //플레이어 색
-  socket.on('player:setColor', ({ roomId, color }, ack) => {
+  socket.on("player:setColor", ({ roomId, color }, ack) => {
     const room = rooms.get(roomId);
-    if (!room) return ack?.({ ok: false, error: 'NO_ROOM' });
+    if (!room) return ack?.({ ok: false, error: "NO_ROOM" });
 
     const me = room.players[socket.id];
-    if (!me) return ack?.({ ok: false, error: 'NOT_IN_ROOM' });
+    if (!me) return ack?.({ ok: false, error: "NOT_IN_ROOM" });
 
     // 간단한 검증
-    const isHex = /^#?[0-9a-fA-F]{6}$/.test(color || '');
-    if (!isHex) return ack?.({ ok: false, error: 'INVALID_COLOR' });
+    const isHex = /^#?[0-9a-fA-F]{6}$/.test(color || "");
+    if (!isHex) return ack?.({ ok: false, error: "INVALID_COLOR" });
 
-    const hex = ('#' + String(color).replace('#', '')).toUpperCase();
+    const hex = ("#" + String(color).replace("#", "")).toUpperCase();
 
     // (선택) 중복 금지: 다른 사람이 쓰는 색이면 거부
-    const used = new Set(Object.values(room.players).map(p => (p.color || '').toLowerCase()));
-    const myCurrent = (me.color || '').toLowerCase();
+    const used = new Set(
+      Object.values(room.players).map((p) => (p.color || "").toLowerCase())
+    );
+    const myCurrent = (me.color || "").toLowerCase();
     if (used.has(hex.toLowerCase()) && hex.toLowerCase() !== myCurrent) {
-      return ack?.({ ok: false, error: 'COLOR_TAKEN' });
+      return ack?.({ ok: false, error: "COLOR_TAKEN" });
     }
 
     me.color = hex;
     ack?.({ ok: true });
 
     // 클라가 이미 구독 중인 이벤트로 전파
-    io.to(roomId).emit('player:updated', { players: Object.values(room.players) });
+    io.to(roomId).emit("player:updated", {
+      players: Object.values(room.players),
+    });
   });
 
   // 호스트만 게임 시작
@@ -376,9 +401,11 @@ io.on("connection", (socket) => {
     room.status = "playing";
     console.log(`[GAME START] room ${rid} by host ${socket.id}`);
 
-    io.to(rid).emit("game:start", {
-      at: Date.now(),
+    io.to(rid).emit("game:started", {
+      // ← "game:started"로 변경
+      startTime: Date.now(), // ← "at" 대신 "startTime"
       room: safeRoomState(room),
+      players: Object.values(room.players), // ← 플레이어 데이터 추가
     });
     ack?.({ ok: true });
   });
