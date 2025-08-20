@@ -2,7 +2,7 @@
 import { CharacterColors, GfxRefs } from "../types/player.types";
 
 /**
- * 얼굴(눈/입/표정) 업데이트
+ * 얼굴 그리기
  */
 export function updateFace(
   refs: GfxRefs,
@@ -18,31 +18,28 @@ export function updateFace(
   const { x, y, health, maxHealth, isWallGrabbing } = params;
 
   face.clear();
-  face.fillStyle(0x000000);
+  face.lineStyle(2, 0x000000);
 
-  // 눈
-  face.fillCircle(x - 5, y - 5, 2);
-  face.fillCircle(x + 5, y - 5, 2);
+  // 기본 표정
+  face.beginPath();
+  face.arc(x, y - 5, 3, 0, Math.PI * 2); // 왼쪽 눈
+  face.arc(x + 6, y - 5, 3, 0, Math.PI * 2); // 오른쪽 눈
+  face.strokePath();
 
-  // 입 (체력 비율에 따라)
-  const hp = Math.max(0, Math.min(1, health / maxHealth));
-
-  if (hp > 0.7) {
-    // 웃는 입
-    face.lineStyle(2, 0x000000);
-    face.beginPath();
-    face.arc(x, y + 2, 5, 0, Math.PI);
-    face.strokePath();
-  } else if (hp > 0.3) {
-    // 무표정
-    face.fillRect(x - 4, y, 8, 2);
+  // 입 (체력에 따라 변화)
+  face.beginPath();
+  if (health > 50) {
+    // 건강할 때: 미소
+    face.arc(x + 3, y + 2, 4, 0, Math.PI);
+  } else if (health > 20) {
+    // 중간: 직선
+    face.moveTo(x, y + 2);
+    face.lineTo(x + 6, y + 2);
   } else {
-    // 찌그린 입
-    face.lineStyle(2, 0x000000);
-    face.beginPath();
-    face.arc(x, y + 5, 5, Math.PI, 0);
-    face.strokePath();
+    // 위험: 찡그림
+    face.arc(x + 3, y + 4, 4, Math.PI, Math.PI * 2);
   }
+  face.strokePath();
 
   // 벽잡기 집중한 표정
   if (isWallGrabbing) {
@@ -51,7 +48,7 @@ export function updateFace(
 }
 
 /**
- * 몸(원) 위치/스케일/기울기 업데이트 + 얼굴 동기화
+ * 몸(원) 위치/스케일/기울기 업데이트
  */
 export function updatePose(
   refs: GfxRefs,
@@ -66,11 +63,10 @@ export function updatePose(
     health: number;
     maxHealth: number;
     isWallGrabbing?: boolean;
-    showHeadHpBar?: boolean;              // Hp바
     scaleOverride?: { x: number; y: number }; // 옵션
   }
 ) {
-  const { body, hpBarBg, hpBarFill } = refs;
+  const { body } = refs;
   const {
     x,
     y,
@@ -82,7 +78,6 @@ export function updatePose(
     health,
     maxHealth,
     isWallGrabbing,
-    showHeadHpBar = false,
     scaleOverride,
   } = params;
 
@@ -102,28 +97,6 @@ export function updatePose(
     body.setFillStyle(colors.head);
   }
 
-  // 얼굴도 갱신
+  // 얼굴 갱신
   updateFace(refs, { x, y, health, maxHealth, isWallGrabbing });
-
-  // ★ HP바 갱신 ----------------------------------------------------------
-  if (hpBarBg && hpBarFill) {
-    const visible = !!showHeadHpBar;
-    hpBarBg.setVisible(visible);
-    hpBarFill.setVisible(visible);
-
-    hpBarBg.clear();
-    hpBarFill.clear();
-
-    if (visible) {
-      const ratio = Math.max(0, Math.min(1, health / maxHealth));
-      const w = 48;
-      const h = 6;
-      const headOffsetY = -38;            // 머리 위 살짝
-      const left = x - w / 2;
-      const top = y + headOffsetY - h;
-
-      hpBarBg.fillStyle(0x000000, 0.55).fillRoundedRect(left, top, w, h, 3);
-      hpBarFill.fillStyle(0xff4d4d, 1).fillRoundedRect(left + 1, top + 1, (w - 2) * ratio, h - 2, 2);
-    }
-  }
 }

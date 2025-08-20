@@ -44,6 +44,12 @@ export default class Player {
 
   private particleSystem!: ParticleSystem;
 
+  // 멀티플레이어 ID
+  private id?: string;
+
+  // 멀티플레이어 모드 여부
+  private isMultiplayer = false;
+
   // 그래픽 참조
   private gfx!: GfxRefs;
 
@@ -98,6 +104,17 @@ export default class Player {
 
   // 마우스/총
   private mouseX = 0;
+
+  // 멀티플레이어 파티클 콜백
+  public onParticleCreated?: (
+    type: string,
+    x: number,
+    y: number,
+    color: number
+  ) => void;
+
+  // 낙하 데미지 콜백
+  public onFalloutDamage?: (damage: number) => void;
   private mouseY = 0;
 
   private lastShotTime = 0;
@@ -116,8 +133,8 @@ export default class Player {
   private falloutCooldownMs = 600;
   private lastFalloutAt = 0;
 
-  // Player 클래스 필드들 근처에 추가
-  private hpBarShowTimerMs = 0; // >0 이면 머리 위 HP바 표시
+  // 체력바 표시 타이머 (새로운 시스템에서는 사용하지 않음)
+  private hpBarShowTimerMs = 0;
 
   constructor(
     scene: any,
@@ -134,8 +151,6 @@ export default class Player {
     this.colorPreset = preset;
     this.colors = (CHARACTER_PRESETS as any)[preset] as CharacterColors;
     this.particleSystem = new ParticleSystem(this.scene, false);
-
-    console.log(`🎮 플레이어 생성 중... 위치: (${x}, ${y})`);
 
     // 그래픽 생성
     this.gfx = createCharacter(this.scene, this.x, this.y, this.colors);
@@ -163,10 +178,7 @@ export default class Player {
       health: this.health,
       maxHealth: this.maxHealth,
       isWallGrabbing: this.wall.isWallGrabbing,
-      showHeadHpBar: this.hpBarShowTimerMs > 0,
     });
-
-    console.log(`✅ 플레이어 생성 완료`);
   }
 
   // ⭐ CollisionSystem 설정 메서드
@@ -296,11 +308,23 @@ export default class Player {
         this.isJumping = true;
         this.isGrounded = false;
         this.wobble += 1;
-        this.particleSystem.createJumpParticle(this.x, this.y + 25);
+        this.particleSystem.createJumpParticle(
+          this.x,
+          this.y + 25,
+          this.colors.head
+        );
+
+        // 멀티플레이어 파티클 전송
+        if (this.onParticleCreated) {
+          this.onParticleCreated("jump", this.x, this.y + 25, this.colors.head);
+        }
       }
     } else {
       // 벽점프 입력
       if (key.jump && this.wall.isWallGrabbing) {
+        // 벽점프 전 방향 저장
+        const wallDirection = this.wall.wallGrabDirection;
+
         const jumped = performWallJump(
           {
             ...this.wall,
@@ -326,10 +350,40 @@ export default class Player {
         this.isJumping = true;
         this.wobble += 2.0;
         this.shootRecoil += 1.0;
-        if (this.wall.wallGrabDirection === "left") {
-          this.particleSystem.createWallLeftJumpParticle(this.x, this.y + 25);
-        } else if (this.wall.wallGrabDirection === "right") {
-          this.particleSystem.createWallRightJumpParticle(this.x, this.y + 25);
+
+        // 저장된 방향으로 파티클 생성
+        if (wallDirection === "left") {
+          this.particleSystem.createWallLeftJumpParticle(
+            this.x,
+            this.y + 25,
+            this.colors.head
+          );
+
+          // 멀티플레이어 파티클 전송
+          if (this.onParticleCreated) {
+            this.onParticleCreated(
+              "wallLeftJump",
+              this.x,
+              this.y + 25,
+              this.colors.head
+            );
+          }
+        } else if (wallDirection === "right") {
+          this.particleSystem.createWallRightJumpParticle(
+            this.x,
+            this.y + 25,
+            this.colors.head
+          );
+
+          // 멀티플레이어 파티클 전송
+          if (this.onParticleCreated) {
+            this.onParticleCreated(
+              "wallRightJump",
+              this.x,
+              this.y + 25,
+              this.colors.head
+            );
+          }
         }
         // // 연출(선택): 카메라 흔들기
         // this.scene.cameras?.main?.shake?.(90, 0.006);
@@ -417,7 +471,6 @@ export default class Player {
       health: this.health,
       maxHealth: this.maxHealth,
       isWallGrabbing: this.wall.isWallGrabbing,
-      showHeadHpBar: this.hpBarShowTimerMs > 0,
     });
 
     drawLimbs(this.gfx, {
@@ -443,8 +496,8 @@ export default class Player {
     // 11) 탄환 정리
     this.bullets = this.bullets.filter((b) => b.active);
 
-    // 낙하사망 리스폰
-    if (this.y > 1200) this.respawn();
+    // 낙하사망 리스폰 (싱글플레이어 모드에서만)
+    if (this.y > 1200 && !this.isMultiplayer) this.respawn();
 
     return this.getState();
   }
@@ -500,7 +553,6 @@ export default class Player {
       health: this.health,
       maxHealth: this.maxHealth,
       isWallGrabbing: this.wall.isWallGrabbing,
-      showHeadHpBar: this.hpBarShowTimerMs > 0,
     });
   }
 
@@ -549,15 +601,35 @@ export default class Player {
   }
   public takeDamage(damage: number): void {
     if (this.invulnerable || damage <= 0) return;
-    const before = this.health;
-    this.health = Math.max(0, this.health - damage);
-    console.log(`💥 takeDamage(${damage}) ${before} -> ${this.health}`);
+
+    // 시각적 효과만 적용 (체력은 서버에서 관리)
     this.wobble += 1;
-    this.hpBarShowTimerMs = 3000; // 어떤 원인이든 실제로 HP가 감소했다면 5초간 HP바 표시
     this.setInvulnerable(1000);
+
+    console.log(`💚 데미지 효과 적용: ${damage} (체력은 서버에서 관리)`);
   }
   public getHealth(): number {
     return this.health;
+  }
+  public setHealth(health: number): void {
+    const oldHealth = this.health;
+    this.health = Math.max(0, Math.min(this.maxHealth, health));
+
+    // 체력이 변경되었으면 로그 출력
+    if (oldHealth !== this.health) {
+      console.log(`💚 내 체력 변경: ${oldHealth} -> ${this.health}`);
+
+      // 체력이 0이 되었을 때 사망 처리 (서버에서 체력이 0으로 설정된 경우)
+      if (this.health <= 0 && oldHealth > 0) {
+        console.log(`💀 플레이어 사망 처리`);
+        this.particleSystem.createDeathOxidationParticle(this.x, this.y);
+
+        // 멀티플레이어 파티클 전송
+        if (this.onParticleCreated) {
+          this.onParticleCreated("death", this.x, this.y, this.colors.head);
+        }
+      }
+    }
   }
   public isAlive(): boolean {
     return this.health > 0;
@@ -569,10 +641,27 @@ export default class Player {
     this.invulnerable = true;
     this.invulnerabilityTimer = duration;
   }
+  public addWobble(): void {
+    this.wobble += 1;
+  }
+  // 새로운 체력바 시스템에서는 타이머가 필요 없음
+
+  public getId(): string | undefined {
+    return this.id;
+  }
+
+  public setId(id: string): void {
+    this.id = id;
+  }
+
+  public setMultiplayerMode(isMultiplayer: boolean): void {
+    this.isMultiplayer = isMultiplayer;
+  }
 
   public setMapBounds(width: number, height: number): void {
     this.x = Math.max(25, Math.min(width - 25, this.x));
-    if (this.y > height + 100) this.respawn();
+    // 멀티플레이어 모드에서는 respawn하지 않음 (서버에서 관리)
+    if (this.y > height + 100 && !this.isMultiplayer) this.respawn();
   }
 
   public getBody(): any {
@@ -583,7 +672,6 @@ export default class Player {
     this.colorPreset = preset;
     this.colors = (CHARACTER_PRESETS as any)[preset] as CharacterColors;
     setBodyColor(this.gfx, this.colors.head);
-    console.log(`캐릭터 색상이 '${preset}'으로 변경되었습니다.`);
   }
   public getCurrentPreset(): CharacterPreset {
     return this.colorPreset;
@@ -658,14 +746,6 @@ export default class Player {
   }
 
   public getGunPosition(): { x: number; y: number; angle: number } {
-    console.log(`🎯 Player.getGunPosition 호출됨`);
-    console.log(`   - this.x: ${this.x}`);
-    console.log(`   - this.y: ${this.y}`);
-    console.log(`   - this.mouseX: ${this.mouseX}`);
-    console.log(`   - this.mouseY: ${this.mouseY}`);
-    console.log(`   - this.crouchHeight: ${this.crouchHeight}`);
-    console.log(`   - this.baseCrouchOffset: ${this.baseCrouchOffset}`);
-
     // 🔥 혹시 this.mouseX나 this.mouseY가 잘못된 값인지 확인
     if (!isFinite(this.mouseX) || !isFinite(this.mouseY)) {
       console.error(
@@ -683,12 +763,6 @@ export default class Player {
       crouchHeight: this.crouchHeight,
       baseCrouchOffset: this.baseCrouchOffset,
     });
-
-    console.log(
-      `🎯 Player.getGunPosition 결과: (${result.x.toFixed(
-        1
-      )}, ${result.y.toFixed(1)})`
-    );
 
     // 🔥 결과값 검증
     if (!isFinite(result.x) || !isFinite(result.y)) {
@@ -733,7 +807,14 @@ export default class Player {
     if (now - this.lastFalloutAt < this.falloutCooldownMs) return; // 중복 방지
 
     const dmg = Math.max(1, Math.round(this.maxHealth * damageRatio));
-    this.takeDamage(dmg); // ← 여기서 HP바 타이머가 켜짐
+
+    // 서버에 낙하 데미지 전송 (로컬 데미지 처리 제거)
+    if (this.onFalloutDamage) {
+      this.onFalloutDamage(dmg);
+    }
+
+    // 시각적 효과만 적용
+    this.takeDamage(dmg);
 
     this.velocityY = -Math.abs(bounceSpeed); // 위로 튕김
     this.isGrounded = false;

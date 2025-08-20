@@ -13,6 +13,7 @@ type Player = {
   team?: Team;
   color?: string;
   ready: boolean;
+  health?: number; // 체력 추가
 };
 
 type Room = {
@@ -97,6 +98,7 @@ function safeRoomState(room: Room) {
     team: p.team,
     color: p.color,
     ready: p.ready,
+    health: p.health || 100, // 체력 정보 포함
   }));
   return {
     roomId: room.roomId,
@@ -149,6 +151,7 @@ io.on("connection", (socket) => {
       nickname: String(payload?.nickname ?? "Player"), // ✅ 저장
       team: "A",
       ready: false,
+      health: 100, // 초기 체력 설정
     };
 
     rooms.set(roomId, room);
@@ -263,6 +266,7 @@ io.on("connection", (socket) => {
         nickname: n, // ✅ 저장
         team: "A",
         ready: false,
+        health: 100, // 초기 체력 설정
       };
     }
 
@@ -282,7 +286,8 @@ io.on("connection", (socket) => {
       player.team = team;
     }
 
-    // 최종 등록
+    // 최종 등록 (체력 추가)
+    player.health = 100; // 초기 체력 설정
     room.players[socket.id] = player;
 
     console.log("palyer:", player);
@@ -296,7 +301,10 @@ io.on("connection", (socket) => {
     ack?.({ ok: true, room: safeRoomState(room) });
     io.to(roomId).emit("room:update", safeRoomState(room));
     io.to(roomId).emit("player:joined", {
-      players: Object.values(room.players),
+      players: Object.values(room.players).map((player) => ({
+        ...player,
+        health: player.health || 100,
+      })),
     });
   });
 
@@ -420,11 +428,27 @@ io.on("connection", (socket) => {
     room.status = "playing";
     console.log(`[GAME START] room ${rid} by host ${socket.id}`);
 
+    // 게임 시작 시 모든 플레이어의 체력 정보 전송
+    const playersWithHealth = Object.values(room.players).map((player) => ({
+      ...player,
+      health: player.health || 100,
+    }));
+
     io.to(rid).emit("game:started", {
       // ← "game:started"로 변경
       startTime: Date.now(), // ← "at" 대신 "startTime"
       room: safeRoomState(room),
-      players: Object.values(room.players), // ← 플레이어 데이터 추가
+      players: playersWithHealth, // ← 체력 정보가 포함된 플레이어 데이터
+    });
+
+    // 게임 시작 시 모든 플레이어의 현재 체력 정보를 각각 전송
+    Object.entries(room.players).forEach(([playerId, player]) => {
+      io.to(rid).emit("game:healthUpdate", {
+        playerId: playerId,
+        health: player.health || 100,
+        damage: 0,
+        timestamp: Date.now(),
+      });
     });
     ack?.({ ok: true });
   });
@@ -458,6 +482,102 @@ io.on("connection", (socket) => {
       ...data,
       t: Date.now(),
     });
+  });
+
+  // 원격 HP 반영용: 총알 피격 중계
+  socket.on(
+    "game:bulletHit",
+    (payload: { roomId: string; playerId: string; hit: any }) => {
+      const { roomId, hit } = payload || {};
+      if (!roomId || !hit) return;
+
+      // 서버에서 체력 관리
+      const room = rooms.get(roomId);
+      if (room && room.players[hit.targetPlayerId]) {
+        // 현재 체력 가져오기 (기본값 100)
+        const currentHealth = room.players[hit.targetPlayerId]?.health || 100;
+        const newHealth = Math.max(0, currentHealth - hit.damage);
+
+        // 서버에 체력 업데이트
+        const player = room.players[hit.targetPlayerId];
+        if (player) {
+          player.health = newHealth;
+
+          // 체력이 0이 되었을 때 리스폰 처리
+          if (newHealth <= 0) {
+            console.log(`[RESPAWN] ${hit.targetPlayerId} 체력 0으로 리스폰`);
+            // 3초 후 체력 회복
+            setTimeout(() => {
+              const currentRoom = rooms.get(roomId);
+              const currentPlayer = currentRoom?.players[hit.targetPlayerId];
+              if (currentPlayer) {
+                currentPlayer.health = 100;
+
+                // 리스폰 이벤트 전송
+                io.to(roomId).emit("game:healthUpdate", {
+                  playerId: hit.targetPlayerId,
+                  health: 100,
+                  damage: 0,
+                  timestamp: Date.now(),
+                });
+
+                console.log(`[RESPAWN] ${hit.targetPlayerId} 체력 회복: 100`);
+              }
+            }, 3000);
+          }
+        }
+
+        // 모든 클라이언트에게 체력 업데이트 전송
+        io.to(roomId).emit("game:healthUpdate", {
+          playerId: hit.targetPlayerId,
+          health: newHealth,
+          damage: hit.damage,
+          timestamp: Date.now(),
+        });
+
+        console.log(
+          `[HEALTH] ${hit.targetPlayerId}: ${currentHealth} -> ${newHealth} (-${hit.damage})`
+        );
+
+        // 방의 모든 플레이어 체력 상태 로그
+        console.log(
+          `[ROOM HEALTH] Room ${roomId} players health:`,
+          Object.entries(room.players).map(
+            ([id, p]) => `${p.nickname}: ${p.health}`
+          )
+        );
+      }
+
+      // 기존 충돌 이벤트도 전송
+      io.to(roomId).emit("game:bulletHit", hit);
+    }
+  );
+
+  // 관절(포즈) 동기화: 조준 각도 등
+  socket.on("pose:update", (payload: { roomId: string; pose: any }) => {
+    const { roomId, pose } = payload || {};
+    if (!roomId || !pose) return;
+    // 보낸 당사자 제외, 같은 방에 전달
+    socket.to(roomId).emit("pose:update", pose);
+  });
+
+  // 파티클 이벤트 중계
+  socket.on(
+    "particle:create",
+    (payload: { roomId: string; particleData: any }) => {
+      const { roomId, particleData } = payload || {};
+      if (!roomId || !particleData) return;
+      // 보낸 당사자 제외, 같은 방에 전달
+      socket.to(roomId).emit("particle:create", particleData);
+    }
+  );
+
+  // 게임 이벤트 중계 (체력바 표시 등)
+  socket.on("game:event", (payload: { roomId: string; event: any }) => {
+    const { roomId, event } = payload || {};
+    if (!roomId || !event) return;
+    // 보낸 당사자 제외, 같은 방에 전달
+    socket.to(roomId).emit("game:event", event);
   });
 
   // 채팅

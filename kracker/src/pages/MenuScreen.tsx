@@ -41,14 +41,11 @@ const MenuScreen: React.FC = () => {
     connectSocket();
 
     socket.on("connect", () => {
-      console.log("connected:", socket.id);
       // 테스트로 서버로 임의 이동 이벤트 보내보기
       socket.emit("move", { x: Math.random() * 500, y: Math.random() * 500 });
     });
 
-    socket.on("stateUpdate", (state) => {
-      console.log("stateUpdate:", state);
-    });
+    socket.on("stateUpdate", (state) => {});
 
     return () => {
       socket.off("stateUpdate");

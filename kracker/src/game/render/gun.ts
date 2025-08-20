@@ -56,61 +56,32 @@ export function getGunPosition(params: {
   baseCrouchOffset: number;
 }): GunPose {
   const { x, y, mouseX, mouseY, crouchHeight, baseCrouchOffset } = params;
-
-  console.log(`🐛 DEBUG: 총구 위치 계산 시작`);
-  console.log(
-    `   입력값: player(${x}, ${y}), mouse(${mouseX}, ${mouseY}), crouch=${crouchHeight}`
-  );
-
   // 1. 기본 플레이어 위치 (웅크리기 적용)
   const crouchYOffset = crouchHeight * baseCrouchOffset;
   const basePlayerY = y + crouchYOffset;
-
-  console.log(`   웅크리기 적용된 플레이어 Y: ${basePlayerY}`);
 
   // 2. 마우스 방향 판정
   const mouseDirectionX = mouseX - x;
   const isPointingLeft = mouseDirectionX < 0;
 
-  console.log(
-    `   마우스 방향: ${
-      isPointingLeft ? "왼쪽" : "오른쪽"
-    } (deltaX: ${mouseDirectionX})`
-  );
-
   // 3. 🔥 핵심: 어깨는 플레이어 몸통 중심에서 고정된 위치
   const shoulderX = x + (isPointingLeft ? -15 : 15);
   const shoulderY = basePlayerY; // 어깨는 항상 몸통보다 8픽셀 위
-
-  console.log(`   어깨 위치: (${shoulderX}, ${shoulderY})`);
 
   // 4. 마우스를 향한 각도 계산 (어깨에서 마우스로)
   const deltaX = mouseX - shoulderX;
   const deltaY = mouseY - shoulderY;
   let targetAngle = Math.atan2(deltaY, deltaX);
 
-  console.log(
-    `   타겟 각도 계산: deltaX=${deltaX}, deltaY=${deltaY}, angle=${(
-      (targetAngle * 180) /
-      Math.PI
-    ).toFixed(1)}도`
-  );
-
   // 6. 팔 끝 위치 계산 (어깨에서 각도 방향으로 팔 길이만큼)
   const armLength = 22;
   const armEndX = shoulderX + Math.cos(targetAngle) * armLength;
   const armEndY = shoulderY + Math.sin(targetAngle) * armLength;
 
-  console.log(`   팔 끝 위치: (${armEndX.toFixed(2)}, ${armEndY.toFixed(2)})`);
-
   // 7. 총구 끝 위치 계산 (팔 끝에서 같은 각도로 총 길이만큼)
   const gunLength = 30;
   const gunTipX = armEndX + Math.cos(targetAngle) * gunLength;
   const gunTipY = armEndY + Math.sin(targetAngle) * gunLength;
-
-  console.log(
-    `   총구 끝 위치: (${gunTipX.toFixed(2)}, ${gunTipY.toFixed(2)})`
-  );
 
   // 8. 🔥 중요: 검증 - Y좌표가 이상하게 고정되었는지 확인
   const expectedYRange = [basePlayerY - 50, basePlayerY + 50]; // 합리적인 Y 범위
@@ -127,13 +98,6 @@ export function getGunPosition(params: {
     y: gunTipY,
     angle: targetAngle,
   };
-
-  console.log(
-    `✅ 최종 결과: (${result.x.toFixed(2)}, ${result.y.toFixed(2)}) 각도: ${(
-      (result.angle * 180) /
-      Math.PI
-    ).toFixed(1)}도`
-  );
 
   return result;
 }
@@ -152,15 +116,9 @@ export function calculateSafeBulletSpawn(
   }> = [],
   safetyDistance: number = 8
 ): { x: number; y: number } {
-  console.log(
-    `🚀 총알 스폰 계산: 총구(${gunX.toFixed(1)}, ${gunY.toFixed(1)})`
-  );
-
   // 총구에서 발사 방향으로 약간 앞으로 이동
   const spawnX = gunX + Math.cos(angle) * safetyDistance;
   const spawnY = gunY + Math.sin(angle) * safetyDistance;
-
-  console.log(`🚀 스폰 위치: (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);
 
   return { x: spawnX, y: spawnY };
 }
