@@ -505,13 +505,20 @@ io.on("connection", (socket) => {
 
       const room = rooms.get(roomId);
       if (room && room.players[hit.targetPlayerId]) {
-        const currentHealth = room.players[hit.targetPlayerId]?.health || 100;
+        // 현재 체력 가져오기 (기본값 100)
+        const target = room.players[hit.targetPlayerId];
+        if (!target) return;
+        const currentHealth = target.health ?? 100;
+
+        // 이미 사망 상태면 추가 데미지 무시
+        if (currentHealth <= 0) {
+          return;
+        }
+
         const newHealth = Math.max(0, currentHealth - hit.damage);
 
-        const player = room.players[hit.targetPlayerId];
-        if (player) {
-          player.health = newHealth;
-        }
+        // 서버에 체력 업데이트
+        target.health = newHealth;
 
         // 모든 클라이언트에게 체력 업데이트 전송
         io.to(roomId).emit("game:healthUpdate", {
@@ -521,25 +528,43 @@ io.on("connection", (socket) => {
           timestamp: Date.now(),
         });
 
-        // 🆕 라운드 종료 판정
+        // 사망 브로드캐스트
+        if (newHealth <= 0) {
+          io.to(roomId).emit("game:event", {
+            type: "dead",
+            playerId: hit.targetPlayerId,
+            data: { x: hit.x, y: hit.y },
+          });
+        }
+
+        // 🔎 라운드 종료 판정 및 스케줄링 (3초 대기 후 방송)
         const { shouldEnd, winners } = evaluateRoundEnd(room);
         if (shouldEnd && !room.isRoundEnding) {
           room.isRoundEnding = true;
-
-          // 3초 대기 후 라운드 종료 브로드캐스트 및 승리 스택 반영
           setTimeout(() => {
-            // 승리 스택 증가
+            // 승자 승리 스택 반영
             winners.forEach((pid) => {
               const wp = room.players[pid];
               if (wp) wp.wins = (wp.wins || 0) + 1;
             });
-
+            // 라운드 결과/다음 단계 방송
             endRound(io, room);
-
-            // 다음 라운드 준비가 시작되므로 플래그 해제
+            // 스케줄 해제
             room.isRoundEnding = false;
           }, 3000);
         }
+
+        console.log(
+          `[HEALTH] ${hit.targetPlayerId}: ${currentHealth} -> ${newHealth} (-${hit.damage})`
+        );
+
+        // 방의 모든 플레이어 체력 상태 로그
+        console.log(
+          `[ROOM HEALTH] Room ${roomId} players health:`,
+          Object.entries(room.players).map(
+            ([id, p]) => `${p.nickname}: ${p.health}`
+          )
+        );
       }
 
       // 기존 충돌 이벤트도 전송
@@ -714,6 +739,19 @@ io.on("connection", (socket) => {
             damage: 0,
             timestamp: Date.now(),
           });
+          // 각 플레이어 alive 신호
+          io.to(rid).emit("game:event", {
+            type: "alive",
+            playerId: p.id,
+            data: { round: payload.round },
+          });
+        });
+
+        // 모든 플레이어에게 스폰 위치로 복귀 지시 (클라에서 맵 스폰에 맞춰 위치 리셋)
+        io.to(rid).emit("game:event", {
+          type: "respawnAll",
+          playerId: "server",
+          data: { round: payload.round },
         });
 
         // 선택 상태 초기화(서버)

@@ -701,12 +701,7 @@ export default class Player {
       // 체력이 0이 되었을 때 사망 처리 (서버에서 체력이 0으로 설정된 경우)
       if (this.health <= 0 && oldHealth > 0) {
         console.log(`💀 플레이어 사망 처리`);
-        this.particleSystem.createDeathOxidationParticle(this.x, this.y);
-
-        // 멀티플레이어 파티클 전송
-        if (this.onParticleCreated) {
-          this.onParticleCreated("death", this.x, this.y, this.colors.head);
-        }
+        // 사망 파티클/브로드캐스트는 서버 dead 이벤트에서 처리
       }
     }
   }
@@ -884,6 +879,9 @@ export default class Player {
   public applyBottomBoundaryHit(damageRatio = 0.3, bounceSpeed = 900): void {
     const now = Date.now();
     if (now - this.lastFalloutAt < this.falloutCooldownMs) return; // 중복 방지
+
+    // 사망 상태면 낙사 데미지 무시
+    if (this.health <= 0) return;
 
     const dmg = Math.max(1, Math.round(this.maxHealth * damageRatio));
 
