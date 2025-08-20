@@ -22,6 +22,7 @@ export class CollisionSystem {
   private readonly SPAWN_SAFETY_DISTANCE = 10; // 스폰 시 안전 거리
 
   private player?: any;
+  private networkManager?: any; // 네트워크 매니저 참조
 
   constructor(
     scene: Phaser.Scene,
@@ -57,6 +58,10 @@ export class CollisionSystem {
 
   public setPlayer(player: any): void {
     this.player = player;
+  }
+
+  public setNetworkManager(networkManager: any): void {
+    this.networkManager = networkManager;
   }
 
   destroy() {
@@ -180,19 +185,31 @@ export class CollisionSystem {
           const bulletRef = b.getData("__bulletRef");
           const dmg = bulletRef?.getConfig ? bulletRef.getConfig().damage : 10;
 
-          // 플레이어에 데미지 적용
-          try {
-            this.player.takeDamage?.(dmg);
-          } catch (e) {
-            console.warn("player.takeDamage 호출 실패:", e);
+          // 서버에만 체력 업데이트 전송 (로컬 데미지 처리 제거)
+          if (this.networkManager && this.player) {
+            const playerId = this.player.getId?.() || this.player.id;
+            const hitData = {
+              bulletId: `collision_${Date.now()}`,
+              targetPlayerId: playerId,
+              damage: dmg,
+              x: b.x,
+              y: b.y,
+            };
+
+            console.log(
+              `💥 CollisionSystem: 서버에 체력 업데이트 전송 - 플레이어: ${playerId}, 데미지: ${dmg}`
+            );
+            this.networkManager.sendBulletHit(hitData);
+          } else {
+            console.warn(
+              `⚠️ CollisionSystem: 네트워크 매니저 또는 플레이어가 없음`
+            );
           }
 
           // 총알 폭발/제거
           try {
-            if (bulletRef?.hit)
-              bulletRef.hit(b.x, b.y);
-            else
-              b.destroy(true);
+            if (bulletRef?.hit) bulletRef.hit(b.x, b.y);
+            else b.destroy(true);
           } catch (e) {
             b.destroy(true);
           }
@@ -371,13 +388,6 @@ export class CollisionSystem {
     if (!bulletSprite.active) return;
     if (bulletSprite.getData("__handled")) return;
     bulletSprite.setData("__handled", true);
-
-    console.log(
-      `💥 총알-플랫폼 충돌! 위치: (${bulletSprite.x.toFixed(
-        1
-      )}, ${bulletSprite.y.toFixed(1)})`
-    );
-
     // 총알 파괴
     try {
       const bulletData = bulletSprite.getData("__bulletRef");

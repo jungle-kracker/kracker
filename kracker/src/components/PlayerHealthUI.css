@@ -1,0 +1,113 @@
+.player-health-ui {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 10px;
+  padding: 15px;
+  min-width: 250px;
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.health-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.health-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.player-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.local-indicator {
+  background: #4caf50;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.health-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.health-bar-background {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.health-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+}
+
+.health-text {
+  font-size: 12px;
+  color: white;
+  font-weight: 500;
+  min-width: 50px;
+  text-align: right;
+}
+
+.local-player .player-name {
+  color: #4caf50;
+}
+
+.remote-player .player-name {
+  color: #ff9800;
+}
+
+/* 애니메이션 효과 */
+.health-bar-fill {
+  animation: healthPulse 2s ease-in-out infinite;
+}
+
+@keyframes healthPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .player-health-ui {
+    top: 10px;
+    right: 10px;
+    min-width: 200px;
+    padding: 10px;
+  }
+
+  .player-name {
+    font-size: 12px;
+  }
+
+  .health-text {
+    font-size: 10px;
+  }
+}

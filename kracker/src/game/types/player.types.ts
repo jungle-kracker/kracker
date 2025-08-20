@@ -51,10 +51,6 @@ export interface GfxRefs {
   leftLeg: any; // Phaser.GameObjects.Graphics
   rightLeg: any; // Phaser.GameObjects.Graphics
   gun: any; // Phaser.GameObjects.Graphics
-
-  //머리 위 HP바
-  hpBarBg?: any;
-  hpBarFill?: any;
 }
 
 // 벽잡기 상태 블록(모듈 간 전달용, 필요 시 확장)
@@ -76,3 +72,11 @@ export interface CharacterColors {
   limbs: number; // 팔/다리 선
   gun?: number; // 총 라인(옵션)
 }
+
+// 포즈 스냅샷 타입
+export type PoseSnapshot = {
+  id: string; // playerId
+  angle?: number; // 총/팔 조준 각도(라디안)
+  facing?: "left" | "right"; // 좌우
+  t: number; // Date.now()
+};

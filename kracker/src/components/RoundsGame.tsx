@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import GameManager from "../game/GameManager";
+import PlayerHealthUI from "./PlayerHealthUI";
 
 // ★ 게임 상태 타입 정의
 interface GamePlayer {
@@ -326,6 +327,15 @@ const RoundsGame: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [isGameReady, setIsGameReady] = React.useState(false);
   const [gameState, setGameState] = React.useState<GameState | null>(null);
+  const [playerHealthInfo, setPlayerHealthInfo] = useState<
+    Array<{
+      id: string;
+      name: string;
+      health: number;
+      maxHealth: number;
+      isLocalPlayer: boolean;
+    }>
+  >([]);
 
   // ★ 게임 상태 로드
   useEffect(() => {
@@ -525,6 +535,27 @@ const RoundsGame: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [handleBackToLobby]);
 
+  // 플레이어 체력 정보 업데이트
+  useEffect(() => {
+    if (!isGameReady || !gameManagerRef.current) return;
+
+    const updateHealthInfo = () => {
+      const scene = gameManagerRef.current?.getScene();
+      if (scene && typeof (scene as any).getPlayerHealthInfo === "function") {
+        const healthInfo = (scene as any).getPlayerHealthInfo();
+        setPlayerHealthInfo(healthInfo);
+      }
+    };
+
+    // 초기 업데이트
+    updateHealthInfo();
+
+    // 주기적 업데이트 (100ms마다)
+    const interval = setInterval(updateHealthInfo, 100);
+
+    return () => clearInterval(interval);
+  }, [isGameReady]);
+
   return (
     <Container>
       <GameCanvas ref={gameRef} />
@@ -532,8 +563,13 @@ const RoundsGame: React.FC = () => {
       {/* ⭐ 커스텀 크로스헤어 커서 */}
       <CrosshairCursor />
 
+      {/* 플레이어 체력 UI */}
+      {isGameReady && playerHealthInfo.length > 0 && (
+        <PlayerHealthUI players={playerHealthInfo} />
+      )}
+
       {/* ★ 플레이어 리스트 UI */}
-      {gameState && isGameReady && (
+      {/* {gameState && isGameReady && (
         <PlayerListUI>
           <h4>참가자 ({gameState.players.length}명)</h4>
           {gameState.players.map((player) => (
@@ -557,7 +593,7 @@ const RoundsGame: React.FC = () => {
             ESC: 로비로 돌아가기
           </div>
         </PlayerListUI>
-      )}
+      )} */}
 
       <LoadingOverlay isVisible={isLoading}>
         <div>
