@@ -655,7 +655,7 @@ export function doShoot(opts: {
   console.log(`   각도: ${((angle * 180) / Math.PI).toFixed(1)}도`);
 
   // 2. 이알 스폰 위치 - 이구에서 약간 앞으로
-  const spawnDistance = 10;
+  const spawnDistance = 70;
   const spawnX = gunX + Math.cos(angle) * spawnDistance;
   const spawnY = gunY + Math.sin(angle) * spawnDistance;
 
@@ -663,11 +663,33 @@ export function doShoot(opts: {
 
   // 3. 이알 그룹 가져오기
   let bulletGroup: Phaser.Physics.Arcade.Group;
-  if (collisionSystem && typeof collisionSystem.getBulletGroup === "function") {
-    bulletGroup = collisionSystem.getBulletGroup();
+
+  //이전 코드, 공유 그룹 중복 덮어쓰기 버그 있음
+  // if (collisionSystem && typeof collisionSystem.getBulletGroup === "function") {
+  //   bulletGroup = collisionSystem.getBulletGroup();
+  // } else {
+  //   console.warn("CollisionSystem 없음, 임시 그룹 생성(플레이어 피격 판정 비활성)");
+  //   bulletGroup = scene.physics.add.group({
+  //     runChildUpdate: true,
+  //     allowGravity: true,
+  //   });
+  // }
+
+  //공유 그룹 중복 덮어쓰기 블록 삭제함
+  const cs =
+    (opts.collisionSystem &&
+      typeof (opts.collisionSystem as any).getBulletGroup === "function" &&
+      opts.collisionSystem) ||
+    ((opts.scene as any).__collisionSystem &&
+      typeof (opts.scene as any).__collisionSystem.getBulletGroup === "function" &&
+      (opts.scene as any).__collisionSystem);
+
+  if (cs) {
+    bulletGroup = cs.getBulletGroup();
+    console.log("🧨 Using CollisionSystem bulletGroup");
   } else {
-    console.warn("⚠️ CollisionSystem 없음, 임시 그룹 생성");
-    bulletGroup = scene.physics.add.group({
+    console.warn("⚠️ CollisionSystem 없음, 임시 그룹 생성(플레이어 피격 판정 비활성)");
+    bulletGroup = opts.scene.physics.add.group({
       runChildUpdate: true,
       allowGravity: true,
     });
@@ -756,10 +778,18 @@ export class ShootingSystem {
   }
 
   private setupPhysicsGroups(): void {
-    this.bulletGroup = this.scene.physics.add.group({
-      runChildUpdate: false,
-      allowGravity: true,
-    });
+    const cs = (this.scene as any).__collisionSystem;
+    if (cs && typeof cs.getBulletGroup === "function") {
+      this.bulletGroup = cs.getBulletGroup();
+      console.log("🔗 ShootingSystem uses CollisionSystem bulletGroup");
+    } else {
+      // 최후의 수단
+      this.bulletGroup = this.scene.physics.add.group({
+        runChildUpdate: false,
+        allowGravity: true,
+      });
+      console.warn("⚠️ CollisionSystem 미연결, 임시 bulletGroup 사용");
+    }
   }
 
   private setupUpdateLoop(): void {

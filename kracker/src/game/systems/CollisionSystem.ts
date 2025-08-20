@@ -45,6 +45,12 @@ export class CollisionSystem {
     return this.bulletGroup;
   }
 
+  public registerBullet(bulletSprite: Phaser.Physics.Arcade.Image): void {
+    if (!bulletSprite) return;
+    // 관찰용 그룹(= this.bulletGroup)에 가입시켜서 CCD 스윕, 플랫폼 충돌, 플레이어 맞추기 로직에 포함
+    this.bulletGroup.add(bulletSprite);
+  }
+
   public getPlatformGroup(): Phaser.Physics.Arcade.StaticGroup {
     return this.platformGroup;
   }
@@ -172,10 +178,7 @@ export class CollisionSystem {
 
           // 데미지 가져오기
           const bulletRef = b.getData("__bulletRef");
-          const dmg =
-            bulletRef && typeof bulletRef.getConfig === "function"
-              ? bulletRef.getConfig().damage
-              : 10;
+          const dmg = bulletRef?.getConfig ? bulletRef.getConfig().damage : 10;
 
           // 플레이어에 데미지 적용
           try {
@@ -186,13 +189,11 @@ export class CollisionSystem {
 
           // 총알 폭발/제거
           try {
-            if (bulletRef && typeof bulletRef.hit === "function") {
+            if (bulletRef?.hit)
               bulletRef.hit(b.x, b.y);
-            } else {
+            else
               b.destroy(true);
-            }
           } catch (e) {
-            console.warn("bullet.hit/destroy 실패:", e);
             b.destroy(true);
           }
 
