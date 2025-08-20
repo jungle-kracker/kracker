@@ -334,6 +334,9 @@ export default class GameScene extends Phaser.Scene {
         destroyCharacter(remotePlayer.gfxRefs);
       }
 
+      //퇴장 시 태그 제거
+      this.uiManager.destroyNameTag(playerId);
+
       this.remotePlayers.delete(playerId);
     }
   }
@@ -408,6 +411,9 @@ export default class GameScene extends Phaser.Scene {
 
     // 색상 설정
     this.setMyPlayerColor(playerData.color);
+
+    //내 플레이어 세팅 시 태그 만들기
+    this.uiManager.createNameTag(playerData.id, playerData.name);
   }
 
   // ☆ 원격 플레이어 생성 (완전히 새로운 구현)
@@ -469,6 +475,9 @@ export default class GameScene extends Phaser.Scene {
 
     // Map에 저장
     this.remotePlayers.set(playerData.id, remotePlayer);
+
+    //원격 플레이어 생성 시 태그 만들기
+    this.uiManager.createNameTag(playerData.id, playerData.name);
 
     console.log(
       `✅ 원격 플레이어 ${playerData.name} 캐릭터 생성됨 at (${spawnPoint.x}, ${spawnPoint.y})`
@@ -683,7 +692,7 @@ export default class GameScene extends Phaser.Scene {
 
     const barWidth = 40;
     const barHeight = 4;
-    const barY = y - 35;
+    const barY = y + 10;
 
     // 배경
     refs.hpBarBg.clear();
@@ -1077,6 +1086,27 @@ export default class GameScene extends Phaser.Scene {
 
     // ☆ 원격 플레이어들 업데이트 및 보간
     this.updateRemotePlayers(deltaTime);
+
+    // === [닉네임 태그 위치 갱신] =====================================
+    // 내 플레이어: Player.getBounds()를 이용해 HP바 상단 근사치 계산
+    if (this.player && this.myPlayerId) {
+      const b = this.player.getBounds();          // { x, y, width, height, radius }
+      const x = b.x + b.width / 2;                // 바운즈 중앙 X
+      const hpBarTopY = b.y - 8;                  // HP바가 머리 위에 그려진다고 가정(여유 8px)
+      this.uiManager.updateNameTagPosition(this.myPlayerId, x, hpBarTopY);
+    }
+
+    // 원격 플레이어들: 현재 렌더 기준 좌표 사용
+    this.remotePlayers.forEach((rp) => {
+      // 렌더는 lastPosition 기준으로 하고 있으므로 동일 기준 사용
+      const x = rp.lastPosition.x;
+
+      // 반지름 25px + HP바 마진 10px 정도를 상단 오프셋으로 사용
+      // (필요하면 25/10 숫자만 조정하면 됨)
+      const hpBarTopY = rp.lastPosition.y - 25 ;
+
+      this.uiManager.updateNameTagPosition(rp.id, x, hpBarTopY);
+    });
 
     // 그림자 시스템 업데이트
     if (this.mapRenderer) {
@@ -1848,6 +1878,9 @@ export default class GameScene extends Phaser.Scene {
 
     // 상태 변경
     this.sceneState = GAME_STATE.SCENE_STATES.LOADING;
+
+    //모든 이름표 정리
+    this.uiManager.destroyAllNameTags();
 
     // ☆ 네트워크 매니저 정리
     try {
