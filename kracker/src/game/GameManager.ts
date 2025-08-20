@@ -1,6 +1,6 @@
 // src/game/GameManager.ts - 슬림화 완성본 (중복 제거)
 import Phaser from "phaser";
-import { GAME_CONFIG } from "./config";
+import { GAME_CONFIG } from "./Config";
 import { initializeMaps } from "./maps/MapLoader";
 
 // 🆕 외부 GameScene 사용

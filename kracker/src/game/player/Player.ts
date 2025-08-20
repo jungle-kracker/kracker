@@ -35,7 +35,7 @@ import {
 } from "../mechanics/wallgrab";
 
 // 기존 config / Bullet 의존성은 유지
-import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../config";
+import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../Config";
 import { Bullet } from "../bullet";
 
 export default class Player {

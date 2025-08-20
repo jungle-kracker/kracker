@@ -1,5 +1,5 @@
 // src/game/shadow/ShadowSystem.ts
-import { Platform } from "../config";
+import { Platform } from "../Config";
 import { ShadowRenderer } from "./ShadowRenderer";
 import {
   ShadowRendererConfig,
