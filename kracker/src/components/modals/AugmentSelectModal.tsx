@@ -84,6 +84,17 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
     }
   }, [chosenBy, players, isOpen, autoCloseWhenAll, onClose]);
 
+  useEffect(() => {
+    const onProgress = (data: { round: number; selections: Record<string, string>; selectedCount: number; totalPlayers: number }) => {
+      // 서버 진행 상황을 로컬 상태에 반영 (다른 플레이어들의 선택 표시)
+      setChosenBy(data.selections || {});
+    };
+    socket.on("augment:progress", onProgress);
+    return () => {
+      socket.off("augment:progress", onProgress);
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   return ReactDOM.createPortal(

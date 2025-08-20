@@ -168,54 +168,59 @@ export class CollisionSystem {
 
       // 🔥 총알 ↔ 플레이어 충돌 체크 (원-원)
       if (this.player && typeof this.player.getPosition === "function") {
-        const pos = this.player.getPosition();
-        const pb = this.player.getBounds?.();
-        const playerRadius = pb?.radius ?? 25; // 플레이어 반경(기본값 25)
+        const getHealth = (this.player as any)?.getHealth?.();
+        if (typeof getHealth === "number" && getHealth <= 0) {
+          // 사망 상태면 피격 판정 제외
+        } else {
+          const pos = this.player.getPosition();
+          const pb = this.player.getBounds?.();
+          const playerRadius = pb?.radius ?? 25; // 플레이어 반경(기본값 25)
 
-        const dx = b.x - pos.x;
-        const dy = b.y - pos.y;
-        const bulletR = this.getBulletRadius(b);
-        const rSum = playerRadius + bulletR;
+          const dx = b.x - pos.x;
+          const dy = b.y - pos.y;
+          const bulletR = this.getBulletRadius(b);
+          const rSum = playerRadius + bulletR;
 
-        if (dx * dx + dy * dy <= rSum * rSum) {
-          // 한 프레임 중복 처리 방지
-          b.setData("__hitThisFrame", true);
+          if (dx * dx + dy * dy <= rSum * rSum) {
+            // 한 프레임 중복 처리 방지
+            b.setData("__hitThisFrame", true);
 
-          // 데미지 가져오기
-          const bulletRef = b.getData("__bulletRef");
-          const dmg = bulletRef?.getConfig ? bulletRef.getConfig().damage : 10;
+            // 데미지 가져오기
+            const bulletRef = b.getData("__bulletRef");
+            const dmg = bulletRef?.getConfig ? bulletRef.getConfig().damage : 10;
 
-          // 서버에만 체력 업데이트 전송 (로컬 데미지 처리 제거)
-          if (this.networkManager && this.player) {
-            const playerId = this.player.getId?.() || this.player.id;
-            const hitData = {
-              bulletId: `collision_${Date.now()}`,
-              targetPlayerId: playerId,
-              damage: dmg,
-              x: b.x,
-              y: b.y,
-            };
+            // 서버에만 체력 업데이트 전송 (로컬 데미지 처리 제거)
+            if (this.networkManager && this.player) {
+              const playerId = this.player.getId?.() || this.player.id;
+              const hitData = {
+                bulletId: `collision_${Date.now()}`,
+                targetPlayerId: playerId,
+                damage: dmg,
+                x: b.x,
+                y: b.y,
+              };
 
-            console.log(
-              `💥 CollisionSystem: 서버에 체력 업데이트 전송 - 플레이어: ${playerId}, 데미지: ${dmg}`
-            );
-            this.networkManager.sendBulletHit(hitData);
-          } else {
-            console.warn(
-              `⚠️ CollisionSystem: 네트워크 매니저 또는 플레이어가 없음`
-            );
+              console.log(
+                `💥 CollisionSystem: 서버에 체력 업데이트 전송 - 플레이어: ${playerId}, 데미지: ${dmg}`
+              );
+              this.networkManager.sendBulletHit(hitData);
+            } else {
+              console.warn(
+                `⚠️ CollisionSystem: 네트워크 매니저 또는 플레이어가 없음`
+              );
+            }
+
+            // 총알 폭발/제거
+            try {
+              if (bulletRef?.hit) bulletRef.hit(b.x, b.y);
+              else b.destroy(true);
+            } catch (e) {
+              b.destroy(true);
+            }
+
+            // 이 총알은 처리 완료 → 다음 총알로
+            continue;
           }
-
-          // 총알 폭발/제거
-          try {
-            if (bulletRef?.hit) bulletRef.hit(b.x, b.y);
-            else b.destroy(true);
-          } catch (e) {
-            b.destroy(true);
-          }
-
-          // 이 총알은 처리 완료 → 다음 총알로
-          continue;
         }
       }
 
