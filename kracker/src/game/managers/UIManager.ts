@@ -55,10 +55,10 @@ const DEFAULT_UI_CONFIG: UIConfig = {
     },
   },
   visibility: {
-    instructions: false,
-    debugInfo: false,
-    shadowStatus: false,
-    mapStatus: false,
+    instructions: true,
+    debugInfo: true,
+    shadowStatus: true,
+    mapStatus: true,
   },
 };
 

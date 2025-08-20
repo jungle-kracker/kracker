@@ -22,7 +22,7 @@ const GAME_SETTINGS = {
   RENDER: {
     ANTIALIAS: true,
     PIXEL_ART: false,
-    BACKGROUND_COLOR: "rgba(0,0,0,0)",
+    BACKGROUND_COLOR: "#0a0a1a", // 순수한 네이비 블루 배경
   },
 
   // 기본 맵
@@ -103,12 +103,12 @@ const PLAYER_CONSTANTS = {
   // 색상 프리셋
   COLOR_PRESETS: {
     기본: { primary: 0x4a90e2, secondary: 0x357abd },
-    빨간색: { primary: 0xD76A6A, secondary: 0xc0392b },
-    주황색: { primary: 0xEE9841, secondary: 0xe67e22 },
-    초록색: { primary: 0x5A945B, secondary: 0x27ae60 },
+    빨간색: { primary: 0xd76a6a, secondary: 0xc0392b },
+    주황색: { primary: 0xee9841, secondary: 0xe67e22 },
+    초록색: { primary: 0x5a945b, secondary: 0x27ae60 },
     파란색: { primary: 0x196370, secondary: 0x2980b9 },
-    보라색: { primary: 0x6C3FAF, secondary: 0x8e44ad },
-    핑크색: { primary: 0xDF749D, secondary: 0xc2185b },
+    보라색: { primary: 0x6c3faf, secondary: 0x8e44ad },
+    핑크색: { primary: 0xdf749d, secondary: 0xc2185b },
   },
 
   // 크기

@@ -60,6 +60,7 @@ export class Bullet {
   private _active: boolean = true;
   private _id: string;
   private createdTime: number;
+  public _hitProcessed: boolean = false; // 충돌 처리 상태 추적
 
   // 테일 효과를 위한 위치 히스토리
   private positionHistory: Array<{ x: number; y: number; time: number }> = [];
@@ -84,6 +85,7 @@ export class Bullet {
       .toString(36)
       .substr(2, 9)}`;
     this.createdTime = Date.now();
+    this._hitProcessed = false; // 충돌 처리 상태 초기화
 
     // 기본 설정 병합
     this.config = {
@@ -139,7 +141,7 @@ export class Bullet {
     this.sprite.setCircle(radius);
 
     // 3) 비주얼 이펙트들
-    this.tail = this.scene.add.graphics().setDepth(this.sprite.depth - 1);
+    this.tail = this.scene.add.graphics().setDepth(this.sprite.depth + 1); // 총알보다 앞에 표시
     // 스크롤/줌 동기화 (테일이 이알과 어긋나지 않도록)
     this.tail.setScrollFactor(
       (this.sprite as any).scrollFactorX ?? 1,
@@ -180,39 +182,6 @@ export class Bullet {
           const centerY = size / 2;
           const radius = this.config.radius;
 
-          // 글로우 효과 (외부 후광) - 은은하게
-          const gradient1 = ctx.createRadialGradient(
-            centerX,
-            centerY,
-            0,
-            centerX,
-            centerY,
-            radius * 2.5
-          );
-          gradient1.addColorStop(0, "rgba(255, 200, 150, 0.1)"); // 매우 은은한 연한 주황색
-          gradient1.addColorStop(0.4, "rgba(255, 180, 120, 0.05)"); // 더 은은한 연한 주황색
-          gradient1.addColorStop(0.7, "rgba(255, 160, 100, 0.02)"); // 거의 투명한 연한 주황색
-          gradient1.addColorStop(1, "rgba(255, 140, 80, 0)"); // 투명
-
-          ctx.fillStyle = gradient1;
-          ctx.fillRect(0, 0, size, size);
-
-          // 중간 글로우 (내부 후광) - 은은하게
-          const gradient2 = ctx.createRadialGradient(
-            centerX,
-            centerY,
-            0,
-            centerX,
-            centerY,
-            radius * 1.8
-          );
-          gradient2.addColorStop(0, "rgba(255, 200, 150, 0.2)"); // 은은한 연한 주황색
-          gradient2.addColorStop(0.6, "rgba(255, 180, 120, 0.1)"); // 더 은은한 연한 주황색
-          gradient2.addColorStop(1, "rgba(255, 160, 100, 0)"); // 투명
-
-          ctx.fillStyle = gradient2;
-          ctx.fillRect(0, 0, size, size);
-
           // 메인 총알 본체 (밝은 중심부)
           const gradient3 = ctx.createRadialGradient(
             centerX,
@@ -232,30 +201,6 @@ export class Bullet {
           ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
           ctx.fill();
 
-          // 핵심 하이라이트 (가장 밝은 부분) - 은은하게
-          const gradient4 = ctx.createRadialGradient(
-            centerX - radius * 0.3,
-            centerY - radius * 0.3,
-            0,
-            centerX - radius * 0.3,
-            centerY - radius * 0.3,
-            radius * 0.6
-          );
-          gradient4.addColorStop(0, "#ffffff"); // 흰색
-          gradient4.addColorStop(0.5, "rgba(255, 255, 255, 0.4)"); // 은은한 반투명 흰색
-          gradient4.addColorStop(1, "rgba(255, 255, 255, 0)"); // 투명
-
-          ctx.fillStyle = gradient4;
-          ctx.beginPath();
-          ctx.arc(
-            centerX - radius * 0.3,
-            centerY - radius * 0.3,
-            radius * 0.6,
-            0,
-            Math.PI * 2
-          );
-          ctx.fill();
-
           canvas.refresh();
         }
       }
@@ -266,36 +211,12 @@ export class Bullet {
       try {
         const graphics = this.scene.add.graphics();
 
-        // 글로우 효과 (외부 후광) - 은은하게
-        graphics.fillStyle(0xffcc80, 0.1);
-        graphics.fillCircle(
-          this.config.radius * 2,
-          this.config.radius * 2,
-          this.config.radius * 2.5
-        );
-
-        // 중간 글로우 (내부 후광) - 은은하게
-        graphics.fillStyle(0xffcc80, 0.2);
-        graphics.fillCircle(
-          this.config.radius * 2,
-          this.config.radius * 2,
-          this.config.radius * 1.8
-        );
-
         // 메인 총알 본체
         graphics.fillStyle(0xffaa40, 1);
         graphics.fillCircle(
           this.config.radius * 2,
           this.config.radius * 2,
           this.config.radius
-        );
-
-        // 핵심 하이라이트 - 은은하게
-        graphics.fillStyle(0xffffff, 0.4);
-        graphics.fillCircle(
-          this.config.radius * 1.7,
-          this.config.radius * 1.7,
-          this.config.radius * 0.6
         );
 
         graphics.generateTexture(
@@ -400,6 +321,17 @@ export class Bullet {
     // 🔥 단순한 삼각형 테일 그리기
     this.updateSimpleTail();
 
+    // 디버깅: 총알 꼬리 상태 확인
+    if (this.tail && this.tail.scene) {
+      console.log("🎯 총알 꼬리 상태:", {
+        visible: this.tail.visible,
+        alpha: this.tail.alpha,
+        depth: this.tail.depth,
+        x: this.tail.x,
+        y: this.tail.y,
+      });
+    }
+
     // 속도 기반 시각적 효과
     this.updateVisualEffects();
 
@@ -430,17 +362,27 @@ export class Bullet {
    * 🔥 단순한 테일 업데이트 (총알과 같은 색상)
    */
   private updateSimpleTail(): void {
-    if (!this.tail || !this.tail.scene) return;
+    if (!this.tail || !this.tail.scene) {
+      console.log("🎯 총알 꼬리 그래픽 객체 없음");
+      return;
+    }
 
     this.tail.clear();
 
-    if (this.positionHistory.length < 3) return;
+    if (this.positionHistory.length < 3) {
+      console.log("🎯 총알 위치 히스토리 부족:", this.positionHistory.length);
+      return;
+    }
 
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     const speed = body.velocity.length();
 
-    // 속도가 낮으면 테일 표시 안 함
-    if (speed < 100) return;
+    // 속도가 낮으면 테일 표시 안 함 (임계값 낮춤)
+    if (speed < 10) {
+      // 매우 낮은 속도에서만 숨김
+      console.log("🎯 총알 속도 낮음:", speed);
+      return;
+    }
 
     // 🔥 현재 총알의 정확한 위치 사용 (히스토리 말고 실시간)
     const currentX = this.sprite.x;
@@ -449,9 +391,9 @@ export class Bullet {
     // 속도 벡터 각도
     const velocityAngle = Math.atan2(body.velocity.y, body.velocity.x);
 
-    // 테일 길이와 너비
-    const tailLength = Math.min(80, speed * 0.03);
-    const tailWidth = Math.min(20, this.config.radius * 2 + speed * 0.0007);
+    // 테일 길이와 너비 (자연스럽게)
+    const tailLength = Math.min(40, speed * 0.02);
+    const tailWidth = Math.min(15, this.config.radius * 1.5 + speed * 0.0005);
 
     // 🔥 테일 시작점을 총알 앞쪽으로 (더 겹치게)
     const overlapDistance = this.config.radius * 1.23; // 총알 반지름의 70% 만큼 앞으로
@@ -470,10 +412,19 @@ export class Bullet {
     const wing2X = baseX - Math.cos(perpAngle) * wingOffset;
     const wing2Y = baseY - Math.sin(perpAngle) * wingOffset;
 
-    // 🔥 총알과 똑같은 색상 사용 (config.color)
-    const tailColor = this.config.color;
+    // 🔥 총알과 같은 색상으로 맞춤 (더 은은하게)
+    const tailColor = 0xffaa40; // 총알과 같은 주황색
 
-    // 테일 글로우 효과 (은은하게)
+    // 테일 글로우 효과 (은은한 외부 후광)
+    this.tail.fillStyle(0xffffff, 0.2); // 흰색 글로우 (더 은은하게)
+    this.tail.beginPath();
+    this.tail.moveTo(wing1X, wing1Y);
+    this.tail.lineTo(wing2X, wing2Y);
+    this.tail.lineTo(tailEndX, tailEndY);
+    this.tail.closePath();
+    this.tail.fillPath();
+
+    // 중간 글로우 효과 (은은한 후광)
     this.tail.fillStyle(tailColor, 0.15);
     this.tail.beginPath();
     this.tail.moveTo(wing1X, wing1Y);
@@ -482,8 +433,8 @@ export class Bullet {
     this.tail.closePath();
     this.tail.fillPath();
 
-    // 메인 삼각형 그리기
-    this.tail.fillStyle(tailColor, 0.8);
+    // 메인 삼각형 그리기 (은은한 중심부)
+    this.tail.fillStyle(tailColor, 0.6);
     this.tail.beginPath();
     this.tail.moveTo(wing1X, wing1Y);
     this.tail.lineTo(wing2X, wing2Y);
@@ -548,15 +499,24 @@ export class Bullet {
    * 충돌 처리
    */
   public hit(contactX?: number, contactY?: number): void {
-    if (!this._active) return;
+    if (!this._active || this._hitProcessed) return;
+
+    // 충돌 처리 플래그 설정
+    this._hitProcessed = true;
 
     const hitX = contactX ?? this.sprite.x;
     const hitY = contactY ?? this.sprite.y;
 
+    console.log(
+      `💥 총알 충돌 처리: ${this._id} at (${hitX.toFixed(1)}, ${hitY.toFixed(
+        1
+      )})`
+    );
+
     // 충돌 이벤트 호출
     this.events.onHit?.(hitX, hitY);
 
-    // 폭발 효과 생성
+    // 폭발 효과 생성 (충돌 각도 고려)
     this.createSafeExplosionEffect(hitX, hitY);
 
     // 이알 제거
@@ -564,35 +524,182 @@ export class Bullet {
   }
 
   /**
-   * 안전한 폭발 효과 생성
+   * 안전한 폭발 효과 생성 (V자 불꽃 이펙트 - 충돌 각도 고려)
    */
   private createSafeExplosionEffect(x: number, y: number): void {
     try {
-      const flash = this.scene.add.circle(
-        x,
-        y,
-        this.config.radius * 3,
-        0xffffff,
-        0.8
-      );
-      flash.setDepth(150);
-      flash.setBlendMode(Phaser.BlendModes.ADD);
+      // 총알 색상과 동일한 색상 사용
+      const bulletColor = this.config.color;
 
+      // 충돌 각도 계산
+      const collisionAngle = this.calculateCollisionAngle();
+
+      // V자 모양 불꽃 파티클들 생성 (충돌 각도 기반)
+      this.createVShapeFireParticles(x, y, bulletColor, collisionAngle);
+    } catch (error) {
+      console.warn("폭발 효과 생성 실패:", error);
+    }
+  }
+
+  /**
+   * 충돌 각도 계산 (총알 속도 벡터 기반)
+   */
+  private calculateCollisionAngle(): number {
+    try {
+      if (this.sprite && this.sprite.body) {
+        // Phaser Physics Body에서 속도 가져오기
+        const velocityX = this.sprite.body.velocity.x;
+        const velocityY = this.sprite.body.velocity.y;
+
+        // 속도가 0이면 기본 각도 반환
+        if (Math.abs(velocityX) < 0.1 && Math.abs(velocityY) < 0.1) {
+          return -90; // 기본 위쪽 방향
+        }
+
+        // 속도 벡터의 각도 계산 (라디안)
+        const angleRad = Math.atan2(velocityY, velocityX);
+
+        // 라디안을 도로 변환
+        const angleDeg = (angleRad * 180) / Math.PI;
+
+        return angleDeg;
+      }
+    } catch (error) {
+      console.warn("충돌 각도 계산 실패:", error);
+    }
+
+    // 기본값: 위쪽 방향
+    return -90;
+  }
+
+  /**
+   * V자 모양 불꽃 파티클 생성 (더 극적하고 길게)
+   */
+  private createVShapeFireParticles(
+    x: number,
+    y: number,
+    color: number,
+    collisionAngle: number
+  ): void {
+    try {
+      // 충돌 각도를 기반으로 V자 방향 조정
+      const baseAngle = collisionAngle;
+      const vSpread = 60; // V자 퍼짐 각도
+
+      // V자 각도 설정 (충돌 각도 기준)
+      const leftAngle = baseAngle - vSpread; // 충돌 각도에서 왼쪽으로
+      const rightAngle = baseAngle + vSpread; // 충돌 각도에서 오른쪽으로
+      const centerAngle = baseAngle; // 충돌 각도 그대로
+
+      // 색상 변형 (주황색 추가)
+      const orangeColor = 0xff6600; // 주황색
+      const mixedColor = this.blendColors(color, orangeColor, 0.3); // 30% 주황색 섞기
+
+      // 파티클 수 (적당히 유지)
+      const particleCount = 6;
+
+      // 왼쪽 V자 파티클들 (충돌 각도 기준)
+      for (let i = 0; i < particleCount; i++) {
+        const angle = leftAngle + (Math.random() - 0.5) * 40; // 약간의 랜덤성
+        const speed = 120 + Math.random() * 180; // 더 빠른 속도
+        const size = 3 + Math.random() * 5; // 더 큰 크기
+        const particleColor = Math.random() < 0.7 ? color : mixedColor; // 70% 원래 색, 30% 혼합 색
+
+        this.createFireParticle(x, y, angle, speed, size, particleColor, 0.9);
+      }
+
+      // 오른쪽 V자 파티클들 (충돌 각도 기준)
+      for (let i = 0; i < particleCount; i++) {
+        const angle = rightAngle + (Math.random() - 0.5) * 40; // 약간의 랜덤성
+        const speed = 120 + Math.random() * 180; // 더 빠른 속도
+        const size = 3 + Math.random() * 5; // 더 큰 크기
+        const particleColor = Math.random() < 0.7 ? color : mixedColor; // 70% 원래 색, 30% 혼합 색
+
+        this.createFireParticle(x, y, angle, speed, size, particleColor, 0.9);
+      }
+
+      // 중앙 파티클들 (충돌 각도 방향)
+      for (let i = 0; i < 3; i++) {
+        const angle = centerAngle + (Math.random() - 0.5) * 30;
+        const speed = 80 + Math.random() * 120; // 더 빠른 속도
+        const size = 2 + Math.random() * 4; // 더 큰 크기
+        const particleColor = Math.random() < 0.6 ? color : mixedColor; // 60% 원래 색, 40% 혼합 색
+
+        this.createFireParticle(x, y, angle, speed, size, particleColor, 0.8);
+      }
+    } catch (error) {
+      console.warn("V자 불꽃 파티클 생성 실패:", error);
+    }
+  }
+
+  /**
+   * 색상 혼합 함수
+   */
+  private blendColors(color1: number, color2: number, ratio: number): number {
+    // 색상 분해
+    const r1 = (color1 >> 16) & 0xff;
+    const g1 = (color1 >> 8) & 0xff;
+    const b1 = color1 & 0xff;
+
+    const r2 = (color2 >> 16) & 0xff;
+    const g2 = (color2 >> 8) & 0xff;
+    const b2 = color2 & 0xff;
+
+    // 색상 혼합
+    const r = Math.round(r1 * (1 - ratio) + r2 * ratio);
+    const g = Math.round(g1 * (1 - ratio) + g2 * ratio);
+    const b = Math.round(b1 * (1 - ratio) + b2 * ratio);
+
+    return (r << 16) | (g << 8) | b;
+  }
+
+  /**
+   * 개별 불꽃 파티클 생성 (더 극적하고 길게)
+   */
+  private createFireParticle(
+    x: number,
+    y: number,
+    angle: number,
+    speed: number,
+    size: number,
+    color: number,
+    alpha: number
+  ): void {
+    try {
+      // 파티클 생성
+      const particle = this.scene.add.circle(x, y, size, color, alpha);
+      particle.setDepth(151);
+      particle.setBlendMode(Phaser.BlendModes.ADD);
+
+      // 각도를 라디안으로 변환
+      const angleRad = (angle * Math.PI) / 180;
+
+      // 속도 벡터 계산
+      const velocityX = Math.cos(angleRad) * speed;
+      const velocityY = Math.sin(angleRad) * speed;
+
+      // 더 멀리, 더 오래 튀도록 수정
+      const travelDistance = 0.3 + Math.random() * 0.4; // 0.3~0.7배 거리
+      const duration = 600 + Math.random() * 400; // 600~1000ms (더 오래)
+
+      // 파티클 애니메이션 (더 극적하게)
       this.scene.tweens.add({
-        targets: flash,
-        scaleX: 2,
-        scaleY: 2,
+        targets: particle,
+        x: x + velocityX * travelDistance, // 더 멀리 이동
+        y: y + velocityY * travelDistance,
+        scaleX: 0.05, // 더 작게 축소
+        scaleY: 0.05,
         alpha: 0,
-        duration: 200,
-        ease: "Power2",
+        duration: duration, // 더 오래 지속
+        ease: "Power3", // 더 부드러운 이징
         onComplete: () => {
-          if (flash && flash.scene) {
-            flash.destroy();
+          if (particle && particle.scene) {
+            particle.destroy();
           }
         },
       });
     } catch (error) {
-      console.warn("폭발 효과 생성 실패:", error);
+      console.warn("불꽃 파티클 생성 실패:", error);
     }
   }
 
@@ -603,6 +710,7 @@ export class Bullet {
     if (!this._active) return;
 
     this._active = false;
+    this._hitProcessed = true; // 제거 시 충돌 처리 완료로 표시
 
     // 이벤트 호출
     this.events.onDestroy?.();

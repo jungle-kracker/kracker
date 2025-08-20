@@ -30,6 +30,60 @@ const JUMP_PREPARE_KEYFRAME: CharacterKeyframe = {
 };
 
 /**
+ * 왼쪽 방향 점프 준비 자세 (왼쪽으로 향하면서 다리 굽힘)
+ */
+const JUMP_PREPARE_LEFT_KEYFRAME: CharacterKeyframe = {
+  time: 0.0,
+  leftLeg: {
+    hip: { x: -12, y: 15 },
+    knee: { x: -18, y: 18 }, // 왼쪽 다리 더 많이 굽힘
+    foot: { x: -15, y: 35 },
+  },
+  rightLeg: {
+    hip: { x: 8, y: 15 },
+    knee: { x: 12, y: 18 }, // 오른쪽 다리도 굽힘
+    foot: { x: 10, y: 35 },
+  },
+  leftArm: {
+    hip: { x: -12, y: 5 }, // 왼쪽 팔 더 뒤로
+    knee: { x: -25, y: 12 },
+    foot: { x: -35, y: 20 },
+  },
+  rightArm: {
+    hip: { x: 8, y: 5 }, // 오른쪽 팔도 뒤로
+    knee: { x: 15, y: 12 },
+    foot: { x: 25, y: 20 },
+  },
+};
+
+/**
+ * 오른쪽 방향 점프 준비 자세 (오른쪽으로 향하면서 다리 굽힘)
+ */
+const JUMP_PREPARE_RIGHT_KEYFRAME: CharacterKeyframe = {
+  time: 0.0,
+  leftLeg: {
+    hip: { x: -8, y: 15 },
+    knee: { x: -12, y: 18 }, // 왼쪽 다리 굽힘
+    foot: { x: -10, y: 35 },
+  },
+  rightLeg: {
+    hip: { x: 12, y: 15 },
+    knee: { x: 18, y: 18 }, // 오른쪽 다리 더 많이 굽힘
+    foot: { x: 15, y: 35 },
+  },
+  leftArm: {
+    hip: { x: -8, y: 5 }, // 왼쪽 팔 뒤로
+    knee: { x: -15, y: 12 },
+    foot: { x: -25, y: 20 },
+  },
+  rightArm: {
+    hip: { x: 12, y: 5 }, // 오른쪽 팔 더 뒤로
+    knee: { x: 25, y: 12 },
+    foot: { x: 35, y: 20 },
+  },
+};
+
+/**
  * 점프 발사 자세 (다리가 펴지면서 뛰는 순간)
  */
 const JUMP_LAUNCH_KEYFRAME: CharacterKeyframe = {
@@ -53,6 +107,60 @@ const JUMP_LAUNCH_KEYFRAME: CharacterKeyframe = {
     hip: { x: 10, y: 0 }, // 팔이 위로
     knee: { x: 15, y: -10 },
     foot: { x: 20, y: -15 },
+  },
+};
+
+/**
+ * 왼쪽 방향 점프 발사 자세 (왼쪽으로 향하면서 발사)
+ */
+const JUMP_LAUNCH_LEFT_KEYFRAME: CharacterKeyframe = {
+  time: 0.3,
+  leftLeg: {
+    hip: { x: -12, y: 10 },
+    knee: { x: -10, y: 35 }, // 왼쪽 다리 더 많이 펴짐
+    foot: { x: -8, y: 45 },
+  },
+  rightLeg: {
+    hip: { x: 8, y: 10 },
+    knee: { x: 6, y: 35 }, // 오른쪽 다리도 펴짐
+    foot: { x: 3, y: 45 },
+  },
+  leftArm: {
+    hip: { x: -12, y: 0 }, // 왼쪽 팔 더 위로
+    knee: { x: -18, y: -12 },
+    foot: { x: -25, y: -18 },
+  },
+  rightArm: {
+    hip: { x: 8, y: 0 }, // 오른쪽 팔도 위로
+    knee: { x: 12, y: -8 },
+    foot: { x: 15, y: -12 },
+  },
+};
+
+/**
+ * 오른쪽 방향 점프 발사 자세 (오른쪽으로 향하면서 발사)
+ */
+const JUMP_LAUNCH_RIGHT_KEYFRAME: CharacterKeyframe = {
+  time: 0.3,
+  leftLeg: {
+    hip: { x: -8, y: 10 },
+    knee: { x: -6, y: 35 }, // 왼쪽 다리 펴짐
+    foot: { x: -3, y: 45 },
+  },
+  rightLeg: {
+    hip: { x: 12, y: 10 },
+    knee: { x: 10, y: 35 }, // 오른쪽 다리 더 많이 펴짐
+    foot: { x: 8, y: 45 },
+  },
+  leftArm: {
+    hip: { x: -8, y: 0 }, // 왼쪽 팔 위로
+    knee: { x: -12, y: -8 },
+    foot: { x: -15, y: -12 },
+  },
+  rightArm: {
+    hip: { x: 12, y: 0 }, // 오른쪽 팔 더 위로
+    knee: { x: 18, y: -12 },
+    foot: { x: 25, y: -18 },
   },
 };
 
@@ -165,10 +273,10 @@ const LAND_IMPACT_KEYFRAME: CharacterKeyframe = {
 };
 
 /**
- * 착지 후 회복 자세 (일반 서있는 자세로)
+ * 착지 후 회복 자세 (천천히 일어나는 자세)
  */
 const LAND_RECOVERY_KEYFRAME: CharacterKeyframe = {
-  time: 1.0,
+  time: 2.0, // 더 오래 지속되도록 시간 증가
   leftLeg: {
     hip: { x: -10, y: 20 },
     knee: { x: -8, y: 30 },
@@ -201,6 +309,36 @@ export const jumpAnimation: Animation = {
   keyframes: [
     JUMP_PREPARE_KEYFRAME,
     JUMP_LAUNCH_KEYFRAME,
+    JUMP_AIRBORNE_KEYFRAME,
+  ],
+  priority: 40,
+};
+
+/**
+ * 왼쪽 방향 점프 애니메이션 (왼쪽으로 향하면서 점프)
+ */
+export const jumpLeftAnimation: Animation = {
+  name: "jump-left",
+  duration: 0.6,
+  loop: false,
+  keyframes: [
+    JUMP_PREPARE_LEFT_KEYFRAME,
+    JUMP_LAUNCH_LEFT_KEYFRAME,
+    JUMP_AIRBORNE_KEYFRAME,
+  ],
+  priority: 40,
+};
+
+/**
+ * 오른쪽 방향 점프 애니메이션 (오른쪽으로 향하면서 점프)
+ */
+export const jumpRightAnimation: Animation = {
+  name: "jump-right",
+  duration: 0.6,
+  loop: false,
+  keyframes: [
+    JUMP_PREPARE_RIGHT_KEYFRAME,
+    JUMP_LAUNCH_RIGHT_KEYFRAME,
     JUMP_AIRBORNE_KEYFRAME,
   ],
   priority: 40,
@@ -243,11 +381,11 @@ export const fallAnimation: Animation = {
 };
 
 /**
- * 착지 애니메이션
+ * 착지 애니메이션 (천천히 회복)
  */
 export const landAnimation: Animation = {
   name: "land",
-  duration: 0.4,
+  duration: 1.2, // 더 오래 지속되도록 시간 증가
   loop: false,
   keyframes: [
     LAND_PREPARE_KEYFRAME,
@@ -262,13 +400,20 @@ export const landAnimation: Animation = {
  */
 export function getJumpKeyframeAtTime(
   animationType: "jump" | "fall" | "land",
-  time: number
+  time: number,
+  direction?: "left" | "right" | "center"
 ): CharacterKeyframe {
   let animation: Animation;
 
   switch (animationType) {
     case "jump":
-      animation = jumpAnimation;
+      if (direction === "left") {
+        animation = jumpLeftAnimation;
+      } else if (direction === "right") {
+        animation = jumpRightAnimation;
+      } else {
+        animation = jumpAnimation;
+      }
       break;
     case "fall":
       animation = fallAnimation;
@@ -336,6 +481,8 @@ function interpolateLimb(start: any, end: any, t: number) {
  */
 export const JumpAnimations = {
   jump: jumpAnimation,
+  "jump-left": jumpLeftAnimation,
+  "jump-right": jumpRightAnimation,
   fall: fallAnimation,
   land: landAnimation,
 } as const;

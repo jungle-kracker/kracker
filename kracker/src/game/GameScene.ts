@@ -4,8 +4,9 @@ import Player from "./player/Player";
 import MapRenderer from "./MapRenderer";
 import { MapLoader } from "./maps/MapLoader";
 import { ParticleSystem } from "./particle";
-import { CollisionSystem } from "./systems/CollisionSystem";
+
 import { NetworkManager } from "./managers/NetworkManager"; // ☆ 네트워크 매니저 추가
+import { DebugRenderer } from "./debug/DebugRenderer"; // ☆ 디버그 렌더러 추가
 
 // ☆ 캐릭터 렌더링 관련 import 추가
 import { createCharacter, destroyCharacter } from "./render/character.core";
@@ -108,7 +109,6 @@ export default class GameScene extends Phaser.Scene {
   private particleSystem!: ParticleSystem;
   private bulletGroup!: Phaser.Physics.Arcade.Group;
   private platformGroup!: Phaser.Physics.Arcade.StaticGroup;
-  private collisionSystem!: CollisionSystem;
 
   // ☆ 멀티플레이어 관련
   private remotePlayers: Map<string, RemotePlayer> = new Map();
@@ -127,6 +127,7 @@ export default class GameScene extends Phaser.Scene {
   private cameraManager!: CameraManager;
   private shadowManager!: ShadowManager;
   private shootingManager!: ShootingManager;
+  private debugRenderer!: DebugRenderer; // ☆ 디버그 렌더러 추가
 
   // 씬 상태 관리
   private currentMapKey: MapKey = GAME_SETTINGS.DEFAULT_MAP as MapKey;
@@ -187,9 +188,6 @@ export default class GameScene extends Phaser.Scene {
 
       // 플레이어 생성
       this.createPlayer(data?.spawn);
-      this.player.setCollisionSystem(this.collisionSystem);
-      this.collisionSystem.setPlayer(this.player);
-      this.collisionSystem.setNetworkManager(this.networkManager);
 
       // 사격 시스템과 플레이어 연결
       this.shootingManager.setPlayer(this.player);
@@ -516,15 +514,20 @@ export default class GameScene extends Phaser.Scene {
     const myId = this.myPlayerId;
     if (!myId) return;
 
-    // 내 AABB
-    const myBounds = this.player.getBounds(); // 기존 findPlayerAtPosition에서 쓰던 것과 동일
+    // 내 원형 히트박스
+    const myCircleBounds = this.player.getCircleBounds(); // 원형 히트박스 사용
 
-    // 헬퍼
-    const pointInRect = (
+    // 헬퍼 - 원형 충돌 감지
+    const pointInCircle = (
       px: number,
       py: number,
-      r: { x: number; y: number; width: number; height: number }
-    ) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height;
+      circle: { x: number; y: number; radius: number }
+    ) => {
+      const distanceX = px - circle.x;
+      const distanceY = py - circle.y;
+      const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+      return distanceSquared <= circle.radius * circle.radius;
+    };
 
     for (const b of bullets) {
       if (!b || b._hitProcessed) continue;
@@ -533,16 +536,22 @@ export default class GameScene extends Phaser.Scene {
       const by = b.y ?? b.position?.y ?? b.body?.y;
       if (bx == null || by == null) continue;
 
+      let hitDetected = false;
+
       // 원격 총알이 나를 맞춘 경우
       if (b.ownerId && b.ownerId !== myId) {
-        if (pointInRect(bx, by, myBounds)) {
+        if (pointInCircle(bx, by, myCircleBounds)) {
+          hitDetected = true;
           b._hitProcessed = true;
+
+          const damage = this.shootingManager?.getDamage() ?? 25;
+          console.log(`🎯 내가 맞음! 데미지: ${damage}, 총알 소유자: ${b.ownerId}`);
 
           // 서버에 타격 전송 (로컬 데미지 처리 제거)
           this.networkManager?.sendBulletHit({
             bulletId: b.id || `bullet_${Date.now()}`,
             targetPlayerId: myId,
-            damage: this.shootingManager?.getDamage() ?? 25,
+            damage: damage,
             x: bx,
             y: by,
           });
@@ -550,11 +559,10 @@ export default class GameScene extends Phaser.Scene {
           // 카메라 흔들기만 적용 (체력은 서버에서 처리)
           this.shakeCamera(150, 0.008);
         }
-        continue;
       }
 
       // 내 총알이 원격 플레이어를 맞춘 경우
-      if (b.ownerId === myId) {
+      if (!hitDetected && b.ownerId === myId) {
         const playerIds = Array.from(this.remotePlayers.keys());
         for (let i = 0; i < playerIds.length; i++) {
           const pid = playerIds[i];
@@ -562,20 +570,23 @@ export default class GameScene extends Phaser.Scene {
           const body = remote?.gfxRefs?.body;
           if (!body) continue;
 
-          // 간단한 몸통 AABB (기존 findPlayerAtPosition과 동일 기준)
-          const bounds = {
-            x: body.x - 20,
-            y: body.y - 20,
-            width: 40,
-            height: 40,
+          // 원형 히트박스 사용
+          const circleBounds = {
+            x: body.x,
+            y: body.y,
+            radius: 18, // 18px 반지름으로 통일
           };
-          if (pointInRect(bx, by, bounds)) {
+          if (pointInCircle(bx, by, circleBounds)) {
+            hitDetected = true;
             b._hitProcessed = true;
+
+            const damage = this.shootingManager?.getDamage() ?? 25;
+            console.log(`🎯 상대 맞춤! 타겟: ${pid}, 데미지: ${damage}`);
 
             this.networkManager?.sendBulletHit({
               bulletId: b.id || `bullet_${Date.now()}`,
               targetPlayerId: pid,
-              damage: this.shootingManager?.getDamage() ?? 25,
+              damage: damage,
               x: bx,
               y: by,
             });
@@ -583,6 +594,12 @@ export default class GameScene extends Phaser.Scene {
             break;
           }
         }
+      }
+
+      // 충돌이 감지되었으면 총알 제거
+      if (hitDetected && b && typeof b.hit === "function") {
+        console.log(`🎯 총알 히트! 총알 ID: ${b.id}, 위치: (${bx}, ${by})`);
+        b.hit(bx, by);
       }
     }
   }
@@ -1124,6 +1141,7 @@ export default class GameScene extends Phaser.Scene {
       shootRecoil: 0,
       currentTime: Date.now() / 1000,
       currentFacing: facing,
+      isJumping: !networkState.isGrounded, // 점프 상태 추정 (지상에 없으면 점프 중으로 간주)
     });
 
     // 디버그: 주기적으로 위치 로그
@@ -1394,8 +1412,6 @@ export default class GameScene extends Phaser.Scene {
     });
     this.shootingManager.initialize();
 
-    (this.shootingManager as any)?.setCollisionSystem?.(this.collisionSystem);
-
     // 사격 시스템 충돌 설정
     this.shootingManager.setupCollisions(this.platformGroup);
 
@@ -1406,6 +1422,9 @@ export default class GameScene extends Phaser.Scene {
     this.inputManager = new InputManager(this);
     this.setupInputCallbacks();
     this.inputManager.initialize();
+
+    // ☆ 디버그 렌더러 초기화
+    this.debugRenderer = new DebugRenderer(this);
 
     // UI 상태 업데이트
     this.updateAllUI();
@@ -1534,15 +1553,6 @@ export default class GameScene extends Phaser.Scene {
       body.updateFromGameObject();
       this.platformGroup.add(rect);
     });
-
-    // CollisionSystem 생성
-    this.collisionSystem = new CollisionSystem(
-      this,
-      this.bulletGroup,
-      this.platformGroup
-    );
-
-    (this as any).__collisionSystem = this.collisionSystem;
 
     console.log(
       `✅ Physics Groups 초기화 완료: bullets=${this.bulletGroup.children.size}, platforms=${this.platformGroup.children.size}`
@@ -1731,11 +1741,25 @@ export default class GameScene extends Phaser.Scene {
     // 그림자 시스템 업데이트
     if (this.mapRenderer) {
       this.mapRenderer.updateShadows();
+
+      // 🎨 패럴랙스 배경 효과를 위한 플레이어 위치 업데이트
+      if (this.player) {
+        const playerState = this.player.getState();
+        this.mapRenderer.updatePlayerPosition(
+          playerState.position.x,
+          playerState.position.y
+        );
+      }
     }
 
     // 사격 시스템 업데이트
     if (this.shootingManager) {
-      // UI 업데이트는 필요시에만
+      this.shootingManager.update(); // 총알 업데이트 추가
+    }
+
+    // ☆ 디버그 렌더러 업데이트
+    if (this.debugRenderer) {
+      this.debugRenderer.update();
     }
 
     // 게임 로직 업데이트
@@ -2357,18 +2381,18 @@ export default class GameScene extends Phaser.Scene {
     maxHealth: number;
     isLocalPlayer: boolean;
   }> {
-    // 디버깅: 현재 체력 정보 로그
-    console.log("🔍 현재 플레이어 체력 정보 수집:");
-    if (this.player && this.myPlayerId) {
-      console.log(
-        `  - 로컬 플레이어 (${this.myPlayerId}): ${this.player.getHealth()}/100`
-      );
-    }
-    this.remotePlayers.forEach((remotePlayer, playerId) => {
-      console.log(
-        `  - 원격 플레이어 (${playerId}): ${remotePlayer.networkState.health}/100`
-      );
-    });
+    // 디버깅: 현재 체력 정보 로그 (주석 처리)
+    // console.log("🔍 현재 플레이어 체력 정보 수집:");
+    // if (this.player && this.myPlayerId) {
+    //   console.log(
+    //     `  - 로컬 플레이어 (${this.myPlayerId}): ${this.player.getHealth()}/100`
+    //   );
+    // }
+    // this.remotePlayers.forEach((remotePlayer, playerId) => {
+    //   console.log(
+    //     `  - 원격 플레이어 (${playerId}): ${remotePlayer.networkState.health}/100`
+    //   );
+    // });
     const players: Array<{
       id: string;
       name: string;
@@ -2439,6 +2463,7 @@ export default class GameScene extends Phaser.Scene {
       this.inputManager?.destroy();
       this.shadowManager?.destroy();
       this.uiManager?.destroy();
+      this.debugRenderer?.destroy(); // ☆ 디버그 렌더러 정리
     } catch (error) {
       // 매니저 정리 중 에러
     }
