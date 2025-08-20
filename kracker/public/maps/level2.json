@@ -1,16 +1,16 @@
 {
   "meta": {
-    "key": "level1",
-    "name": "정글 1",
+    "key": "level2",
+    "name": "암벽 1",
     "width": 1920,
     "height": 1080
   },
   "background": {
     "type": "image+gradient",
-    "image": "jungleBg",
+    "image": "cliffBg",
     "parallax": 1,
     "gradient": {
-      "top": "#005429",
+      "top": "rgb(40,40,40,0.6)",
       "bottom": "#000000"
     }
   },

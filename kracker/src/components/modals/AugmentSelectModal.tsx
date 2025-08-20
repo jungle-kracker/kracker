@@ -2,9 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
 import BgBase from "../../assets/images/titleBackground.svg";
 import AugmentCard from "../cards/AugmentCard";
-import imgDok from "../../assets/cards/독걸려랑.svg";
-import imgKki from "../../assets/cards/끼얏호우.svg";
-import imgFast from "../../assets/cards/빨리뽑기.svg";
+import { getRandomAugments } from "../../data/augments";
 import { socket } from "../../lib/socket";
 
 export type AugmentPlayer = {
@@ -24,31 +22,8 @@ export interface AugmentSelectModalProps {
   myPlayerId?: string; // 현재 플레이어의 ID
 }
 
-// 사용 가능한 카드 목록
-const availableCards = [
-  "독걸려랑",
-  "끼얏호우", 
-  "빨리뽑기"
-];
-
-// 이름→이미지 경로 매핑 (정적 import로 번들 안전)
-const cardImageMap: Record<string, string> = {
-  "독걸려랑": imgDok,
-  "끼얏호우": imgKki,
-  "빨리뽑기": imgFast,
-};
-
 // 증강 데이터 (랜덤으로 3개 카드 선택)
-const getRandomAugmentData = () => {
-  const shuffled = [...availableCards].sort(() => 0.5 - Math.random());
-  const selectedCards = shuffled.slice(0, 3);
-  
-  return selectedCards.map((cardName, index) => ({
-    id: `augment-${index + 1}`,
-    name: cardName,
-    description: `${cardName}의 효과가 적용됩니다.`,
-  }));
-};
+const getRandomAugmentData = () => getRandomAugments(3);
 
 const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
   isOpen,
@@ -83,6 +58,17 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
       }, 400);
     }
   }, [chosenBy, players, isOpen, autoCloseWhenAll, onClose]);
+
+  useEffect(() => {
+    const onProgress = (data: { round: number; selections: Record<string, string>; selectedCount: number; totalPlayers: number }) => {
+      // 서버 진행 상황을 로컬 상태에 반영 (다른 플레이어들의 선택 표시)
+      setChosenBy(data.selections || {});
+    };
+    socket.on("augment:progress", onProgress);
+    return () => {
+      socket.off("augment:progress", onProgress);
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -296,7 +282,7 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
                 <AugmentCard
                   name={augment.name}
                   description={augment.description}
-                  imageUrl={cardImageMap[augment.name]}
+                  imageUrl={augment.image}
                 />
               </div>
             </div>

@@ -15,6 +15,8 @@ type Player = {
   ready: boolean;
   health?: number; // 체력 추가
   wins?: number;   // 🆕 라운드 승리 스택
+  // 🆕 활성 증강: augmentId -> { id, startedAt }
+  augments?: Record<string, { id: string; startedAt: number }>;
 };
 
 type Room = {
@@ -42,6 +44,7 @@ type Room = {
   augmentSelections: Array<{
     round: number;
     selections: Record<string, string>; // playerId -> augmentId
+    completionScheduled?: boolean; // 🆕 완료 방송 예약 여부
   }>;
   // 🆕 라운드 종료 브로드캐스트 지연 중 여부
   isRoundEnding?: boolean;
@@ -504,41 +507,107 @@ io.on("connection", (socket) => {
 
       const room = rooms.get(roomId);
       if (room && room.players[hit.targetPlayerId]) {
-        const currentHealth = room.players[hit.targetPlayerId]?.health || 100;
-        const newHealth = Math.max(0, currentHealth - hit.damage);
+        // 현재 체력 가져오기 (기본값 100)
+        const target = room.players[hit.targetPlayerId];
+        if (!target) return;
+        const currentHealth = target.health ?? 100;
 
-        const player = room.players[hit.targetPlayerId];
-        if (player) {
-          player.health = newHealth;
+        // 이미 사망 상태면 추가 데미지 무시
+        if (currentHealth <= 0) {
+          return;
         }
+
+        // 서버 권위 대미지 계산 (증강 반영)
+        const shooter = room.players[payload.playerId];
+        let damage = hit.damage ?? 25;
+        // 빨리뽑기: 고정 추가 대미지
+        if (shooter?.augments && shooter.augments["빨리뽑기"]) {
+          damage += 5;
+        }
+        const newHealth = Math.max(0, currentHealth - damage);
+
+        // 서버에 체력 업데이트
+        target.health = newHealth;
 
         // 모든 클라이언트에게 체력 업데이트 전송
         io.to(roomId).emit("game:healthUpdate", {
           playerId: hit.targetPlayerId,
           health: newHealth,
-          damage: hit.damage,
+          damage: damage,
           timestamp: Date.now(),
         });
 
-        // 🆕 라운드 종료 판정
+        // 독걸려랑: DoT 스케줄
+        if (shooter?.augments && shooter.augments["독걸려랑"] && newHealth > 0) {
+          const victimId = hit.targetPlayerId;
+          let ticks = 3;
+          const dot = 5;
+          const timer = setInterval(() => {
+            const r = rooms.get(roomId);
+            if (!r) return clearInterval(timer);
+            const v = r.players[victimId];
+            if (!v) return clearInterval(timer);
+            const h = v.health ?? 100;
+            if (h <= 0) return clearInterval(timer);
+            const nh = Math.max(0, h - dot);
+            v.health = nh;
+            io.to(roomId).emit("game:healthUpdate", {
+              playerId: victimId,
+              health: nh,
+              damage: dot,
+              timestamp: Date.now(),
+            });
+            ticks -= 1;
+            if (nh <= 0 || ticks <= 0) clearInterval(timer);
+          }, 1000);
+        }
+
+        // 끈적여요: 둔화 상태 방송 (클라에서 이동속도 적용)
+        if (shooter?.augments && shooter.augments["끈적여요"]) {
+          io.to(roomId).emit("game:event", {
+            type: "status",
+            playerId: hit.targetPlayerId,
+            data: { status: "slow", ms: 1500, multiplier: 0.7 },
+          });
+        }
+
+        // 사망 브로드캐스트
+        if (newHealth <= 0) {
+          io.to(roomId).emit("game:event", {
+            type: "dead",
+            playerId: hit.targetPlayerId,
+            data: { x: hit.x, y: hit.y },
+          });
+        }
+
+        // 🔎 라운드 종료 판정 및 스케줄링 (3초 대기 후 방송)
         const { shouldEnd, winners } = evaluateRoundEnd(room);
         if (shouldEnd && !room.isRoundEnding) {
           room.isRoundEnding = true;
-
-          // 3초 대기 후 라운드 종료 브로드캐스트 및 승리 스택 반영
           setTimeout(() => {
-            // 승리 스택 증가
+            // 승자 승리 스택 반영
             winners.forEach((pid) => {
               const wp = room.players[pid];
               if (wp) wp.wins = (wp.wins || 0) + 1;
             });
-
+            // 라운드 결과/다음 단계 방송
             endRound(io, room);
-
-            // 다음 라운드 준비가 시작되므로 플래그 해제
+            // 스케줄 해제
             room.isRoundEnding = false;
           }, 3000);
         }
+
+        console.log(
+          `[HEALTH] ${hit.targetPlayerId}: ${currentHealth} -> ${newHealth} (-${hit.damage})`
+        );
+
+        // 방의 모든 플레이어 체력 상태 로그
+        console.log(
+          `[ROOM HEALTH] Room ${roomId} players health:`,
+          Object.entries(room.players).map(
+            ([id, p]) => `${p.nickname}: ${p.health}`
+          )
+        );
       }
 
       // 기존 충돌 이벤트도 전송
@@ -666,6 +735,7 @@ io.on("connection", (socket) => {
         roundSelection = {
           round: payload.round,
           selections: {},
+          completionScheduled: false,
         };
         room.augmentSelections.push(roundSelection);
       }
@@ -677,36 +747,87 @@ io.on("connection", (socket) => {
         `[AUGMENT SELECT] room ${rid}, round ${payload.round}, player ${socket.id} -> ${payload.augmentId}`
       );
 
+      // 진행 상황 브로드캐스트 (실시간 동기화)
+      io.to(rid).emit("augment:progress", {
+        round: payload.round,
+        selections: roundSelection.selections,
+        selectedCount: Object.keys(roundSelection.selections).length,
+        totalPlayers: Object.keys(room.players).length,
+      });
+
       // 모든 플레이어가 선택했는지 확인
       const allPlayersSelected = Object.values(room.players).every(
         (player) => roundSelection!.selections[player.id]
       );
 
-      if (allPlayersSelected) {
+      if (allPlayersSelected && !roundSelection.completionScheduled) {
+        roundSelection.completionScheduled = true;
         console.log(
           `[AUGMENT COMPLETE] room ${rid}, round ${payload.round} - 모든 플레이어 선택 완료`
         );
-        
-        // 모든 플레이어에게 증강 선택 완료 알림
+
+        // 즉시 완료 방송
         io.to(rid).emit("augment:complete", {
           round: payload.round,
           selections: roundSelection.selections,
         });
 
-        // 🆕 다음 라운드를 위해 체력 리셋 (관전자 복귀)
-        const room = rooms.get(rid);
-        if (room) {
-          Object.values(room.players).forEach((p) => (p.health = 100));
-          // 각 플레이어에게 체력 리셋 브로드캐스트
-          Object.values(room.players).forEach((p) => {
-            io.to(rid).emit("game:healthUpdate", {
-              playerId: p.id,
-              health: 100,
-              damage: 0,
-              timestamp: Date.now(),
-            });
+        // 🆕 서버 저장: 각 플레이어의 활성 증강 갱신(간단 모델)
+        Object.entries(roundSelection.selections).forEach(([pid, augId]) => {
+          const p = room.players[pid];
+          if (!p) return;
+          if (!p.augments) p.augments = {};
+          p.augments[augId] = { id: augId, startedAt: Date.now() };
+        });
+
+        // 🆕 증강 상태 전체 방송(스냅샷)
+        io.to(rid).emit("augment:snapshot", {
+          players: Object.values(room.players).map((p) => ({
+            id: p.id,
+            augments: p.augments || {},
+          })),
+          round: payload.round,
+          t: Date.now(),
+        });
+
+        // 2초 대기하는 동안: 모든 플레이어 체력 100% 회복 및 브로드캐스트,
+        // 증강 선택 상태 초기화
+        Object.values(room.players).forEach((p) => {
+          p.health = 100;
+          io.to(rid).emit("game:healthUpdate", {
+            playerId: p.id,
+            health: 100,
+            damage: 0,
+            timestamp: Date.now(),
           });
-        }
+          // 각 플레이어 alive 신호
+          io.to(rid).emit("game:event", {
+            type: "alive",
+            playerId: p.id,
+            data: { round: payload.round },
+          });
+        });
+
+        // 모든 플레이어에게 스폰 위치로 복귀 지시 (클라에서 맵 스폰에 맞춰 위치 리셋)
+        io.to(rid).emit("game:event", {
+          type: "respawnAll",
+          playerId: "server",
+          data: { round: payload.round },
+        });
+
+        // 선택 상태 초기화(서버)
+        roundSelection.selections = {};
+        io.to(rid).emit("augment:progress", {
+          round: payload.round,
+          selections: roundSelection.selections,
+          selectedCount: 0,
+          totalPlayers: Object.keys(room.players).length,
+        });
+
+        // 2초 후 완료 예약 상태 해제
+        setTimeout(() => {
+          roundSelection!.completionScheduled = false;
+        }, 2000);
       }
 
       ack?.({ ok: true, allSelected: allPlayersSelected });
@@ -805,21 +926,36 @@ function endRound(io: Server, room: Room) {
     players: payloadPlayers,
   });
 
+  // 결과 패널 표출 지시
   io.to(room.roomId).emit("round:result", {
     players: payloadPlayers,
     round: room.currentRound,
   });
 
-  setTimeout(() => {
-    io.to(room.roomId).emit("round:augment", {
-      players: Object.values(room.players).map((p) => ({
-        id: p.id,
-        nickname: p.nickname,
-        color: p.color || "#888888",
-      })),
-      round: room.currentRound,
-    });
-  }, 3000);
+  // 최종 승리 조건: 한 명이라도 wins >= 5 (팀전도 플레이어 wins로 판정)
+  const isFinal = Object.values(room.players).some((p) => (p.wins || 0) >= 5);
+
+  if (isFinal) {
+    // 3초 후 최종 결과 방송 (증강 선택으로 가지 않음)
+    setTimeout(() => {
+      io.to(room.roomId).emit("game:final", {
+        round: room.currentRound,
+        players: payloadPlayers,
+      });
+    }, 3000);
+  } else {
+    // 3초 후 증강 선택 화면으로 전환 지시
+    setTimeout(() => {
+      io.to(room.roomId).emit("round:augment", {
+        players: Object.values(room.players).map((p) => ({
+          id: p.id,
+          nickname: p.nickname,
+          color: p.color || "#888888",
+        })),
+        round: room.currentRound,
+      });
+    }, 3000);
+  }
 }
 
 // ──────────────────────────────────────────────────────────────

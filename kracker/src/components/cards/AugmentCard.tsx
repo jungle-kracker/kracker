@@ -21,14 +21,14 @@ const AugmentCard: React.FC<AugmentCardProps> = ({
     <CardContainer onClick={onClick} $isSelected={isSelected}>
       {/* 증강 이미지 영역 */}
       <ImageArea>
-          {imageUrl ? (
-            <AugmentImage src={imageUrl} alt={name} />
-          ) : (
-            <PlaceholderImage>
-              <span>이미지</span>
-            </PlaceholderImage>
-          )}
-        </ImageArea>
+        {imageUrl ? (
+          <AugmentImage src={imageUrl} alt={name} />
+        ) : (
+          <PlaceholderImage>
+            <span>이미지</span>
+          </PlaceholderImage>
+        )}
+      </ImageArea>
     </CardContainer>
   );
 };

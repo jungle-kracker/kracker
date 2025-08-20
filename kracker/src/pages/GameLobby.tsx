@@ -325,7 +325,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
             state: gameState,
             replace: true,
           });
-        }, 200);
+        }, 260);
       } catch (error) {
         console.error("❌ 게임 시작 처리 중 오류:", error);
         alert("게임 시작 중 오류가 발생했습니다.");
@@ -478,7 +478,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
         sessionStorage.setItem("gameState", JSON.stringify(gameState));
 
         setExiting(true);
-        setTimeout(() => navigate("/game", { state: gameState, replace: true }), 200);
+        setTimeout(() => navigate("/game", { state: gameState, replace: true }), 260);
       } catch (error) {
         setLoadingModalOpen(false); // 오류 시 모달 닫기
       }
