@@ -37,6 +37,9 @@ export class ShootingManager {
   private ownerId: string | null = null;
   private getAugmentsFor?: (playerId: string) => Record<string, { id: string; startedAt: number }> | undefined;
 
+  // 총 위 총알 표시를 위한 그래픽 객체
+  private ammoGraphics?: Phaser.GameObjects.Graphics;
+
   constructor(scene: Phaser.Scene, config: ShootingManagerConfig) {
     this.scene = scene;
 
@@ -84,7 +87,7 @@ export class ShootingManager {
     const baseX = 50;
     const baseY = this.scene.cameras.main.height - 150;
 
-    // 탄약 표시
+    // 탄약 표시 (비활성화 - 총 위에 원으로 표시)
     this.ui = {
       ammoText: this.scene.add
         .text(baseX, baseY, "", {
@@ -95,7 +98,8 @@ export class ShootingManager {
           fontFamily: "Arial, sans-serif",
         })
         .setDepth(uiDepth)
-        .setScrollFactor(0),
+        .setScrollFactor(0)
+        .setVisible(false), // 비활성화
 
       reloadText: this.scene.add
         .text(baseX, baseY + 40, "", {
@@ -106,10 +110,16 @@ export class ShootingManager {
           fontFamily: "Arial, sans-serif",
         })
         .setDepth(uiDepth)
-        .setScrollFactor(0),
+        .setScrollFactor(0)
+        .setVisible(false), // 비활성화
     };
 
-    Debug.log.info(LogCategory.UI, "사격 UI 생성 완료");
+    // 총 위에 총알 원형 표시를 위한 그래픽 객체 생성
+    this.ammoGraphics = this.scene.add.graphics();
+    this.ammoGraphics.setDepth(uiDepth + 1);
+    this.ammoGraphics.setScrollFactor(0);
+
+    Debug.log.info(LogCategory.UI, "사격 UI 생성 완료 (총 위 원형 총알 표시)");
   }
 
   /**
@@ -148,8 +158,13 @@ export class ShootingManager {
       return false;
     }
 
-    const gunX = this.getPlayerX();
-    const gunY = this.getPlayerY();
+    // 총의 실제 위치 계산 (동적)
+    const playerX = this.player.getX();
+    const playerY = this.player.getY();
+    const playerState = this.player.getState();
+    const gunX = playerX + (playerState.facingDirection === "right" ? 30 : -30);
+    const gunY = playerY - 10;
+
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
     // ShootingSystem으로 사격 시도
     const shotFired = this.shootingSystem.tryShoot(
@@ -192,6 +207,9 @@ export class ShootingManager {
           } catch {}
         }
       });
+
+      // 반동 효과
+      this.handleRecoil(this.config.recoil);
 
       // 카메라 흔들림 효과
       this.scene.cameras.main.shake(5000, 0.005);
@@ -282,42 +300,104 @@ export class ShootingManager {
    * UI 업데이트
    */
   private updateUI(): void {
-    if (!this.shootingSystem || !this.ui.ammoText || !this.ui.reloadText)
-      return;
+    if (!this.shootingSystem) return;
 
     const currentAmmo = this.shootingSystem.getCurrentAmmo();
     const maxAmmo = this.shootingSystem.getMaxAmmo();
 
-    // 탄약 표시 업데이트
-    this.ui.ammoText.setText(`🔫 ${currentAmmo}/${maxAmmo}`);
+    // 총 위에 총알 원형 표시 업데이트
+    this.updateAmmoGraphics(currentAmmo, maxAmmo);
 
-    // 탄약 색상 변경 (적을수록 빨갛게)
-    const ammoRatio = currentAmmo / maxAmmo;
-    if (ammoRatio <= 0.3) {
-      this.ui.ammoText.setColor("#ff4444"); // 빨간색
-    } else if (ammoRatio <= 0.6) {
-      this.ui.ammoText.setColor("#ffaa44"); // 주황색
-    } else {
-      this.ui.ammoText.setColor("#ffffff"); // 흰색
-    }
-
-    // 재장전 상태 표시
+    // 재장전 상태 표시 (텍스트는 비활성화되어 있음)
     if (this.shootingSystem.isReloading()) {
-      this.ui.reloadText.setText(
-        `🔄 재장전 중... (${this.config.reloadTime / 1000}초)`
-      );
-      this.ui.reloadText.setVisible(true);
-
-      // 깜빡이는 효과
-      const blinkAlpha = Math.sin(Date.now() * 0.01) * 0.3 + 0.7;
-      this.ui.reloadText.setAlpha(blinkAlpha);
-    } else if (currentAmmo === 0) {
-      this.ui.reloadText.setText("💥 R키로 재장전!");
-      this.ui.reloadText.setVisible(true);
-      this.ui.reloadText.setAlpha(1);
-    } else {
-      this.ui.reloadText.setVisible(false);
+      // 재장전 중일 때 총알 원형들을 깜빡이게
+      this.blinkAmmoGraphics();
     }
+  }
+
+  /**
+   * 총 위에 총알 원형 표시 업데이트 (3개씩 위아래 그룹화)
+   */
+  private updateAmmoGraphics(currentAmmo: number, maxAmmo: number): void {
+    if (!this.ammoGraphics || !this.player) return;
+
+    this.ammoGraphics.clear();
+
+    // 총 위치 계산 (플레이어 위치 + 총 위치 오프셋)
+    const playerX = this.player.getX();
+    const playerY = this.player.getY();
+    const playerState = this.player.getState();
+    const gunX = playerX + (playerState.facingDirection === "right" ? 30 : -30);
+    const gunY = playerY - 10;
+
+    // 총알 원형 크기와 간격
+    const bulletRadius = 4;
+    const bulletSpacing = 8; // 총알 간 간격
+    const rowSpacing = 12; // 위아래 행 간격
+    const bulletsPerRow = 3; // 행당 총알 수
+
+    // 총알 행 수 계산
+    const totalRows = Math.ceil(maxAmmo / bulletsPerRow);
+    const currentRow = Math.floor(currentAmmo / bulletsPerRow);
+    const bulletsInCurrentRow = currentAmmo % bulletsPerRow;
+
+    // 총알 탄창 위치 (총 위에)
+    const magazineY = gunY - 15; // 총에 더 가깝게 위치
+
+    // 각 행별로 총알 그리기
+    for (let rowIndex = 0; rowIndex < totalRows; rowIndex++) {
+      const rowY = magazineY + (rowIndex - totalRows / 2) * rowSpacing;
+
+      // 현재 행의 총알 수
+      const bulletsInThisRow =
+        rowIndex < currentRow
+          ? bulletsPerRow
+          : rowIndex === currentRow
+          ? bulletsInCurrentRow
+          : 0;
+
+      // 행 내 총알들 그리기
+      for (let bulletIndex = 0; bulletIndex < bulletsPerRow; bulletIndex++) {
+        const x =
+          gunX +
+          (playerState.facingDirection === "right" ? 10 : -10) +
+          (bulletIndex - 1) * bulletSpacing; // 총 앞쪽으로 이동
+        const y = rowY;
+
+        if (bulletIndex < bulletsInThisRow) {
+          // 남은 총알 - 밝은 노란색
+          this.ammoGraphics.fillStyle(0xffff00, 0.9);
+          this.ammoGraphics.fillCircle(x, y, bulletRadius);
+          this.ammoGraphics.lineStyle(1, 0xffffff, 1);
+          this.ammoGraphics.strokeCircle(x, y, bulletRadius);
+        } else {
+          // 사용된 총알 - 어두운 회색
+          this.ammoGraphics.fillStyle(0x666666, 0.5);
+          this.ammoGraphics.fillCircle(x, y, bulletRadius);
+          this.ammoGraphics.lineStyle(1, 0x444444, 0.8);
+          this.ammoGraphics.strokeCircle(x, y, bulletRadius);
+        }
+      }
+
+      // 행 구분선 (선택사항)
+      if (rowIndex < totalRows - 1) {
+        this.ammoGraphics.lineStyle(1, 0x444444, 0.3);
+        this.ammoGraphics.beginPath();
+        this.ammoGraphics.moveTo(gunX - 16, rowY + rowSpacing / 2);
+        this.ammoGraphics.lineTo(gunX + 16, rowY + rowSpacing / 2);
+        this.ammoGraphics.strokePath();
+      }
+    }
+  }
+
+  /**
+   * 총알 원형들 깜빡이기 (재장전 중)
+   */
+  private blinkAmmoGraphics(): void {
+    if (!this.ammoGraphics) return;
+
+    const blinkAlpha = Math.sin(Date.now() * 0.01) * 0.3 + 0.7;
+    this.ammoGraphics.setAlpha(blinkAlpha);
   }
 
   /**
@@ -397,16 +477,22 @@ export class ShootingManager {
 
   private getPlayerX(): number {
     if (!this.player) return 0;
-    if (typeof this.player.getX === "function") return this.player.getX();
-    if ((this.player as any).x !== undefined) return (this.player as any).x;
-    return 0;
+    const playerX =
+      typeof this.player.getX === "function"
+        ? this.player.getX()
+        : (this.player as any).x || 0;
+    const playerState = this.player.getState ? this.player.getState() : null;
+    const facingDirection = playerState?.facingDirection || "right";
+    return playerX + (facingDirection === "right" ? 30 : -30);
   }
 
   private getPlayerY(): number {
     if (!this.player) return 0;
-    if (typeof this.player.getY === "function") return this.player.getY();
-    if ((this.player as any).y !== undefined) return (this.player as any).y;
-    return 0;
+    const playerY =
+      typeof this.player.getY === "function"
+        ? this.player.getY()
+        : (this.player as any).y || 0;
+    return playerY - 10;
   }
 
   // ===== 원격 플레이어용 메서드들 =====
@@ -547,6 +633,9 @@ export class ShootingManager {
       this.ui.ammoText?.destroy();
       this.ui.reloadText?.destroy();
     }
+
+    // 총알 그래픽 정리
+    this.ammoGraphics?.destroy();
 
     // 참조 정리
     this.player = undefined;

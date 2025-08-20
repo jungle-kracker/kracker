@@ -28,10 +28,6 @@ export function updateFace(
   face.fillStyle(faceColors.light);
   face.fillCircle(x + 3, y, 8);
 
-  // 얼굴 하이라이트 (더 밝게)
-  face.fillStyle(0xffffff);
-  face.fillCircle(x + 1, y - 2, 3);
-
   // 눈 (입체감 있는 검은색)
   face.fillStyle(0x000000);
   face.fillCircle(x, y - 5, 2.5); // 왼쪽 눈

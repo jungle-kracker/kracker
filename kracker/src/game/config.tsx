@@ -22,7 +22,7 @@ export const GAME_CONFIG = {
   playerSpeed: 300,
   jumpSpeed: 900,
   gravity: 2000,
-  backgroundColor: "#1a4a3a",
+  backgroundColor: "#1F3540", // 다크 블루-그린 배경
   platformColor: "#c0c0c0",
 
   // 맵 기본 크기 (맵 데이터가 없을 때 사용)

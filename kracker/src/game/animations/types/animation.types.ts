@@ -54,7 +54,10 @@ export type AnimationType =
   | "running"
   | "wallGrab"
   | "crouch"
+  | "landing-crouch"
   | "jump"
+  | "jump-left"
+  | "jump-right"
   | "fall";
 
 /**

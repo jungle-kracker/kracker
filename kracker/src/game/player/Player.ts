@@ -35,7 +35,7 @@ import {
 } from "../mechanics/wallgrab";
 
 // 기존 config / Bullet 의존성은 유지
-import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../config";
+import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../Config";
 import { Bullet } from "../bullet";
 
 export default class Player {
@@ -67,11 +67,18 @@ export default class Player {
   private isShooting = false;
   private facingDirection: "left" | "right" = "right";
 
+  // 착지 애니메이션 추적
+  private landTime = 0; // 착지한 시간
+  private isLanding = false; // 착지 애니메이션 중인지
+  private jumpStartTime = 0; // 점프 시작 시간
+  private lastLandingTime = 0; // 마지막 착지 시간 (쿨다운용)
+  private isLandingCrouch = false; // 착지 후 자동 앉기 상태
+  private landingCrouchStartTime = 0; // 착지 앉기 시작 시간
+  private landingCrouchDuration = 0.3; // 착지 앉기 지속시간
+  private jumpStartY = 0; // 점프 시작 Y 위치
+
   // 플랫폼
   private platforms: Platform[];
-
-  // ⭐ CollisionSystem 참조
-  private collisionSystem?: any;
 
   // 벽잡기/벽점프 상태
   private wall: WallGrabState = {
@@ -87,7 +94,7 @@ export default class Player {
   // 웅크리기
   private isCrouching = false;
   private crouchHeight = 0;
-  private crouchTransitionSpeed = 0.3;
+  private crouchTransitionSpeed = 0.5; // 더 부드러운 전환
   private baseCrouchOffset = 3;
 
   // 애니메이션 파라미터
@@ -206,12 +213,6 @@ export default class Player {
     });
   }
 
-  // ⭐ CollisionSystem 설정 메서드
-  public setCollisionSystem(collisionSystem: any): void {
-    this.collisionSystem = collisionSystem;
-    console.log("✅ CollisionSystem이 Player에 연결되었습니다.");
-  }
-
   // ========== 내부 유틸 ==========
 
   private readInputs(): KeyState {
@@ -302,9 +303,16 @@ export default class Player {
   }
 
   private updateCrouch(key: KeyState) {
-    // 벽잡기 중에는 웅크리기 불가
-    if (key.crouch && this.isGrounded && !this.wall.isWallGrabbing) {
+    // 착지 앉기 상태가 활성화되어 있으면 강제로 앉기
+    if (this.isLandingCrouch) {
       this.isCrouching = true;
+    }
+    // 벽잡기 중에는 웅크리기 불가
+    else if (key.crouch && this.isGrounded && !this.wall.isWallGrabbing) {
+      this.isCrouching = true;
+      // 수동으로 웅크리기 키를 누르면 착지 앉기 취소
+      this.isLandingCrouch = false;
+      this.landingCrouchStartTime = 0;
     } else {
       this.isCrouching = false;
     }
@@ -339,7 +347,11 @@ export default class Player {
 
     // 3) 벽 상태 판단/갱신 (다른 처리보다 먼저)
     const bounds = computePlayerBounds(this.x, this.y, this.crouchHeight);
-    const wallDir = checkWallCollision(bounds, this.platforms, this.velocityX);
+    const wallDir = checkWallCollision(bounds, this.platforms, this.velocityX, {
+      x: this.x,
+      y: this.y,
+      crouchHeight: this.crouchHeight,
+    });
     const wallStateIn = {
       ...this.wall,
       velocityX: this.velocityX,
@@ -357,6 +369,8 @@ export default class Player {
     };
     this.velocityX = wallStateOut.velocityX;
     this.velocityY = wallStateOut.velocityY;
+
+    // 착지 감지 (벽잡기 업데이트 후)
     this.isGrounded = wallStateOut.isGrounded;
 
     //Hp바 표시 타이머 감소
@@ -383,11 +397,22 @@ export default class Player {
         this.velocityX = dampen(this.velocityX, 0.8, 10);
       }
 
-      // 점프 (지상, not crouch)
-      if (key.jump && this.isGrounded && !this.isJumping && !this.isCrouching) {
+      // 점프 (지상에서만, 앉기 상태에서도 가능)
+      if (key.jump && this.isGrounded && !this.isJumping) {
         this.velocityY = -GAME_CONFIG.jumpSpeed;
         this.isJumping = true;
         this.isGrounded = false;
+        this.jumpStartTime = Date.now() / 1000; // 점프 시작 시간 기록
+        this.jumpStartY = this.y; // 점프 시작 Y 위치 저장
+
+        // 착지 앉기 상태 취소
+        this.isLandingCrouch = false;
+        this.landingCrouchStartTime = 0;
+
+        // console.log(
+        //   "🎯 점프 시작! jumpStartTime:",
+        //   this.jumpStartTime.toFixed(2)
+        // );
         this.wobble += 1;
         this.particleSystem.createJumpParticle(
           this.x,
@@ -429,6 +454,12 @@ export default class Player {
         this.isGrounded = jumped.isGrounded;
 
         this.isJumping = true;
+        this.jumpStartTime = Date.now() / 1000; // 벽점프 시작 시간 기록
+        this.jumpStartY = this.y; // 벽점프 시작 Y 위치 저장
+        // console.log(
+        //   "🎯 벽점프 시작! jumpStartTime:",
+        //   this.jumpStartTime.toFixed(2)
+        // );
         this.wobble += 2.0;
         this.shootRecoil += 1.0;
 
@@ -493,8 +524,7 @@ export default class Player {
       this.velocityX,
       this.velocityY,
       this.platforms,
-      this.crouchHeight,
-      dt
+      this.crouchHeight
     );
     this.x = resolver.x;
     this.y = resolver.y;
@@ -503,6 +533,11 @@ export default class Player {
 
     const wasGrounded = this.isGrounded;
     this.isGrounded = resolver.isGrounded;
+
+    // 앉기 상태에서 착지 판정 디버깅 (필요시)
+    // if (this.isCrouching && this.isGrounded !== wasGrounded) {
+    //   console.log(`🛬 Crouch landing: ${wasGrounded} → ${this.isGrounded}, crouchHeight: ${this.crouchHeight.toFixed(2)}`);
+    // }
 
     if (!wasGrounded && this.isGrounded) {
       // 착지
@@ -514,6 +549,68 @@ export default class Player {
         this.wall.wallGrabTimer = 0;
       }
       this.wobble += 0.5;
+
+      // 착지 이펙트 생성 (쿨다운 체크)
+      const currentTime = Date.now() / 1000;
+      const timeSinceLastLanding = currentTime - this.lastLandingTime;
+
+      // 0.3초 쿨다운으로 중복 이펙트 방지
+      if (timeSinceLastLanding > 0.3) {
+        // 점프 시작 위치보다 더 내려갔을 때만 이벤트 발생
+        const fallDistance = this.jumpStartY - this.y;
+        if (fallDistance > 10) {
+          // 10픽셀 이상 내려갔을 때만
+          this.landTime = currentTime; // 현재 시간 기록
+          this.isLanding = true;
+          this.lastLandingTime = currentTime;
+
+          // 점프 시작 시간부터 착지까지의 시간 계산
+          const timeSinceJumpStart = currentTime - this.jumpStartTime;
+
+          // 착지할 때마다 이펙트 생성 (크기는 점프 시간에 따라 조절)
+          let effectScale = 0.6; // 기본 크기
+
+          if (timeSinceJumpStart > 2.0) {
+            effectScale = 1.0; // 긴 점프 후 큰 이펙트
+          } else if (timeSinceJumpStart > 1.0) {
+            effectScale = 0.8; // 중간 점프 후 중간 이펙트
+          } else if (timeSinceJumpStart > 0.5) {
+            effectScale = 0.7; // 짧은 점프 후 작은 이펙트
+          }
+
+          // 착지 이펙트 생성
+          this.particleSystem.createLandingParticle(
+            this.x,
+            this.y + 25,
+            this.colors.head,
+            effectScale
+          );
+
+          // 착지 후 자동 앉기 시작 (고정 0.1초)
+          this.isLandingCrouch = true;
+          this.landingCrouchStartTime = currentTime;
+          this.landingCrouchDuration = 0.1; // 고정 0.1초
+        }
+      }
+    }
+
+    // 착지 상태 리셋 (착지 후 1.5초 후)
+    if (this.isLanding && this.landTime > 0) {
+      const timeSinceLand = Date.now() / 1000 - this.landTime;
+      if (timeSinceLand > 1.5) {
+        this.isLanding = false;
+        this.landTime = 0;
+      }
+    }
+
+    // 착지 앉기 상태 업데이트
+    if (this.isLandingCrouch && this.landingCrouchStartTime > 0) {
+      const timeSinceCrouchStart =
+        Date.now() / 1000 - this.landingCrouchStartTime;
+      if (timeSinceCrouchStart > this.landingCrouchDuration) {
+        this.isLandingCrouch = false;
+        this.landingCrouchStartTime = 0;
+      }
     }
 
     // 9) 애니메이션 파라미터
@@ -572,6 +669,9 @@ export default class Player {
       // 새로 추가된 파라미터들
       currentTime: Date.now() / 1000,
       currentFacing: this.facingDirection,
+      isJumping: this.isJumping, // 점프 상태 추가
+      isLanding: this.isLanding, // 착지 상태 추가
+      landTime: this.landTime, // 착지 시간 추가
     });
 
     // 11) 탄환 정리
@@ -655,6 +755,22 @@ export default class Player {
     const y = this.y - radius + crouchYOffset;
 
     return { x, y, width, height, radius };
+  }
+
+  public getCircleBounds(): {
+    x: number;
+    y: number;
+    radius: number;
+  } {
+    const radius = 18; // 더 작은 반지름으로 조정
+    const heightReduction = this.crouchHeight * 6; // 앉기 시 높이 감소 줄임
+    const crouchYOffset = this.crouchHeight * 3; // Y 오프셋 더 줄임
+
+    return {
+      x: this.x,
+      y: this.y - crouchYOffset, // Y값을 30px 올려서 플랫폼에 박히는 문제 해결
+      radius: Math.max(radius - heightReduction, 12), // 최소 반지름 보장
+    };
   }
 
   public resetVelocity(): void {
