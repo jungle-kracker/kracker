@@ -73,7 +73,7 @@ const RoundResultModal: React.FC<RoundResultModalProps> = ({
         inset: 0,
         width: "100dvw",
         height: "100dvh",
-        background: "linear-gradient(to top, #000000 0%, #0b0a2c 100%)",
+        background: "rgba(0, 0, 0, 0.85)",
         backdropFilter: "blur(6px)",
         WebkitBackdropFilter: "blur(6px)",
         display: "grid",
@@ -81,8 +81,8 @@ const RoundResultModal: React.FC<RoundResultModalProps> = ({
         zIndex: 1000,
         color: "#fff",
         touchAction: "none",
-        transform: isAnimating ? "translateX(0)" : "translateX(100%)",
-        transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+        opacity: isAnimating ? 1 : 0,
+        transition: "opacity 300ms ease",
       }}
     >
       {/* Title 섹션 (뒤로가기 버튼 없음) */}

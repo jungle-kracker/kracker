@@ -658,14 +658,20 @@ export default class GameScene extends Phaser.Scene {
       const currentHealth = this.player.getHealth();
       const expectedHealth = health;
 
-      // 서버 체력과 로컬 체력이 다르면 동기화
       if (currentHealth !== expectedHealth) {
-        console.log(`💚 체력 동기화: ${currentHealth} -> ${expectedHealth}`);
-        // 체력을 직접 설정 (서버 값으로)
         this.player.setHealth(expectedHealth);
 
-        // 데미지가 있으면 시각적 효과 적용
-        if (damage > 0) {
+        // 사망 시: 입력 비활성화 + 캐릭터 숨김 (관전)
+        if (expectedHealth <= 0) {
+          this.setInputEnabled(false);
+          this.playerHide();
+        } else {
+          // 회복(리스폰) 시: 입력 활성화 + 캐릭터 표시
+          this.playerShow();
+          this.setInputEnabled(true);
+        }
+
+        if (damage > 0 && expectedHealth > 0) {
           this.player.addWobble();
           this.player.setInvulnerable(1000);
         }
@@ -679,17 +685,28 @@ export default class GameScene extends Phaser.Scene {
         const oldHealth = remotePlayer.networkState.health;
         remotePlayer.networkState.health = health;
 
-        // 체력이 변경되었거나 데미지가 있으면 로그 출력
+        // 사망/부활 시 가시성 토글
+        const shouldBeVisible = health > 0;
+        remotePlayer.isVisible = shouldBeVisible;
+        const refs = remotePlayer.gfxRefs;
+        if (refs) {
+          const vis = (v: boolean) => {
+            refs.body?.setVisible?.(v);
+            refs.face?.setVisible?.(v);
+            refs.leftArm?.setVisible?.(v);
+            refs.rightArm?.setVisible?.(v);
+            refs.leftLeg?.setVisible?.(v);
+            refs.rightLeg?.setVisible?.(v);
+            refs.gun?.setVisible?.(v);
+          };
+          vis(shouldBeVisible);
+        }
+
         if (oldHealth !== health || damage > 0) {
           console.log(
             `💚 ${remotePlayer.name} 체력 업데이트: ${oldHealth} -> ${health}`
           );
         }
-
-        // 디버깅: 원격 플레이어 체력 업데이트 확인
-        console.log(
-          `🔍 원격 플레이어 ${remotePlayer.name} 체력 업데이트 완료: ${health}/100`
-        );
       } else {
         console.warn(`⚠️ 체력 업데이트할 플레이어를 찾을 수 없음: ${playerId}`);
         console.log(
@@ -698,6 +715,36 @@ export default class GameScene extends Phaser.Scene {
         );
       }
     }
+  }
+
+  // 🆕 로컬 플레이어 보이기/숨기기 유틸
+  private playerShow(): void {
+    try {
+      const gfx: any = (this.player as any)?.gfx;
+      if (gfx) {
+        gfx.body?.setVisible?.(true);
+        gfx.face?.setVisible?.(true);
+        gfx.leftArm?.setVisible?.(true);
+        gfx.rightArm?.setVisible?.(true);
+        gfx.leftLeg?.setVisible?.(true);
+        gfx.rightLeg?.setVisible?.(true);
+        gfx.gun?.setVisible?.(true);
+      }
+    } catch (e) {}
+  }
+  private playerHide(): void {
+    try {
+      const gfx: any = (this.player as any)?.gfx;
+      if (gfx) {
+        gfx.body?.setVisible?.(false);
+        gfx.face?.setVisible?.(false);
+        gfx.leftArm?.setVisible?.(false);
+        gfx.rightArm?.setVisible?.(false);
+        gfx.leftLeg?.setVisible?.(false);
+        gfx.rightLeg?.setVisible?.(false);
+        gfx.gun?.setVisible?.(false);
+      }
+    } catch (e) {}
   }
 
   // ☆ 플레이어 입장 처리
