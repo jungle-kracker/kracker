@@ -1,5 +1,5 @@
 // src/game/maps/MapLoader.ts
-import { Platform } from "../Config";
+import { Platform } from "../config";
 
 export interface MapImage {
   key: string;

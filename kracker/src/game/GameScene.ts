@@ -1,5 +1,5 @@
 // src/game/GameScene.ts - NetworkManager 통합된 멀티플레이어 GameScene
-import { Platform, Bullet, CHARACTER_PRESETS } from "./Config";
+import { Platform, Bullet, CHARACTER_PRESETS } from "./config";
 import Player from "./player/Player";
 import MapRenderer from "./MapRenderer";
 import { MapLoader } from "./maps/MapLoader";
