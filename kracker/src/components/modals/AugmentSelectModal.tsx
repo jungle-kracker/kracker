@@ -101,8 +101,8 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
         color: "#fff",
         display: "grid",
         gridTemplateRows: "auto 1fr",
-        transform: isAnimating ? "translateX(0)" : "translateX(100%)",
-        transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+        opacity: isAnimating ? 1 : 0,
+        transition: "opacity 300ms ease",
       }}
     >
       {/* 배경 텍스쳐 */}
@@ -252,8 +252,8 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
               {/* SVG 카드 컨테이너 */}
               <div
                 style={{
-                  width: "459px",
-                  height: "620px",
+                  width: "390px",
+                  height: "590px",
                   background: "rgba(255, 255, 255, 0.1)",
                   border: "2px solid rgba(255, 255, 255, 0.3)",
                   borderRadius: "30px",

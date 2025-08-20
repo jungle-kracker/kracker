@@ -37,8 +37,9 @@ export default AugmentCard;
 
 // Styled Components
 const CardContainer = styled.div<{ $isSelected: boolean }>`
-  width: 450px;
-  height: 620px;
+  width: 380px;
+  height: 580px;
+  overflow: hidden;
   position: relative;
   cursor: pointer;
   transition: all 0.3s ease;

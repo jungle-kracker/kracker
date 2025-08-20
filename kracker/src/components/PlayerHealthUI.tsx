@@ -44,6 +44,11 @@ const PlayerHealthUI: React.FC<PlayerHealthUIProps> = ({
               {player.isLocalPlayer && (
                 <span className="local-indicator">(나)</span>
               )}
+              {player.health <= 0 && (
+                <span className="dead-indicator" style={{ marginLeft: 6, color: "#ff6666" }}>
+                  (사망)
+                </span>
+              )}
             </div>
             <div className="health-bar-container">
               <div className="health-bar-background">

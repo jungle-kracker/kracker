@@ -14,6 +14,7 @@ type Player = {
   color?: string;
   ready: boolean;
   health?: number; // 체력 추가
+  wins?: number;   // 🆕 라운드 승리 스택
 };
 
 type Room = {
@@ -42,6 +43,8 @@ type Room = {
     round: number;
     selections: Record<string, string>; // playerId -> augmentId
   }>;
+  // 🆕 라운드 종료 브로드캐스트 지연 중 여부
+  isRoundEnding?: boolean;
 };
 
 const MAX_ROOMS = 5;
@@ -144,6 +147,7 @@ io.on("connection", (socket) => {
       currentRound: 0,
       roundResults: [],
       augmentSelections: [],
+      isRoundEnding: false,
     };
 
     room.players[socket.id] = {
@@ -152,6 +156,7 @@ io.on("connection", (socket) => {
       team: "A",
       ready: false,
       health: 100, // 초기 체력 설정
+      wins: 0,     // 🆕 승리 스택 초기화
     };
 
     rooms.set(roomId, room);
@@ -161,6 +166,8 @@ io.on("connection", (socket) => {
       nickname: payload.nickname?.trim() || "Player",
       ready: false,
       team: "A",
+      health: 100,
+      wins: 0,
     };
 
     rooms.set(roomId, room);
@@ -260,6 +267,8 @@ io.on("connection", (socket) => {
     if (ex) {
       // 기존 입장자면 닉네임만 갱신(정책에 따라 유지해도 됨)
       ex.nickname = n; // ✅ 갱신
+      if (ex.health == null) ex.health = 100;
+      if (ex.wins == null) ex.wins = 0;
     } else {
       room.players[socket.id] = {
         id: socket.id,
@@ -267,6 +276,7 @@ io.on("connection", (socket) => {
         team: "A",
         ready: false,
         health: 100, // 초기 체력 설정
+        wins: 0,     // 🆕 승리 스택 초기화
       };
     }
 
@@ -288,6 +298,7 @@ io.on("connection", (socket) => {
 
     // 최종 등록 (체력 추가)
     player.health = 100; // 초기 체력 설정
+    player.wins = player.wins ?? 0;
     room.players[socket.id] = player;
 
     console.log("palyer:", player);
@@ -491,40 +502,14 @@ io.on("connection", (socket) => {
       const { roomId, hit } = payload || {};
       if (!roomId || !hit) return;
 
-      // 서버에서 체력 관리
       const room = rooms.get(roomId);
       if (room && room.players[hit.targetPlayerId]) {
-        // 현재 체력 가져오기 (기본값 100)
         const currentHealth = room.players[hit.targetPlayerId]?.health || 100;
         const newHealth = Math.max(0, currentHealth - hit.damage);
 
-        // 서버에 체력 업데이트
         const player = room.players[hit.targetPlayerId];
         if (player) {
           player.health = newHealth;
-
-          // 체력이 0이 되었을 때 리스폰 처리
-          if (newHealth <= 0) {
-            console.log(`[RESPAWN] ${hit.targetPlayerId} 체력 0으로 리스폰`);
-            // 3초 후 체력 회복
-            setTimeout(() => {
-              const currentRoom = rooms.get(roomId);
-              const currentPlayer = currentRoom?.players[hit.targetPlayerId];
-              if (currentPlayer) {
-                currentPlayer.health = 100;
-
-                // 리스폰 이벤트 전송
-                io.to(roomId).emit("game:healthUpdate", {
-                  playerId: hit.targetPlayerId,
-                  health: 100,
-                  damage: 0,
-                  timestamp: Date.now(),
-                });
-
-                console.log(`[RESPAWN] ${hit.targetPlayerId} 체력 회복: 100`);
-              }
-            }, 3000);
-          }
         }
 
         // 모든 클라이언트에게 체력 업데이트 전송
@@ -535,17 +520,25 @@ io.on("connection", (socket) => {
           timestamp: Date.now(),
         });
 
-        console.log(
-          `[HEALTH] ${hit.targetPlayerId}: ${currentHealth} -> ${newHealth} (-${hit.damage})`
-        );
+        // 🆕 라운드 종료 판정
+        const { shouldEnd, winners } = evaluateRoundEnd(room);
+        if (shouldEnd && !room.isRoundEnding) {
+          room.isRoundEnding = true;
 
-        // 방의 모든 플레이어 체력 상태 로그
-        console.log(
-          `[ROOM HEALTH] Room ${roomId} players health:`,
-          Object.entries(room.players).map(
-            ([id, p]) => `${p.nickname}: ${p.health}`
-          )
-        );
+          // 3초 대기 후 라운드 종료 브로드캐스트 및 승리 스택 반영
+          setTimeout(() => {
+            // 승리 스택 증가
+            winners.forEach((pid) => {
+              const wp = room.players[pid];
+              if (wp) wp.wins = (wp.wins || 0) + 1;
+            });
+
+            endRound(io, room);
+
+            // 다음 라운드 준비가 시작되므로 플래그 해제
+            room.isRoundEnding = false;
+          }, 3000);
+        }
       }
 
       // 기존 충돌 이벤트도 전송
@@ -699,6 +692,21 @@ io.on("connection", (socket) => {
           round: payload.round,
           selections: roundSelection.selections,
         });
+
+        // 🆕 다음 라운드를 위해 체력 리셋 (관전자 복귀)
+        const room = rooms.get(rid);
+        if (room) {
+          Object.values(room.players).forEach((p) => (p.health = 100));
+          // 각 플레이어에게 체력 리셋 브로드캐스트
+          Object.values(room.players).forEach((p) => {
+            io.to(rid).emit("game:healthUpdate", {
+              playerId: p.id,
+              health: 100,
+              damage: 0,
+              timestamp: Date.now(),
+            });
+          });
+        }
       }
 
       ack?.({ ok: true, allSelected: allPlayersSelected });
@@ -754,6 +762,64 @@ function leaveAllRooms(socket: any) {
     left.push(rid);
   }
   return left;
+}
+
+// ──────────────────────────────────────────────────────────────
+// 라운드 종료 판정 및 처리 헬퍼
+// ──────────────────────────────────────────────────────────────
+function evaluateRoundEnd(room: Room): { shouldEnd: boolean; winners: string[] } {
+  const players = Object.values(room.players);
+  const alive = players.filter((p) => (p.health ?? 100) > 0);
+
+  if (alive.length <= 1) {
+    // 살아남은 사람이 1명이면 그 사람, 0명이면 빈 배열
+    return { shouldEnd: true, winners: alive.map((p) => p.id) };
+  }
+
+  // 팀전인 경우: 살아남은 플레이어들이 모두 같은 팀이면 종료
+  const aliveTeams = new Set(alive.map((p) => p.team));
+  if (aliveTeams.size === 1) {
+    // 동일 팀 전원 승리
+    return { shouldEnd: true, winners: alive.map((p) => p.id) };
+  }
+
+  return { shouldEnd: false, winners: [] };
+}
+
+function buildRoundResultPayload(room: Room): Array<{ id: string; nickname: string; color: string; wins: number }>{
+  return Object.values(room.players).map((p) => ({
+    id: p.id,
+    nickname: p.nickname,
+    color: p.color || "#888888",
+    wins: p.wins || 0,
+  }));
+}
+
+function endRound(io: Server, room: Room) {
+  room.currentRound += 1;
+
+  const payloadPlayers = buildRoundResultPayload(room);
+
+  room.roundResults.push({
+    round: room.currentRound,
+    players: payloadPlayers,
+  });
+
+  io.to(room.roomId).emit("round:result", {
+    players: payloadPlayers,
+    round: room.currentRound,
+  });
+
+  setTimeout(() => {
+    io.to(room.roomId).emit("round:augment", {
+      players: Object.values(room.players).map((p) => ({
+        id: p.id,
+        nickname: p.nickname,
+        color: p.color || "#888888",
+      })),
+      round: room.currentRound,
+    });
+  }, 3000);
 }
 
 // ──────────────────────────────────────────────────────────────
