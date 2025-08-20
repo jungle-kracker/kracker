@@ -124,6 +124,9 @@ export default class GameScene extends Phaser.Scene {
     super({ key: "GameScene" });
   }
 
+  //멀티관련 
+  private pendingMultiplayerData: GameData | null = null;
+
   preload(): void {
     Debug.log.info(LogCategory.SCENE, "에셋 프리로드 시작");
     this.load.svg("jungleBg", "/mapJungle-Bg.svg");
@@ -183,6 +186,14 @@ export default class GameScene extends Phaser.Scene {
 
       this.sceneState = GAME_STATE.SCENE_STATES.RUNNING;
       this.isInitialized = true;
+
+
+      // 대기열에 멀티플레이 초기화 데이터가 있으면 지금 처리
+      if (this.pendingMultiplayerData) {
+        const queued = this.pendingMultiplayerData;
+        this.pendingMultiplayerData = null;
+        this.initializeMultiplayer(queued);
+      }
 
       Debug.log.info(LogCategory.SCENE, "GameScene 생성 완료");
     } catch (error) {
@@ -329,6 +340,13 @@ export default class GameScene extends Phaser.Scene {
 
   // ☆ 멀티플레이어 초기화 메서드 (네트워크 연결 추가)
   public initializeMultiplayer(gameData: GameData): void {
+
+    if (!this.isInitialized || !this.networkManager) {
+      this.pendingMultiplayerData = gameData;
+      console.log("⏳ Scene not ready. Queued multiplayer init.");
+      return;
+    }
+
     console.log("🎮 멀티플레이어 초기화:", gameData);
 
     this.gameData = gameData;
@@ -796,7 +814,7 @@ export default class GameScene extends Phaser.Scene {
       burstDelay: 100,
     });
     this.shootingManager.initialize();
-    
+
     (this.shootingManager as any)?.setCollisionSystem?.(this.collisionSystem);
 
     // 사격 시스템 충돌 설정
@@ -1688,10 +1706,8 @@ export default class GameScene extends Phaser.Scene {
 
           const pos = remote.lastPosition;
           console.log(
-            `${remote.name} (${playerId}): 팀 ${
-              remote.team
-            }, 위치 (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}), HP ${
-              remote.networkState.health
+            `${remote.name} (${playerId}): 팀 ${remote.team
+            }, 위치 (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}), HP ${remote.networkState.health
             }`
           );
         }
