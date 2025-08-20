@@ -2350,10 +2350,7 @@ export default class GameScene extends Phaser.Scene {
   // 디버그 정보 가져오기
   public getDebugInfo() {
     if (!Debug.isEnabled()) {
-      Debug.log.warn(
-        LogCategory.SCENE,
-        "디버그 모드가 비활성화되어 있습니다"
-      );
+      Debug.log.warn(LogCategory.SCENE, "디버그 모드가 비활성화되어 있습니다");
       return null;
     }
 
