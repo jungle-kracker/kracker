@@ -134,6 +134,8 @@ export default class GameScene extends Phaser.Scene {
   private sceneState: any = GAME_STATE.SCENE_STATES.LOADING;
   private isInitialized: boolean = false;
 
+  // 증강 스냅샷: playerId -> Record<augmentId, { id, startedAt }>
+  private augmentByPlayer: Map<string, Record<string, { id: string; startedAt: number }>> = new Map();
   // 퍼포먼스 모니터링
   private performanceTimer: number = 0;
   private frameCount: number = 0;
@@ -249,6 +251,14 @@ export default class GameScene extends Phaser.Scene {
     this.networkManager.onHealthUpdate((data) => {
       this.handleHealthUpdate(data);
     });
+    // 🆕 증강 스냅샷 수신
+    (this.networkManager as any).onAugmentSnapshot?.((data: any) => {
+      try {
+        (data.players || []).forEach((p: any) => {
+          this.augmentByPlayer.set(p.id, p.augments || {});
+        });
+      } catch {}
+    });
 
     // 플레이어 입장/퇴장
     this.networkManager.onPlayerJoin((playerData) => {
@@ -303,8 +313,8 @@ export default class GameScene extends Phaser.Scene {
     // 위치 즉시 업데이트 (부드러운 보간은 update에서 처리)
     remotePlayer.lastPosition = { x: movement.x, y: movement.y };
 
-    // 가시성 확실히 설정
-    remotePlayer.isVisible = true;
+    // 가시성은 체력 상태에 따름 (사망자는 계속 숨김)
+    remotePlayer.isVisible = (remotePlayer.networkState.health || 0) > 0;
 
     // 파티클 생성 로직
     this.handleRemotePlayerParticles(
@@ -607,6 +617,24 @@ export default class GameScene extends Phaser.Scene {
   // ☆ 게임 이벤트 처리
   private handleGameEvent(event: any): void {
     switch (event.type) {
+      case "status":
+        // 상태이상(예: slow) 적용: 간단히 이동 속도 스케일을 일정 시간 낮춤
+        try {
+          const pid = event.playerId;
+          const data = event.data || {};
+          if (data.status === "slow") {
+            if (pid === this.myPlayerId && this.player) {
+              // 로컬 플레이어: 이동 속도 스케일 적용
+              const mult = data.multiplier ?? 0.7;
+              const ms = data.ms ?? 1500;
+              (this.player as any).__speedMul = mult;
+              setTimeout(() => {
+                (this.player as any).__speedMul = 1.0;
+              }, ms);
+            }
+          }
+        } catch {}
+        break;
       case "showHealthBar":
         // 체력바 표시 이벤트 처리
         const playerId = event.data?.playerId || event.playerId;
@@ -643,6 +671,97 @@ export default class GameScene extends Phaser.Scene {
         console.log(`⚡ 파워업 이벤트: ${event.playerId}`);
         break;
 
+      case "respawnAll":
+        // 모든 플레이어를 스폰 위치로 이동
+        try {
+          const spawns = this.mapRenderer?.getSpawns?.() || [];
+          // 내 플레이어
+          if (this.player && this.myPlayerId) {
+            const myData = this.gameData?.players.find((p) => p.id === this.myPlayerId);
+            let spawn = spawns[0];
+            if (this.gameData?.room.gameMode === "팀전") {
+              if (myData?.team === 1) spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
+              else if (myData?.team === 2) spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
+            }
+            if (spawn) {
+              this.setPlayerPosition(spawn.x, spawn.y);
+            }
+            // 이름표 복구
+            if (myData) this.tryCreateNameTag(myData.id, myData.name);
+          }
+          // 원격 플레이어
+          const playerIds = Array.from(this.remotePlayers.keys());
+          for (let i = 0; i < playerIds.length; i++) {
+            const pid = playerIds[i];
+            const rp = this.remotePlayers.get(pid);
+            if (!rp) continue;
+            const rpData = this.gameData?.players.find((p) => p.id === pid);
+            let spawn = spawns[0];
+            if (this.gameData?.room.gameMode === "팀전") {
+              if (rpData?.team === 1) spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
+              else if (rpData?.team === 2) spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
+            }
+            if (spawn) {
+              rp.lastPosition = { x: spawn.x, y: spawn.y };
+              rp.gfxRefs?.body?.setPosition?.(spawn.x, spawn.y);
+            }
+            if (rpData) this.tryCreateNameTag(pid, rpData.name);
+          }
+        } catch (e) {}
+        break;
+
+      case "dead":
+        // 특정 플레이어 사망 방송 수신 시 해당 위치에서만 이펙트 생성 및 숨김
+        try {
+          const pid = event.playerId;
+          const pos = event.data || {};
+          if (pid === this.myPlayerId) {
+            this.playerHide();
+            // 내 사망 이펙트
+            this.createParticleEffect(pos.x ?? this.getPlayerX(), pos.y ?? this.getPlayerY(), true);
+          } else {
+            const rp = this.remotePlayers.get(pid);
+            if (rp) {
+              rp.isVisible = false;
+              const refs = rp.gfxRefs;
+              refs?.body?.setVisible?.(false);
+              refs?.face?.setVisible?.(false);
+              refs?.leftArm?.setVisible?.(false);
+              refs?.rightArm?.setVisible?.(false);
+              refs?.leftLeg?.setVisible?.(false);
+              refs?.rightLeg?.setVisible?.(false);
+              refs?.gun?.setVisible?.(false);
+              try { this.uiManager.destroyNameTag(pid); } catch {}
+              // 원격 사망 이펙트: 해당 좌표에서만 생성
+              this.createParticleEffect(pos.x ?? rp.lastPosition.x, pos.y ?? rp.lastPosition.y, true);
+            }
+          }
+        } catch (e) {}
+        break;
+
+      case "alive":
+        try {
+          const pid = event.playerId;
+          if (pid === this.myPlayerId) {
+            this.playerShow();
+            this.setInputEnabled(true);
+          } else {
+            const rp = this.remotePlayers.get(pid);
+            if (rp) {
+              rp.isVisible = true;
+              const refs = rp.gfxRefs;
+              refs?.body?.setVisible?.(true);
+              refs?.face?.setVisible?.(true);
+              refs?.leftArm?.setVisible?.(true);
+              refs?.rightArm?.setVisible?.(true);
+              refs?.leftLeg?.setVisible?.(true);
+              refs?.rightLeg?.setVisible?.(true);
+              refs?.gun?.setVisible?.(true);
+            }
+          }
+        } catch (e) {}
+        break;
+
       default:
         console.warn(`알 수 없는 게임 이벤트 타입: ${event.type}`);
     }
@@ -652,12 +771,10 @@ export default class GameScene extends Phaser.Scene {
   private handleHealthUpdate(data: any): void {
     console.log(`💚 체력 업데이트 수신:`, data);
     console.log(`💚 현재 내 플레이어 ID: ${this.myPlayerId}`);
-    console.log(`💚 현재 내 플레이어 체력: ${this.player?.getHealth()}`);
 
     const { playerId, health, damage } = data;
 
     if (playerId === this.myPlayerId) {
-      // 내 체력 업데이트 - 서버 체력으로 완전 동기화
       const currentHealth = this.player.getHealth();
       const expectedHealth = health;
 
@@ -669,12 +786,27 @@ export default class GameScene extends Phaser.Scene {
 
         // 데미지가 있으면 시각적 효과 적용
         if (damage > 0) {
+        if (expectedHealth <= 0) {
+          // 사망: 입력 비활성, 렌더 숨김, 이름표 제거, 스폰 위치로 이동
+          this.setInputEnabled(false);
+          this.playerHide();
+          try { this.uiManager.destroyNameTag(this.myPlayerId!); } catch {}
+          this.resetPlayerPosition();
+        } else {
+          // 회복: 렌더 표시, 입력 활성, 이름표 복구
+          this.playerShow();
+          this.setInputEnabled(true);
+          const me = this.gameData?.players.find((p) => p.id === this.myPlayerId);
+          if (me) this.tryCreateNameTag(me.id, me.name);
+        }
+
+        if (damage > 0 && expectedHealth > 0) {
           this.player.addWobble();
           this.player.setInvulnerable(1000);
         }
       }
 
-      console.log(`💚 내 체력 업데이트: ${expectedHealth} (서버 동기화 완료)`);
+      console.log(`💚 내 체력 업데이트: ${expectedHealth}`);
     } else {
       // 원격 플레이어 체력 업데이트
       const remotePlayer = this.remotePlayers.get(playerId);
@@ -683,10 +815,45 @@ export default class GameScene extends Phaser.Scene {
         remotePlayer.networkState.health = health;
 
         // 체력이 변경되었거나 데미지가 있으면 로그 출력
+        const shouldBeVisible = health > 0;
+        remotePlayer.isVisible = shouldBeVisible;
+        const refs = remotePlayer.gfxRefs;
+        if (refs) {
+          const vis = (v: boolean) => {
+            refs.body?.setVisible?.(v);
+            refs.face?.setVisible?.(v);
+            refs.leftArm?.setVisible?.(v);
+            refs.rightArm?.setVisible?.(v);
+            refs.leftLeg?.setVisible?.(v);
+            refs.rightLeg?.setVisible?.(v);
+            refs.gun?.setVisible?.(v);
+          };
+          vis(shouldBeVisible);
+        }
+
+        // 이름표 처리
+        if (!shouldBeVisible) {
+          try { this.uiManager.destroyNameTag(playerId); } catch {}
+          // 사망 시 스폰 위치로 이동(숨긴 상태)
+          const spawns = this.mapRenderer?.getSpawns?.() || [];
+          const team = this.gameData?.players.find(p => p.id === playerId)?.team;
+          let spawn = spawns[0];
+          if (this.gameData?.room.gameMode === "팀전") {
+            if (team === 1) spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
+            else if (team === 2) spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
+          }
+          if (spawn) {
+            remotePlayer.lastPosition = { x: spawn.x, y: spawn.y };
+            if (refs?.body) refs.body.setPosition(spawn.x, spawn.y);
+          }
+        } else {
+          // 부활 시 이름표 복구
+          const rpData = this.gameData?.players.find(p => p.id === playerId);
+          if (rpData) this.tryCreateNameTag(playerId, rpData.name);
+        }
+
         if (oldHealth !== health || damage > 0) {
-          console.log(
-            `💚 ${remotePlayer.name} 체력 업데이트: ${oldHealth} -> ${health}`
-          );
+          console.log(`💚 ${remotePlayer.name} 체력 업데이트: ${oldHealth} -> ${health}`);
         }
 
         // 디버깅: 원격 플레이어 체력 업데이트 확인
@@ -695,10 +862,6 @@ export default class GameScene extends Phaser.Scene {
         );
       } else {
         console.warn(`⚠️ 체력 업데이트할 플레이어를 찾을 수 없음: ${playerId}`);
-        console.log(
-          `🔍 현재 원격 플레이어 목록:`,
-          Array.from(this.remotePlayers.keys())
-        );
       }
     }
   }
@@ -1071,9 +1234,8 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 가시성 체크
-    if (!remotePlayer.isVisible) {
-      console.log(`👁️ ${remotePlayer.name} 가시성 비활성화됨`);
+    // 가시성/사망 상태 체크
+    if (!remotePlayer.isVisible || (remotePlayer.networkState.health || 0) <= 0) {
       return;
     }
 
@@ -1411,6 +1573,8 @@ export default class GameScene extends Phaser.Scene {
       reloadTime: 1000,
     });
     this.shootingManager.initialize();
+    // 🆕 증강 조회 연결
+    this.shootingManager.setAugmentResolver((pid: string) => this.augmentByPlayer.get(pid));
 
     // 사격 시스템 충돌 설정
     this.shootingManager.setupCollisions(this.platformGroup);
@@ -1719,22 +1883,18 @@ export default class GameScene extends Phaser.Scene {
 
     // === [닉네임 태그 위치 갱신] =====================================
     // 내 플레이어: Player.getBounds()를 이용해 HP바 상단 근사치 계산
-    if (this.player && this.myPlayerId) {
-      const b = this.player.getBounds(); // { x, y, width, height, radius }
-      const x = b.x + b.width / 2; // 바운즈 중앙 X
-      const hpBarTopY = b.y - 8; // HP바가 머리 위에 그려진다고 가정(여유 8px)
+    if (this.player && this.myPlayerId && this.player.getHealth() > 0) {
+      const b = this.player.getBounds();
+      const x = b.x + b.width / 2;
+      const hpBarTopY = b.y - 8;
       this.uiManager.updateNameTagPosition(this.myPlayerId, x, hpBarTopY);
     }
 
-    // 원격 플레이어들: 현재 렌더 기준 좌표 사용
+    // 원격 플레이어들: 현재 렌더 기준 좌표 사용 (사망자는 스킵)
     this.remotePlayers.forEach((rp) => {
-      // 렌더는 lastPosition 기준으로 하고 있으므로 동일 기준 사용
+      if (!rp.networkState || rp.networkState.health <= 0 || !rp.isVisible) return;
       const x = rp.lastPosition.x;
-
-      // 반지름 25px + HP바 마진 10px 정도를 상단 오프셋으로 사용
-      // (필요하면 25/10 숫자만 조정하면 됨)
       const hpBarTopY = rp.lastPosition.y - 25;
-
       this.uiManager.updateNameTagPosition(rp.id, x, hpBarTopY);
     });
 
@@ -2500,5 +2660,25 @@ export default class GameScene extends Phaser.Scene {
       // 테스트 기능들 제거
       // spawnTestObjects, stressTest, createTestRemotePlayer, simulateTestBullet 제거
     };
+  }
+
+  // 🆕 안전한 이름표 생성 헬퍼
+  private canCreateText(): boolean {
+    const add: any = (this as any)?.add;
+    const isActive = (this as any)?.sys?.isActive?.() ?? true;
+    return !!(add && typeof add.text === "function" && isActive && this.sceneState === GAME_STATE.SCENE_STATES.RUNNING);
+  }
+
+  private tryCreateNameTag(playerId: string, name: string): void {
+    if (!this.uiManager) return;
+    if (this.canCreateText()) {
+      this.uiManager.createNameTag(playerId, name);
+    } else {
+      setTimeout(() => {
+        if (this.canCreateText()) {
+          this.uiManager.createNameTag(playerId, name);
+        }
+      }, 50);
+    }
   }
 }

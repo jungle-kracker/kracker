@@ -572,19 +572,33 @@ const RoundsGame: React.FC = () => {
       setCurrentRound(data.round);
     };
 
+    const onFinal = (data: { round: number; players: PlayerRoundResult[] }) => {
+      console.log(`🏁 최종 결과 라운드 ${data.round}`);
+      setShowRoundModal(false);
+      setIsAugmentSelectModalOpen(false);
+      setIsFinalResultModalOpen(true);
+    };
+
+    const onAugmentProgress = (data: { round: number; selections: Record<string, string>; selectedCount: number; totalPlayers: number }) => {
+      console.log(`📡 증강 진행 상황: ${data.selectedCount}/${data.totalPlayers}`, data.selections);
+    };
+
     const onAugmentComplete = (data: { round: number; selections: Record<string, string> }) => {
       console.log(`🎯 라운드 ${data.round} 증강 선택 완료:`, data.selections);
-      // 증강 선택 완료 후 처리 (예: 다음 라운드 시작)
       setIsAugmentSelectModalOpen(false);
     };
 
     socket.on("round:result", onRoundResult);
     socket.on("round:augment", onRoundAugment);
+    socket.on("game:final", onFinal);
+    socket.on("augment:progress", onAugmentProgress);
     socket.on("augment:complete", onAugmentComplete);
 
     return () => {
       socket.off("round:result", onRoundResult);
       socket.off("round:augment", onRoundAugment);
+      socket.off("game:final", onFinal);
+      socket.off("augment:progress", onAugmentProgress);
       socket.off("augment:complete", onAugmentComplete);
     };
   }, []);
@@ -722,7 +736,13 @@ const RoundsGame: React.FC = () => {
       {/* ★ 최종 결과 모달 */}
       <FinalResultModal
         isOpen={isFinalResultModalOpen}
-        result="WIN"
+        result={undefined}
+        myWins={(() => {
+          const myId = gameState?.myPlayerId;
+          if (!myId) return undefined;
+          const me = roundPlayers.find(p => p.id === myId);
+          return me?.wins;
+        })()}
         onClose={() => setIsFinalResultModalOpen(false)}
       />
     </Container>
