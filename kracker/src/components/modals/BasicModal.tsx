@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import BackButton from "../buttons/BackButton";
 
@@ -10,6 +10,8 @@ interface BasicModalProps {
 }
 
 const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, children }) => {
+    const [isAnimating, setIsAnimating] = useState(false);
+    
     // 바디 스크롤 잠금만 유지 (오버레이/ESC로 닫기 없음)
     useEffect(() => {
         if (!isOpen) return;
@@ -19,6 +21,17 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
             document.body.style.overflow = prev;
         };
     }, [isOpen]);
+
+    useEffect(() => {
+        if (isOpen) {
+            setIsAnimating(true);
+        }
+    }, [isOpen]);
+
+    const handleClose = () => {
+        setIsAnimating(false);
+        setTimeout(onClose, 300);
+    };
 
     if (!isOpen) return null;
 
@@ -40,6 +53,8 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                 zIndex: 1000,
                 color: "#fff",
                 touchAction: "none",
+                transform: isAnimating ? "translateX(0)" : "translateX(100%)",
+                transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
             }}
         >
             {/* ===== Title 섹션 ===== */}
@@ -65,7 +80,7 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                 >
                     {/* 좌측 정렬 뒤로가기 버튼 (85 x 85) */}
                     <BackButton
-                        onClick={onClose}
+                        onClick={handleClose}
                         style={{
                             width: 85,
                             height: 85,
@@ -115,7 +130,7 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
             </div>
 
             {/* ===== Content 섹션 ===== */}
-            < div
+            <div
                 style={{
                     width: "100%",
                     height: "100%",
@@ -128,8 +143,8 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                 }}
             >
                 <div style={{ display: "grid", placeItems: "center", paddingBottom: 40 }}>{children}</div>
-            </div >
-        </div >,
+            </div>
+        </div>,
         document.body
     );
 };

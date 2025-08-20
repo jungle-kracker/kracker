@@ -28,7 +28,12 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
 
   const [selected, setSelected] = useState<Player | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+
+  const [entered, setEntered] = useState(false);
+  const [exiting, setExiting] = useState(false);
+
   const [loadingModalOpen, setLoadingModalOpen] = useState(false);
+
 
   const [room, setRoom] = useState<RoomSummary | null>(
     location.state?.room ?? null
@@ -65,10 +70,16 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
     return `#${t.toUpperCase()}`;
   };
 
+  useEffect(() => {
+    const t = setTimeout(() => setEntered(true), 0);
+    return () => clearTimeout(t);
+  }, []);
+
   // ★ 홈으로 이동하는 함수 (중복 방지)
   const goHome = useCallback(() => {
     sessionStorage.removeItem("room:last");
-    navigate("/");
+    setExiting(true);
+    setTimeout(() => navigate("/"), 260);
   }, [navigate]);
 
   const handleColorConfirm = (next: Player) => {
@@ -308,10 +319,13 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
 
         sessionStorage.setItem("gameState", JSON.stringify(gameState));
 
-        navigate("/game", {
-          state: gameState,
-          replace: true,
-        });
+        setExiting(true);
+        setTimeout(() => {
+          navigate("/game", {
+            state: gameState,
+            replace: true,
+          });
+        }, 200);
       } catch (error) {
         console.error("❌ 게임 시작 처리 중 오류:", error);
         alert("게임 시작 중 오류가 발생했습니다.");
@@ -463,7 +477,8 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
 
         sessionStorage.setItem("gameState", JSON.stringify(gameState));
 
-        navigate("/game", { state: gameState, replace: true });
+        setExiting(true);
+        setTimeout(() => navigate("/game", { state: gameState, replace: true }), 200);
       } catch (error) {
         setLoadingModalOpen(false); // 오류 시 모달 닫기
       }
@@ -496,129 +511,149 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
   }
 
   return (
-    <Wrap>
-      <TitleSection>
-        <TextBackButton onClick={handleExit} aria-label="나가기">
-          나가기
-        </TextBackButton>
-
-        <TitleBox>
-          <Label>방 코드</Label>
-          <Code>{codeToShow}</Code>
-        </TitleBox>
-      </TitleSection>
-
-      {modalOpen && (
-        <ColorSelectModal
-          open={modalOpen}
-          player={selected}
-          numTeams={NUM_TEAMS}
-          onClose={() => setModalOpen(false)}
-          onConfirm={handleColorConfirm}
-          blockedColors={
-            selected
-              ? blockedColors.filter((c) => c !== selected.color)
-              : blockedColors
-          }
-        />
-      )}
-
-      <OuterCard>
-        {NUM_TEAMS >= 2 ? (
-          <>
-            <SlotGrid>
-              {team1Players.map((p) => (
-                <PlayerCard
-                  key={p.id}
-                  name={p.name}
-                  team={p.team}
-                  numTeams={NUM_TEAMS}
-                  editable={p.id === myId}
-                  onTeamChange={
-                    p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined
-                  }
-                  onCardClick={
-                    p.id === myId ? () => openColorPicker(p) : undefined
-                  }
-                  playerColor={p.color}
-                />
-              ))}
-            </SlotGrid>
-
-            <InnerDivider />
-
-            <SlotGrid>
-              {team2Players.map((p) => (
-                <PlayerCard
-                  key={p.id}
-                  name={p.name}
-                  team={p.team}
-                  numTeams={NUM_TEAMS}
-                  editable={p.id === myId}
-                  onTeamChange={
-                    p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined
-                  }
-                  onCardClick={
-                    p.id === myId ? () => openColorPicker(p) : undefined
-                  }
-                  playerColor={p.color}
-                />
-              ))}
-            </SlotGrid>
-          </>
-        ) : (
-          <>
-            <SlotGrid>
-              {players.slice(0, 3).map((p) => (
-                <PlayerCard
-                  key={p.id}
-                  name={p.name}
-                  team={p.team}
-                  numTeams={NUM_TEAMS}
-                  editable={p.id === myId}
-                  onTeamChange={
-                    p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined
-                  }
-                  onCardClick={
-                    p.id === myId ? () => openColorPicker(p) : undefined
-                  }
-                  playerColor={p.color}
-                />
-              ))}
-            </SlotGrid>
-
-            <InnerDivider />
-
-            <SlotGrid>
-              {players.slice(3, 6).map((p) => (
-                <PlayerCard
-                  key={p.id}
-                  name={p.name}
-                  team={p.team}
-                  numTeams={NUM_TEAMS}
-                  editable={p.id === myId}
-                  onTeamChange={
-                    p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined
-                  }
-                  onCardClick={
-                    p.id === myId ? () => openColorPicker(p) : undefined
-                  }
-                  playerColor={p.color}
-                />
-              ))}
-            </SlotGrid>
-          </>
-        )}
-      </OuterCard>
-
-      <ActionButton
-        disabled={isDisabled}
-        onClick={handleGameStart}
+    <>
+      <div
         style={{
-          opacity: isDisabled ? 0.45 : 1,
-          color: isDisabled ? "#8f8f8f" : "#ffffff",
-          cursor: isDisabled ? "not-allowed" : "pointer",
+          position: "fixed",
+          inset: 0,
+          background: "#000000",
+          zIndex: 9999,
+          opacity: exiting ? 1 : 0,
+          transition: "opacity 260ms ease",
+          pointerEvents: exiting ? "auto" : "none",
         }}
+      />
+      <Wrap style={{
+        opacity: entered && !exiting ? 1 : 0,
+        transition: 'opacity 260ms ease',
+      }}>
+        <TitleSection>
+          <TextBackButton onClick={handleExit} aria-label="나가기">
+            나가기
+          </TextBackButton>
+
+          <TitleBox>
+            <Label>방 코드</Label>
+            <Code>{codeToShow}</Code>
+          </TitleBox>
+        </TitleSection>
+
+        {modalOpen && (
+          <ColorSelectModal
+            open={modalOpen}
+            player={selected}
+            numTeams={NUM_TEAMS}
+            onClose={() => setModalOpen(false)}
+            onConfirm={handleColorConfirm}
+            blockedColors={
+              selected
+                ? blockedColors.filter((c) => c !== selected.color)
+                : blockedColors
+            }
+          />
+        )}
+
+        <OuterCard>
+          {NUM_TEAMS >= 2 ? (
+            <>
+              <SlotGrid>
+                {team1Players.map((p) => (
+                  <PlayerCard
+                    key={p.id}
+                    name={p.name}
+                    team={p.team}
+                    numTeams={NUM_TEAMS}
+                    editable={p.id === myId}
+                    onTeamChange={
+                      p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined
+                    }
+                    onCardClick={
+                      p.id === myId ? () => openColorPicker(p) : undefined
+                    }
+                    playerColor={p.color}
+                  />
+                ))}
+              </SlotGrid>
+
+              <InnerDivider />
+
+              <SlotGrid>
+                {team2Players.map((p) => (
+                  <PlayerCard
+                    key={p.id}
+                    name={p.name}
+                    team={p.team}
+                    numTeams={NUM_TEAMS}
+                    editable={p.id === myId}
+                    onTeamChange={
+                      p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined
+                    }
+                    onCardClick={
+                      p.id === myId ? () => openColorPicker(p) : undefined
+                    }
+                    playerColor={p.color}
+                  />
+                ))}
+              </SlotGrid>
+            </>
+          ) : (
+            <>
+              <SlotGrid>
+                {players.slice(0, 3).map((p) => (
+                  <PlayerCard
+                    key={p.id}
+                    name={p.name}
+                    team={p.team}
+                    numTeams={NUM_TEAMS}
+                    editable={p.id === myId}
+                    onTeamChange={
+                      p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined
+                    }
+                    onCardClick={
+                      p.id === myId ? () => openColorPicker(p) : undefined
+                    }
+                    playerColor={p.color}
+                  />
+                ))}
+              </SlotGrid>
+
+              <InnerDivider />
+
+              <SlotGrid>
+                {players.slice(3, 6).map((p) => (
+                  <PlayerCard
+                    key={p.id}
+                    name={p.name}
+                    team={p.team}
+                    numTeams={NUM_TEAMS}
+                    editable={p.id === myId}
+                    onTeamChange={
+                      p.id === myId ? (n) => handleTeamChange(p.id, n) : undefined
+                    }
+                    onCardClick={
+                      p.id === myId ? () => openColorPicker(p) : undefined
+                    }
+                    playerColor={p.color}
+                  />
+                ))}
+              </SlotGrid>
+            </>
+          )}
+        </OuterCard>
+
+        <ActionButton
+          disabled={isDisabled}
+          onClick={handleGameStart}
+          style={{
+            opacity: isDisabled ? 0.45 : 1,
+            color: isDisabled ? "#8f8f8f" : "#ffffff",
+            cursor: isDisabled ? "not-allowed" : "pointer",
+          }}
+        >
+          시작하기
+        </ActionButton>
+      </Wrap>
+    </>
       >
         시작하기
       </ActionButton>

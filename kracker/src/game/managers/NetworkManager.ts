@@ -289,6 +289,28 @@ export class NetworkManager {
     console.log(`🎯 게임 이벤트 전송: ${event.type}`);
   }
 
+  // 라운드 종료 전송 (승리 스택 포함)
+  public sendRoundEnd(players: Array<{
+    id: string;
+    nickname: string;
+    color: string;
+    wins: number;
+  }>): void {
+    if (!this.isConnected || !this.roomId) return;
+
+    socket.emit("round:end", {
+      players: players,
+    }, (response: any) => {
+      if (response?.ok) {
+        console.log("✅ 라운드 종료 전송 성공");
+      } else {
+        console.error("❌ 라운드 종료 전송 실패:", response?.error);
+      }
+    });
+
+    console.log(`🏆 라운드 종료 전송: ${players.length}명의 플레이어`);
+  }
+
   // 채팅 메시지 전송
   public sendChatMessage(message: string): void {
     if (!this.isConnected || !this.roomId) return;

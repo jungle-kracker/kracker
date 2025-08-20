@@ -27,6 +27,21 @@ type Room = {
   gameMode: string; // "팀전" 등
   createdAt: number;
   nextTeam: Team; // 다음 배정 예정 팀 ("A" 또는 "B")
+  // 증강 관련 필드 추가
+  currentRound: number;
+  roundResults: Array<{
+    round: number;
+    players: Array<{
+      id: string;
+      nickname: string;
+      color: string;
+      wins: number;
+    }>;
+  }>;
+  augmentSelections: Array<{
+    round: number;
+    selections: Record<string, string>; // playerId -> augmentId
+  }>;
 };
 
 const MAX_ROOMS = 5;
@@ -125,6 +140,10 @@ io.on("connection", (socket) => {
       gameMode: String(payload?.gameMode ?? "팀전"),
       createdAt: Date.now(),
       nextTeam: "A", // 처음은 A로 시작
+      // 증강 관련 필드 초기화
+      currentRound: 0,
+      roundResults: [],
+      augmentSelections: [],
     };
 
     room.players[socket.id] = {
@@ -573,6 +592,118 @@ io.on("connection", (socket) => {
       t: Date.now(),
     });
   });
+
+  // ──────────────────────────────────────────────────────────────
+  // 라운드 종료 → 결과 표출 → 3초 뒤 증강 선택 진입 (방 단위 동기화)
+  // ──────────────────────────────────────────────────────────────
+  socket.on(
+    "round:end",
+    (
+      payload: {
+        players: Array<{
+          id: string;
+          nickname: string;
+          color: string;
+          wins: number;
+        }>;
+      },
+      ack?: Function
+    ) => {
+      const rid = currentRoomIdOf(socket);
+      if (!rid) return ack?.({ ok: false, error: "NO_ROOM" });
+
+      const room = rooms.get(rid);
+      if (!room) return ack?.({ ok: false, error: "NO_ROOM" });
+
+      // 현재 라운드 번호 증가
+      room.currentRound += 1;
+
+      // 라운드 결과 저장
+      room.roundResults.push({
+        round: room.currentRound,
+        players: payload.players,
+      });
+
+      // 결과 패널 표출 지시 (클라이언트는 수신 즉시 RoundResultModal 오픈)
+      io.to(rid).emit("round:result", {
+        players: payload.players,
+        round: room.currentRound,
+      });
+
+      // 3초 후 증강 선택 화면으로 전환 지시
+      setTimeout(() => {
+        io.to(rid).emit("round:augment", {
+          players: payload.players.map((p) => ({
+            id: p.id,
+            nickname: p.nickname,
+            color: p.color,
+          })),
+          round: room.currentRound,
+        });
+      }, 3000);
+
+      ack?.({ ok: true });
+    }
+  );
+
+  // ──────────────────────────────────────────────────────────────
+  // 증강 선택 처리 (플레이어별 선택 결과 서버 보관)
+  // ──────────────────────────────────────────────────────────────
+  socket.on(
+    "augment:select",
+    (
+      payload: {
+        augmentId: string;
+        round: number;
+      },
+      ack?: Function
+    ) => {
+      const rid = currentRoomIdOf(socket);
+      if (!rid) return ack?.({ ok: false, error: "NO_ROOM" });
+
+      const room = rooms.get(rid);
+      if (!room) return ack?.({ ok: false, error: "NO_ROOM" });
+
+      // 해당 라운드의 증강 선택 결과 찾기 또는 생성
+      let roundSelection = room.augmentSelections.find(
+        (s) => s.round === payload.round
+      );
+
+      if (!roundSelection) {
+        roundSelection = {
+          round: payload.round,
+          selections: {},
+        };
+        room.augmentSelections.push(roundSelection);
+      }
+
+      // 플레이어의 증강 선택 저장
+      roundSelection.selections[socket.id] = payload.augmentId;
+
+      console.log(
+        `[AUGMENT SELECT] room ${rid}, round ${payload.round}, player ${socket.id} -> ${payload.augmentId}`
+      );
+
+      // 모든 플레이어가 선택했는지 확인
+      const allPlayersSelected = Object.values(room.players).every(
+        (player) => roundSelection!.selections[player.id]
+      );
+
+      if (allPlayersSelected) {
+        console.log(
+          `[AUGMENT COMPLETE] room ${rid}, round ${payload.round} - 모든 플레이어 선택 완료`
+        );
+        
+        // 모든 플레이어에게 증강 선택 완료 알림
+        io.to(rid).emit("augment:complete", {
+          round: payload.round,
+          selections: roundSelection.selections,
+        });
+      }
+
+      ack?.({ ok: true, allSelected: allPlayersSelected });
+    }
+  );
 
   // 연결 종료
   socket.on("disconnect", () => {
