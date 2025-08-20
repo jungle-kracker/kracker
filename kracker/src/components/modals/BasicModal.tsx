@@ -45,15 +45,15 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                 inset: 0,
                 width: "100dvw",
                 height: "100dvh",
-                backgroundColor: "rgba(20,20,27,0.95)", // #1C1B1B + 82%
-                backdropFilter: "blur(6px)",
+                backgroundColor: "rgba(0,0,0,0.85)",
                 display: "grid",
                 gridTemplateRows: "auto 1fr", // title 섹션 / content 섹션
                 zIndex: 1000,
                 color: "#fff",
                 touchAction: "none",
-                transform: isAnimating ? "translateX(0)" : "translateX(100%)",
-                transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+                opacity: isAnimating ? 1 : 0,
+                transition: "opacity 300ms ease",
+                pointerEvents: isAnimating ? "auto" : "none",
             }}
         >
             {/* ===== Title 섹션 ===== */}
