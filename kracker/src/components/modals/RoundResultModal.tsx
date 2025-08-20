@@ -41,6 +41,11 @@ const RoundResultModal: React.FC<RoundResultModalProps> = ({
     };
   }, [isOpen]);
 
+  // props로 받은 players 변화를 로컬 상태에 반영
+  useEffect(() => {
+    setLocalPlayers(players);
+  }, [players]);
+
   // 패널 애니메이션 종료 이후 auto-close
   useEffect(() => {
     if (!isOpen || !panelDone) return;
