@@ -34,6 +34,7 @@ export class ShootingManager {
   private onShotCallback?: (recoil: number) => void;
   private onReloadCallback?: () => void;
   private onHitCallback?: (x: number, y: number) => void;
+  private ownerId: string | null = null;
 
   constructor(scene: Phaser.Scene, config: ShootingManagerConfig) {
     this.scene = scene;
@@ -148,7 +149,7 @@ export class ShootingManager {
 
     const gunX = this.getPlayerX();
     const gunY = this.getPlayerY();
-
+    const before = new Set(this.shootingSystem?.getAllBullets() || []);
     // ShootingSystem으로 사격 시도
     const shotFired = this.shootingSystem.tryShoot(
       gunX,
@@ -168,11 +169,19 @@ export class ShootingManager {
     );
 
     if (shotFired) {
+      const after = this.shootingSystem?.getAllBullets() || [];
       const remaining = this.shootingSystem.getCurrentAmmo();
       Debug.log.debug(
         LogCategory.GAME,
         `🔫 발사! 남은 탄약: ${remaining}/${this.shootingSystem.getMaxAmmo()}`
       );
+      after.forEach((b: any) => {
+        if (!before.has(b)) {
+          b.ownerId = this.ownerId || "local";
+          b._remote = false;
+          b._hitProcessed = false;
+        }
+      });
 
       // 카메라 흔들림 효과
       this.scene.cameras.main.shake(5000, 0.005);
@@ -329,6 +338,13 @@ export class ShootingManager {
   }
 
   // ===== 상태 조회 메서드들 =====
+  public setOwnerId(id: string) {
+    this.ownerId = id;
+  }
+
+  public getAllBullets(): any[] {
+    return this.shootingSystem?.getAllBullets() || [];
+  }
 
   public getAmmoStatus(): {
     current: number;
@@ -376,6 +392,79 @@ export class ShootingManager {
     if (typeof this.player.getY === "function") return this.player.getY();
     if ((this.player as any).y !== undefined) return (this.player as any).y;
     return 0;
+  }
+
+  // ===== 원격 플레이어용 메서드들 =====
+
+  /**
+   * 원격 플레이어의 시각적 총알 생성 (충돌하지 않음)
+   */
+
+  public getDamage(): number {
+    return this.config?.damage ?? 25; // 내부 private config 사용
+  }
+  public createRemotePlayerBullet(shootData: {
+    gunX: number;
+    gunY: number;
+    angle: number;
+    color?: number;
+    shooterId: string;
+  }): void {
+    console.log(`원격 플레이어 총알 생성:`, shootData);
+
+    // 목표 지점 계산 (각도를 이용해서)
+    const range = 1000; // 총알 사정거리
+    const targetX = shootData.gunX + Math.cos(shootData.angle) * range;
+    const targetY = shootData.gunY + Math.sin(shootData.angle) * range;
+
+    // 기존 총알 시스템을 이용하되 충돌 비활성화
+    const originalPlayer = this.player;
+
+    // 가짜 플레이어 객체 (위치만 원격 플레이어 총구로 설정)
+    const fakePlayer = {
+      getX: () => shootData.gunX,
+      getY: () => shootData.gunY,
+      getHealth: () => 100,
+    };
+
+    this.setPlayer(fakePlayer as any);
+
+    // 총알 발사 (시각적 효과용)
+    const before = new Set(this.shootingSystem?.getAllBullets() || []);
+    const shotFired = this.shootingSystem.tryShoot(
+      shootData.gunX,
+      shootData.gunY,
+      targetX,
+      targetY,
+      {
+        color: shootData.color || 0xff4444, // 빨간색
+        tailColor: shootData.color || 0xff4444,
+        radius: 6,
+        speed: this.config.muzzleVelocity * 0.8, // 약간 느리게
+        gravity: { x: 0, y: 500 },
+        useWorldGravity: false,
+        lifetime: 3000, // 짧은 수명
+      }
+    );
+
+    // 원래 플레이어로 복구 (undefined 체크)
+    if (originalPlayer) {
+      this.setPlayer(originalPlayer);
+    }
+    if (shotFired) {
+      const after = this.shootingSystem?.getAllBullets() || [];
+      after.forEach((b: any) => {
+        if (!before.has(b)) {
+          b.ownerId = shootData.shooterId; // 🔹 발사자(원격 플레이어) id
+          b._remote = true;
+          b._hitProcessed = false;
+        }
+      });
+    }
+    Debug.log.debug(
+      LogCategory.GAME,
+      `원격 총알 발사: ${shotFired ? "성공" : "실패"}`
+    );
   }
 
   // ===== 디버그 메서드들 =====

@@ -431,9 +431,14 @@ io.on("connection", (socket) => {
   socket.on("input:shoot", (data: { x: number; y: number; angle: number }) => {
     const rid = currentRoomIdOf(socket);
     if (!rid) return;
-    socket
-      .to(rid)
-      .emit("state:shoot", { id: socket.id, ...data, t: Date.now() });
+
+    console.log(`[SHOOT] ${socket.id} -> room ${rid}: angle ${data.angle}`);
+
+    socket.to(rid).emit("state:shoot", {
+      id: socket.id,
+      ...data,
+      t: Date.now(),
+    });
   });
 
   // 채팅
