@@ -410,8 +410,6 @@ export class ShootingManager {
     color?: number;
     shooterId: string;
   }): void {
-    console.log(`원격 플레이어 총알 생성:`, shootData);
-
     // 목표 지점 계산 (각도를 이용해서)
     const range = 1000; // 총알 사정거리
     const targetX = shootData.gunX + Math.cos(shootData.angle) * range;

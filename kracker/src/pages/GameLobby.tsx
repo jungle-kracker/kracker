@@ -10,6 +10,7 @@ import BackButton from "../components/buttons/BackButton";
 import ActionButton from "../components/buttons/ActionButton";
 import PlayerCard from "../components/cards/PlayerCard";
 import ColorSelectModal from "../components/modals/ColorSelectModal";
+import LoadingModal from "../components/modals/LoadingModal";
 import { socket } from "./../lib/socket";
 
 const toCssHex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
@@ -27,6 +28,7 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
 
   const [selected, setSelected] = useState<Player | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [loadingModalOpen, setLoadingModalOpen] = useState(false);
 
   const [room, setRoom] = useState<RoomSummary | null>(
     location.state?.room ?? null
@@ -175,7 +177,6 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
   // ★ 연결이 끊어지면 즉시 홈으로 이동
   useEffect(() => {
     if (!isConnected && !leaving) {
-      console.log("[CONNECTION LOST] 연결이 끊어져 홈으로 이동합니다.");
       goHome();
     }
   }, [isConnected, leaving, goHome]);
@@ -282,8 +283,6 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
     // ★ 게임 시작 이벤트 수신
     // GameLobby.tsx에서 useEffect로 감싸서 추가
     const onGameStart = (gameData: any) => {
-      console.log("🎮 게임 시작 신호 수신:", gameData);
-
       try {
         if (!room?.roomId || !myId) {
           console.error("❌ 방 정보 또는 내 ID가 없음");
@@ -306,8 +305,6 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
           myPlayerId: myId,
           startTime: gameData.startTime || Date.now(),
         };
-
-        console.log("🚀 게임 상태 생성:", gameState);
 
         sessionStorage.setItem("gameState", JSON.stringify(gameState));
 
@@ -425,17 +422,10 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
       return;
     }
 
-    // 🔥 디버깅 로그 추가
-    console.log("🔥 게임 시작 버튼 클릭됨");
-    console.log("📍 현재 방 정보:", room);
-    console.log("📍 현재 플레이어들:", players);
-    console.log("🔌 소켓 연결 상태:", socket.connected);
-    console.log("🆔 소켓 ID:", socket.id);
+    // 로딩 모달 열기
+    setLoadingModalOpen(true);
 
-    // 서버에 게임 시작 요청
     socket.emit("game:start", {}, (response: any) => {
-      console.log("📨 서버 응답:", response);
-
       if (!response?.ok) {
         const errorMessages: { [key: string]: string } = {
           NOT_HOST: "방장만 게임을 시작할 수 있습니다.",
@@ -447,20 +437,12 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
           errorMessages[response?.error] || "게임 시작에 실패했습니다.";
         alert(errorMsg);
         console.error("❌ 게임 시작 실패:", response);
-      } else {
-        console.log(
-          "✅ 서버에서 성공 응답받음, game:started 이벤트 대기 중..."
-        );
-        console.log("⏰ 5초 후 타임아웃 테스트 실행 예정");
+        setLoadingModalOpen(false); // 실패 시 모달 닫기
       }
     });
 
     // 🧪 임시 테스트: 5초 후 강제로 게임 시작 (서버 이벤트가 안 올 경우 대비)
     setTimeout(() => {
-      console.log(
-        "🧪 타임아웃 테스트: 아직 게임이 시작되지 않음, 강제 시작 시도"
-      );
-
       try {
         const gameState = {
           players: players.map((p) => ({
@@ -479,12 +461,11 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
           startTime: Date.now(),
         };
 
-        console.log("🚀 강제 게임 상태 생성:", gameState);
         sessionStorage.setItem("gameState", JSON.stringify(gameState));
 
         navigate("/game", { state: gameState, replace: true });
       } catch (error) {
-        console.error("❌ 강제 게임 시작 중 오류:", error);
+        setLoadingModalOpen(false); // 오류 시 모달 닫기
       }
     }, 5000);
   };
@@ -641,6 +622,14 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
       >
         시작하기
       </ActionButton>
+
+      {/* 로딩 모달 */}
+      <LoadingModal
+        isOpen={loadingModalOpen}
+        currentPlayers={players.length}
+        expectedPlayers={6} // 기본값
+        roomName={room?.roomName || "Unknown Room"}
+      />
     </Wrap>
   );
 };

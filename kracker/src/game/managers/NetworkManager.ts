@@ -12,7 +12,7 @@ interface PlayerMovement {
   isJumping: boolean;
   isCrouching: boolean;
   isWallGrabbing: boolean;
-  health: number;
+  health?: number; // 체력은 선택적으로 (healthUpdate 이벤트에서만 관리)
 }
 
 interface ShootData {
@@ -32,7 +32,7 @@ interface BulletHit {
 }
 
 interface GameEvent {
-  type: "damage" | "heal" | "respawn" | "powerup";
+  type: "damage" | "heal" | "respawn" | "powerup" | "showHealthBar";
   playerId: string;
   data: any;
 }
@@ -59,6 +59,11 @@ export class NetworkManager {
   private onGameEventCallback?: (event: GameEvent) => void;
   private onPlayerJoinCallback?: (playerData: any) => void;
   private onPlayerLeaveCallback?: (playerId: string) => void;
+  private onPoseCallback?: (playerId: string, pose: any) => void;
+  private onParticleCallback?: (particleData: any) => void;
+  private lastPoseSentAt = 0;
+  private lastPoseCache?: any;
+  private onHealthUpdateCallback?: (data: any) => void;
 
   constructor(scene: any) {
     this.scene = scene;
@@ -167,10 +172,31 @@ export class NetworkManager {
       }
     });
 
+    // 포즈(관절/조준각) 수신
+    socket.on("pose:update", (pose: any) => {
+      // 보낸 당사자라면 스킵
+      const pid = pose?.id;
+      if (!pid || pid === this.myPlayerId) return;
+      this.onPoseCallback?.(pid, pose);
+    });
+
+    // 파티클 수신
+    socket.on("particle:create", (particleData: any) => {
+      this.onParticleCallback?.(particleData);
+    });
+
     // 게임 이벤트 수신
     socket.on("game:event", (event: GameEvent) => {
       if (this.onGameEventCallback) {
         this.onGameEventCallback(event);
+      }
+    });
+
+    // 체력 업데이트 수신
+    socket.on("game:healthUpdate", (data: any) => {
+      console.log(`💚 NetworkManager: 체력 업데이트 수신:`, data);
+      if (this.onHealthUpdateCallback) {
+        this.onHealthUpdateCallback(data);
       }
     });
 
@@ -256,7 +282,6 @@ export class NetworkManager {
       roomId: this.roomId,
       event: {
         ...event,
-        playerId: this.myPlayerId,
         timestamp: Date.now(),
       },
     });
@@ -303,6 +328,45 @@ export class NetworkManager {
 
   public onPlayerLeave(callback: (playerId: string) => void): void {
     this.onPlayerLeaveCallback = callback;
+  }
+
+  // 콜백 등록용 메서드
+  public onPose(callback: (playerId: string, pose: any) => void): void {
+    this.onPoseCallback = callback;
+  }
+
+  public onParticle(callback: (particleData: any) => void): void {
+    this.onParticleCallback = callback;
+  }
+
+  public onHealthUpdate(callback: (data: any) => void): void {
+    this.onHealthUpdateCallback = callback;
+  }
+
+  // 전송/스로틀
+  public maybeSendPose(build: () => any) {
+    const now = performance.now();
+    if (now - this.lastPoseSentAt < 50) return; // 20Hz
+    const pose = build();
+    // 데드밴드(각도/방향 같으면 스킵)
+    const prev = this.lastPoseCache;
+    const same =
+      prev &&
+      prev.facing === pose.facing &&
+      Math.abs((prev.angle ?? 0) - (pose.angle ?? 0)) < 0.02; // ~1.1도
+    if (same) return;
+
+    this.lastPoseSentAt = now;
+    this.lastPoseCache = pose;
+
+    if (!this.roomId) return;
+    socket.emit("pose:update", { roomId: this.roomId, pose });
+  }
+
+  // 파티클 전송
+  public sendParticle(particleData: any): void {
+    if (!this.isConnected || !this.roomId) return;
+    socket.emit("particle:create", { roomId: this.roomId, particleData });
   }
 
   // 네트워크 상태 정보
@@ -381,6 +445,7 @@ export class NetworkManager {
     this.onGameEventCallback = undefined;
     this.onPlayerJoinCallback = undefined;
     this.onPlayerLeaveCallback = undefined;
+    this.onHealthUpdateCallback = undefined;
 
     console.log("✅ NetworkManager 정리 완료");
   }

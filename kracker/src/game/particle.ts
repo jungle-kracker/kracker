@@ -35,16 +35,16 @@ export class ParticleSystem {
   }
 
   private setupMouseListener() {
-    // 마우스 클릭 이벤트 리스너
-    this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (this.isEnabled) {
-        this.createParticleExplosion(pointer.worldX, pointer.worldY);
-      }
-    });
+    // 마우스 클릭 이벤트 리스너 (파티클 제거됨)
+    // this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+    //   if (this.isEnabled) {
+    //     this.createParticleExplosion(pointer.worldX, pointer.worldY);
+    //   }
+    // });
   }
 
   // 메인 파티클 생성 함수
-  createParticleExplosion(x: number, y: number) {
+  createParticleExplosion(x: number, y: number, color: number = 0xee9841) {
     // 씬 유효성 검사
     if (!this.isSceneValid()) {
       console.warn(
@@ -84,6 +84,9 @@ export class ParticleSystem {
 
         // 한 번만 발사
         emitting: false,
+
+        // 캐릭터 색상 적용
+        tint: color,
       });
 
       // 💥 폭발 실행
@@ -100,7 +103,7 @@ export class ParticleSystem {
     }
   }
 
-  createJumpParticle(x: number, y: number) {
+  createJumpParticle(x: number, y: number, color: number = 0xee9841) {
     if (!this.isSceneValid()) {
       console.warn(
         "ParticleSystem: 씬이 유효하지 않아 점프 파티클 생성을 건너뜁니다."
@@ -121,6 +124,7 @@ export class ParticleSystem {
         alpha: { start: 1, end: 0 },
         rotate: 0,
         emitting: false,
+        tint: color,
       });
 
       emitter.explode(Phaser.Math.Between(8, 15));
@@ -135,7 +139,7 @@ export class ParticleSystem {
     }
   }
 
-  createWallLeftJumpParticle(x: number, y: number) {
+  createWallLeftJumpParticle(x: number, y: number, color: number = 0xee9841) {
     if (!this.isSceneValid()) return;
     if (!this.ensureParticleTexture()) return;
 
@@ -150,6 +154,7 @@ export class ParticleSystem {
         alpha: { start: 1, end: 0 },
         rotate: 0,
         emitting: false,
+        tint: color,
       });
 
       emitter.explode(Phaser.Math.Between(8, 15));
@@ -164,7 +169,7 @@ export class ParticleSystem {
     }
   }
 
-  createWallRightJumpParticle(x: number, y: number) {
+  createWallRightJumpParticle(x: number, y: number, color: number = 0xee9841) {
     if (!this.isSceneValid()) return;
     if (!this.ensureParticleTexture()) return;
 
@@ -179,6 +184,7 @@ export class ParticleSystem {
         alpha: { start: 1, end: 0 },
         rotate: 0,
         emitting: false,
+        tint: color,
       });
 
       emitter.explode(Phaser.Math.Between(8, 15));
@@ -190,6 +196,61 @@ export class ParticleSystem {
       });
     } catch (error) {
       console.warn("ParticleSystem: 벽 점프 파티클 생성 실패:", error);
+    }
+  }
+
+  // 하얀색 산화 파티클 (피가 0이 될 때)
+  createDeathOxidationParticle(x: number, y: number) {
+    if (!this.isSceneValid()) return;
+    if (!this.ensureParticleTexture()) return;
+
+    try {
+      // 하얀색 산화 파티클 (더 많은 수량, 더 긴 지속시간)
+      const emitter = this.scene.add.particles(x, y, "particle_white", {
+        quantity: { min: 3, max: 5 },
+        speed: { min: 50, max: 200 },
+        angle: { min: 0, max: 360 },
+        gravityY: -50,
+        lifespan: { min: 1000, max: 2000 },
+        scale: { start: 3, end: 0 },
+        alpha: { start: 0.8, end: 0 },
+        rotate: { min: -180, max: 180 },
+        emitting: false,
+        blendMode: Phaser.BlendModes.ADD, // 더 밝게 보이도록
+      });
+
+      // 더 많은 파티클 생성
+      emitter.explode(Phaser.Math.Between(20, 30));
+      emitter.setDepth(1000); // 높은 depth로 설정
+
+      // 추가로 작은 하얀 파티클들
+      const smallEmitter = this.scene.add.particles(x, y, "particle_white", {
+        quantity: { min: 1, max: 2 },
+        speed: { min: 20, max: 80 },
+        angle: { min: 0, max: 360 },
+        gravityY: -30,
+        lifespan: { min: 800, max: 1500 },
+        scale: { start: 1.5, end: 0 },
+        alpha: { start: 0.6, end: 0 },
+        rotate: 0,
+        emitting: false,
+        blendMode: Phaser.BlendModes.ADD, // 더 밝게 보이도록
+      });
+
+      smallEmitter.explode(Phaser.Math.Between(15, 25));
+      smallEmitter.setDepth(1000); // 높은 depth로 설정
+
+      // 더 오래 지속되도록 정리 시간 연장
+      this.scene.time.delayedCall(2500, () => {
+        if (emitter && emitter.active) {
+          emitter.destroy();
+        }
+        if (smallEmitter && smallEmitter.active) {
+          smallEmitter.destroy();
+        }
+      });
+    } catch (error) {
+      console.warn("ParticleSystem: 산화 파티클 생성 실패:", error);
     }
   }
 
@@ -219,11 +280,17 @@ export class ParticleSystem {
         );
       }
 
-      // 기본 원형
+      // 기본 원형 (캐릭터 색상용)
       graphics.clear();
-      graphics.fillStyle(0xee9841, 1);
+      graphics.fillStyle(0xffffff, 1); // 하얀색으로 유지 (tint로 색상 변경)
       graphics.fillCircle(5, 5, 5);
       graphics.generateTexture("particle_circle", 10, 10);
+
+      // 산화 파티클 전용 하얀색 텍스처
+      graphics.clear();
+      graphics.fillStyle(0xffffff, 1);
+      graphics.fillCircle(5, 5, 5);
+      graphics.generateTexture("particle_white", 10, 10);
 
       // 사각형
       graphics.clear();
