@@ -45,9 +45,8 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                 inset: 0,
                 width: "100dvw",
                 height: "100dvh",
-                backgroundColor: "rgba(28,27,27,0.82)", // #1C1B1B + 82%
+                backgroundColor: "rgba(20,20,27,0.95)", // #1C1B1B + 82%
                 backdropFilter: "blur(6px)",
-                WebkitBackdropFilter: "blur(6px)",
                 display: "grid",
                 gridTemplateRows: "auto 1fr", // title 섹션 / content 섹션
                 zIndex: 1000,

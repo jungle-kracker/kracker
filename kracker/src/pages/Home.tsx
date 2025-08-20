@@ -37,7 +37,7 @@ const Home: React.FC = () => {
 
   return (
     <>
-      <PageTransitionOverlay $exiting={exiting} />
+      <PageTransitionOverlay $entered={entered} $exiting={exiting} />
       <PageRoot $entered={entered} $exiting={exiting} $dimmed={createRoomOpen || searchRoomOpen || SettingOpen}>
         <Background>
           <Wrap>
@@ -144,18 +144,19 @@ const PageRoot = styled.div<{ $entered: boolean; $exiting: boolean; $dimmed: boo
   position: relative;
   min-height: 100vh;
   opacity: ${({ $entered, $exiting }) => ($entered && !$exiting ? 1 : 0)};
-  filter: ${({ $dimmed }) => ($dimmed ? "blur(2px)" : "none")};
-  transition: opacity 260ms ease, filter 160ms ease;
+  /* 홈 화면에서는 모달 오픈 시 배경 블러를 적용하지 않습니다 */
+  filter: none;
+  transition: opacity 260ms ease;
 `;
 
-const PageTransitionOverlay = styled.div<{ $exiting: boolean }>`
+const PageTransitionOverlay = styled.div<{ $entered: boolean; $exiting: boolean }>`
   position: fixed;
   inset: 0;
   background: #000000;
   z-index: 9999;
-  opacity: ${({ $exiting }) => ($exiting ? 1 : 0)};
+  opacity: ${({ $entered, $exiting }) => (!$entered || $exiting ? 1 : 0)};
   transition: opacity 260ms ease;
-  pointer-events: ${({ $exiting }) => ($exiting ? "auto" : "none")};
+  pointer-events: ${({ $entered, $exiting }) => (!$entered || $exiting ? "auto" : "none")};
 `;
 
 const Background = styled.main`
