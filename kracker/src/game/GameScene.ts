@@ -236,6 +236,8 @@ export default class GameScene extends Phaser.Scene {
     });
     this.shootingManager.initialize();
 
+    (this.shootingManager as any)?.setCollisionSystem?.(this.collisionSystem);
+
     // 🔥 사격 시스템 충돌 설정
     this.shootingManager.setupCollisions(this.platformGroup);
 
@@ -316,6 +318,8 @@ export default class GameScene extends Phaser.Scene {
       this.bulletGroup,
       this.platformGroup
     );
+
+    (this as any).__collisionSystem = this.collisionSystem;
 
     console.log(
       `✅ Physics Groups 초기화 완료: bullets=${this.bulletGroup.children.size}, platforms=${this.platformGroup.children.size}`

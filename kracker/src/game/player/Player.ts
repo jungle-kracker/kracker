@@ -549,9 +549,11 @@ export default class Player {
   }
   public takeDamage(damage: number): void {
     if (this.invulnerable || damage <= 0) return;
+    const before = this.health;
     this.health = Math.max(0, this.health - damage);
+    console.log(`💥 takeDamage(${damage}) ${before} -> ${this.health}`);
     this.wobble += 1;
-    this.hpBarShowTimerMs = 5000; // 어떤 원인이든 실제로 HP가 감소했다면 5초간 HP바 표시
+    this.hpBarShowTimerMs = 3000; // 어떤 원인이든 실제로 HP가 감소했다면 5초간 HP바 표시
     this.setInvulnerable(1000);
   }
   public getHealth(): number {
