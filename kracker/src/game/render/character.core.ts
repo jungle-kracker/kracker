@@ -95,29 +95,13 @@ export function renderBodyWithGradient(
   body.fillStyle(gradientColors.base);
   body.fillCircle(x, y, radius);
 
-  // 🎨 입체감을 위한 그라데이션과 하이라이트
-  const time = Date.now() * 0.002; // 천천히 변화하는 시간
+  // 하이라이트 (위쪽 반원)
+  body.fillStyle(gradientColors.light);
+  body.fillCircle(x, y - radius * 0.3, radius * 0.6);
 
-  // 메인 하이라이트 (위쪽 반원)
-  body.fillStyle(gradientColors.light, 0.8);
-  body.fillCircle(x, y - radius * 0.25, radius * 0.7);
-
-  // 중간 하이라이트 (더 작은 반원)
-  body.fillStyle(gradientColors.light, 0.6);
-  body.fillCircle(x, y - radius * 0.15, radius * 0.5);
-
-  // 작은 하이라이트 (가장 밝은 부분)
-  body.fillStyle(gradientColors.light, 0.9);
-  body.fillCircle(x, y - radius * 0.1, radius * 0.3);
-
-  // 그림자 효과 (아래쪽)
-  body.fillStyle(gradientColors.shadow, 0.4);
-  body.fillCircle(x, y + radius * 0.3, radius * 0.6);
-
-  // 측면 그림자 (입체감 강화)
-  body.fillStyle(gradientColors.dark, 0.3);
-  body.fillCircle(x - radius * 0.2, y, radius * 0.4);
-  body.fillCircle(x + radius * 0.2, y, radius * 0.4);
+  // 외곽선 (선택사항)
+  body.lineStyle(1, gradientColors.shadow);
+  body.strokeCircle(x, y, radius);
 }
 
 /**

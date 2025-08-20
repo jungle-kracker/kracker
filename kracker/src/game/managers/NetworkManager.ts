@@ -268,24 +268,16 @@ export class NetworkManager {
   public sendBulletHit(hitData: BulletHit): void {
     if (!this.isConnected || !this.roomId) return;
 
-    const payload = {
+    socket.emit("game:bulletHit", {
       roomId: this.roomId,
       playerId: this.myPlayerId,
       hit: {
         ...hitData,
         timestamp: Date.now(),
       },
-    };
-
-    console.log(`💥 충돌 데이터 전송:`, {
-      roomId: this.roomId,
-      targetPlayerId: hitData.targetPlayerId,
-      damage: hitData.damage,
-      bulletId: hitData.bulletId,
-      position: `(${hitData.x}, ${hitData.y})`
     });
 
-    socket.emit("game:bulletHit", payload);
+    console.log(`💥 충돌 데이터 전송: ${hitData.damage} 데미지`);
   }
 
   // 게임 이벤트 전송

@@ -1,4 +1,4 @@
-import { Platform } from "../Config";
+import { Platform } from "../config";
 import {
   LightConfig,
   CameraInfo,

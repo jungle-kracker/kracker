@@ -1,5 +1,5 @@
 // src/game/MapRenderer.ts - 플랫폼을 물리 바디로 변경
-import { GAME_CONFIG, Platform } from "./Config";
+import { GAME_CONFIG, Platform } from "./config";
 import { MapData, MapLoader } from "./maps/MapLoader";
 import { ShadowSystem } from "./shadow/ShadowSystem";
 
@@ -18,29 +18,6 @@ export default class MapRenderer {
 
   // 그림자 시스템
   private shadowSystem: ShadowSystem;
-
-  // 🎨 패럴랙스 배경을 위한 플레이어 위치 추적
-  private lastPlayerX: number = 0;
-  private lastPlayerY: number = 0;
-
-  // 🎨 동적 배경 요소들을 위한 개별 사각형 객체들
-  private dynamicSquares: Array<{
-    graphics: Phaser.GameObjects.Graphics;
-    baseX: number;
-    baseY: number;
-    speed: number;
-    rotationSpeed: number;
-    scaleSpeed: number;
-    currentRotation: number;
-    currentScale: number;
-  }> = [];
-
-  // 🌿 정글 요소들을 위한 그래픽 객체들
-  private jungleElements: Phaser.GameObjects.Graphics[] = [];
-
-  // 🌟 플랫폼 야광 효과들을 위한 맵
-  private platformGlowEffects: Map<Platform, Phaser.GameObjects.Graphics> =
-    new Map();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -154,18 +131,18 @@ export default class MapRenderer {
 
   /** ⭐ 플랫폼 그라데이션 그리기 */
   private drawPlatformGradient(platform: Platform): void {
-    // 네이비 그린 계열의 어두운 플랫폼 색상 조합들
+    // 초록-파랑 왔다갔다 그라데이션 색상 조합들
     const colorSchemes = [
-      // 1. 네이비 그린 → 다크 네이비 그린 (깊이감 있는 그라데이션)
-      { top: 0x1a4a2a, bottom: 0x0a1a1a },
-      // 2. 다크 포레스트 → 네이비 포레스트 (어두운 숲 느낌)
-      { top: 0x2d5a3a, bottom: 0x1a2a1a },
-      // 3. 네이비 틸 → 다크 네이비 틸 (깊은 바다 느낌)
-      { top: 0x1a4a3a, bottom: 0x0a1a2a },
-      // 4. 다크 그린 → 네이비 그린 (어두운 정글 느낌)
-      { top: 0x2d4a2a, bottom: 0x1a2a1a },
-      // 5. 네이비 포레스트 → 다크 네이비 포레스트 (깊은 숲 느낌)
-      { top: 0x1a3a2a, bottom: 0x0a1a1a },
+      // 1. 민트 → 틸 그린 (초록 → 청록)
+      { top: 0xb8e6b8, bottom: 0x20b2aa },
+      // 2. 틸 그린 → 스틸 블루 (청록 → 스틸 블루)
+      { top: 0x20b2aa, bottom: 0x4682b4 },
+      // 3. 스틸 블루 → 포레스트 그린 (파랑 → 초록)
+      { top: 0x4682b4, bottom: 0x228b22 },
+      // 4. 포레스트 그린 → 틸 그린 (초록 → 청록)
+      { top: 0x228b22, bottom: 0x20b2aa },
+      // 5. 틸 그린 → 민트 (청록 → 연한 초록)
+      { top: 0x20b2aa, bottom: 0xb8e6b8 },
     ];
 
     // 플랫폼 위치에 따라 다른 색상 스킴 선택 (다채롭게)
@@ -202,82 +179,6 @@ export default class MapRenderer {
       this.graphics.fillStyle(color);
       this.graphics.fillRect(platform.x, y, platform.width, stepHeight);
     }
-
-    // 야광 효과 추가
-    this.addGlowEffect(platform);
-  }
-
-  /** 🌟 플랫폼 야광 효과 추가 */
-  private addGlowEffect(platform: Platform): void {
-    // 야광 색상 (밝은 연두색 계열)
-    const glowColors = [
-      0x00ff00, // 밝은 연두색
-      0x00ff44, // 네온 연두색
-      0x00ff66, // 밝은 라임
-      0x00ff88, // 밝은 민트
-      0x00ffaa, // 매우 밝은 연두색
-    ];
-
-    const glowColor = glowColors[Math.floor(Math.random() * glowColors.length)];
-    const glowAlpha = 0.5; // 야광 투명도 증가
-
-    // 플랫폼 테두리 야광 효과
-    const glowGraphics = this.scene.add.graphics();
-    glowGraphics.setDepth(-10); // 플랫폼보다 뒤에
-
-    // 외부 글로우 효과
-    glowGraphics.lineStyle(4, glowColor, glowAlpha * 0.5);
-    glowGraphics.strokeRect(
-      platform.x - 2,
-      platform.y - 2,
-      platform.width + 4,
-      platform.height + 4
-    );
-
-    // 내부 글로우 효과
-    glowGraphics.lineStyle(2, glowColor, glowAlpha * 0.8);
-    glowGraphics.strokeRect(
-      platform.x + 1,
-      platform.y + 1,
-      platform.width - 2,
-      platform.height - 2
-    );
-
-    // 플랫폼 모서리 강화 글로우
-    const cornerSize = 8;
-    glowGraphics.fillStyle(glowColor, glowAlpha * 0.6);
-
-    // 네 모서리에 작은 글로우 사각형
-    glowGraphics.fillRect(
-      platform.x - 1,
-      platform.y - 1,
-      cornerSize,
-      cornerSize
-    );
-    glowGraphics.fillRect(
-      platform.x + platform.width - cornerSize + 1,
-      platform.y - 1,
-      cornerSize,
-      cornerSize
-    );
-    glowGraphics.fillRect(
-      platform.x - 1,
-      platform.y + platform.height - cornerSize + 1,
-      cornerSize,
-      cornerSize
-    );
-    glowGraphics.fillRect(
-      platform.x + platform.width - cornerSize + 1,
-      platform.y + platform.height - cornerSize + 1,
-      cornerSize,
-      cornerSize
-    );
-
-    // 야광 효과를 플랫폼과 연결하여 관리
-    if (!this.platformGlowEffects) {
-      this.platformGlowEffects = new Map();
-    }
-    this.platformGlowEffects.set(platform, glowGraphics);
   }
 
   /** ⭐ 플랫폼 그룹 반환 (충돌 감지용) */
@@ -464,9 +365,6 @@ export default class MapRenderer {
 
     // 배경에 노이즈 효과 추가
     this.addBackgroundNoise(width, height);
-
-    // 정글 분위기 요소들 추가
-    this.addJungleElements(width, height);
   }
 
   private renderDirectGradientOverlay(
@@ -549,7 +447,7 @@ export default class MapRenderer {
     this.scene.textures.addCanvas(key, canvas);
   }
 
-  /** 배경에 구겨진 사각형 패턴 추가 (입체감) - 강화된 버전 */
+  /** 배경에 구겨진 사각형 패턴 추가 (입체감) */
   private addCrumbledSquaresPattern(width: number, height: number): void {
     // 기존 패턴 정리
     if (this.crumbledPattern && this.crumbledPattern.scene) {
@@ -559,86 +457,39 @@ export default class MapRenderer {
     // 구겨진 사각형 패턴을 위한 그래픽 객체 생성
     this.crumbledPattern = this.scene.add.graphics();
     this.crumbledPattern.setDepth(-280); // 배경보다 뒤, 노이즈보다 뒤
-    console.log("🎨 구겨진 사각형 패턴 생성됨");
 
-    // 🎨 훨씬 더 많은 사각형과 배경에 녹아드는 색상으로 강화
-    const squareCount = 80; // 35 → 80으로 대폭 증가
+    // 다양한 크기의 구겨진 사각형들 생성
+    const squareCount = 15;
     const colors = [
-      0x0a1f2a, // 배경색과 동일한 기본 톤
-      0x0d2a3a, // 배경색보다 살짝 밝은 톤
-      0x0f2f3f, // 배경색보다 조금 더 밝은 톤
-      0x0a1a2a, // 배경색보다 살짝 어두운 톤
-      0x0c252f, // 중간 어두운 톤
-      0x0e2d3a, // 중간 밝은 톤
-      0x0b1f2d, // 어두운 톤
-      0x0d2835, // 밝은 톤
+      0x1a4a5a, // 어두운 청록
+      0x2d5a6b, // 중간 청록
+      0x1e3a4a, // 더 어두운 청록
+      0x2a4a5a, // 약간 밝은 청록
     ];
 
     for (let i = 0; i < squareCount; i++) {
-      const size = Math.random() * 120 + 60; // 40-120 → 60-180으로 크기 증가
+      const size = Math.random() * 80 + 40; // 40-120 크기
       const x = Math.random() * width;
       const y = Math.random() * height;
       const color = colors[Math.floor(Math.random() * colors.length)];
-      const alpha = Math.random() * 0.4 + 0.15; // 0.2-0.8 → 0.15-0.55로 투명도 감소 (더 은은하게)
+      const alpha = Math.random() * 0.4 + 0.1; // 0.1-0.5 투명도
       const rotation = Math.random() * Math.PI * 2; // 랜덤 회전
 
       // 구겨진 사각형 그리기
       this.crumbledPattern.fillStyle(color, alpha);
 
-      // 🎨 더 복잡한 구겨진 모양을 위해 더 많은 세그먼트 사용
+      // 구겨진 모양을 위해 불규칙한 점들로 사각형 그리기
       const points = [];
-      const segments = 12; // 8 → 12로 증가
+      const segments = 8;
       for (let j = 0; j < segments; j++) {
         const angle = (j / segments) * Math.PI * 2 + rotation;
-        const radius = size / 2 + (Math.random() - 0.5) * 35; // 20 → 35로 구겨진 효과 증가
+        const radius = size / 2 + (Math.random() - 0.5) * 20; // 구겨진 효과
         const px = x + Math.cos(angle) * radius;
         const py = y + Math.sin(angle) * radius;
         points.push({ x: px, y: py });
       }
 
       // 구겨진 사각형 채우기
-      this.crumbledPattern.beginPath();
-      this.crumbledPattern.moveTo(points[0].x, points[0].y);
-      for (let j = 1; j < points.length; j++) {
-        this.crumbledPattern.lineTo(points[j].x, points[j].y);
-      }
-      this.crumbledPattern.closePath();
-      this.crumbledPattern.fill();
-    }
-
-    // 플랫폼 아래 조명 효과 추가
-    this.addPlatformLighting(width, height);
-
-    // 🎨 추가 레이어: 더 작고 배경에 녹아드는 사각형들로 깊이감 강화
-    const smallSquareCount = 50; // 20 → 50으로 증가
-    const brightColors = [
-      0x0f2f3f, // 배경색보다 살짝 밝은 톤
-      0x102f40, // 조금 더 밝은 톤
-      0x0e2d3a, // 중간 밝기
-      0x0d2a35, // 어두운 밝기
-    ];
-
-    for (let i = 0; i < smallSquareCount; i++) {
-      const size = Math.random() * 50 + 20; // 작은 크기
-      const x = Math.random() * width;
-      const y = Math.random() * height;
-      const color =
-        brightColors[Math.floor(Math.random() * brightColors.length)];
-      const alpha = Math.random() * 0.3 + 0.08; // 0.4+0.1 → 0.3+0.08로 더 은은한 투명도
-      const rotation = Math.random() * Math.PI * 2;
-
-      this.crumbledPattern.fillStyle(color, alpha);
-
-      const points = [];
-      const segments = 6;
-      for (let j = 0; j < segments; j++) {
-        const angle = (j / segments) * Math.PI * 2 + rotation;
-        const radius = size / 2 + (Math.random() - 0.5) * 15;
-        const px = x + Math.cos(angle) * radius;
-        const py = y + Math.sin(angle) * radius;
-        points.push({ x: px, y: py });
-      }
-
       this.crumbledPattern.beginPath();
       this.crumbledPattern.moveTo(points[0].x, points[0].y);
       for (let j = 1; j < points.length; j++) {
@@ -696,83 +547,13 @@ export default class MapRenderer {
     );
     this.backgroundNoise.setOrigin(0, 0);
     this.backgroundNoise.setDepth(-250); // 배경보다 앞, 다른 요소들보다 뒤
-    this.backgroundNoise.setAlpha(0.5); // 0.3 → 0.5로 투명도 증가
+    this.backgroundNoise.setAlpha(0.3); // 투명도 조절
     this.backgroundNoise.setScrollFactor(0.1); // 약간의 패럴랙스 효과
-
-    // 🎨 동적 사각형들 생성 (개별적으로 움직이는 요소들)
-    this.createDynamicSquares(width, height);
   }
 
   private hexToNumber(hex: string): number {
     const cleaned = hex.replace("#", "");
     return parseInt(cleaned, 16);
-  }
-
-  /** 🎨 동적 사각형들 생성 (개별적으로 움직이는 요소들) */
-  private createDynamicSquares(width: number, height: number): void {
-    // 기존 동적 사각형들 정리
-    this.dynamicSquares.forEach((square) => square.graphics.destroy());
-    this.dynamicSquares = [];
-
-    const dynamicSquareCount = 30;
-    const colors = [
-      0x0a1f2a, // 배경색과 동일한 기본 톤
-      0x0d2a3a, // 배경색보다 살짝 밝은 톤
-      0x0f2f3f, // 배경색보다 조금 더 밝은 톤
-      0x0a1a2a, // 배경색보다 살짝 어두운 톤
-    ];
-
-    for (let i = 0; i < dynamicSquareCount; i++) {
-      const graphics = this.scene.add.graphics();
-      graphics.setDepth(-270); // 구겨진 패턴보다 앞
-
-      const size = Math.random() * 60 + 30; // 30-90 크기
-      const x = Math.random() * width;
-      const y = Math.random() * height;
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      const alpha = Math.random() * 0.4 + 0.1; // 0.1-0.5 투명도
-
-      // 각 사각형마다 다른 움직임 속도 설정
-      const speed = Math.random() * 0.5 + 0.1; // 0.1-0.6 속도
-      const rotationSpeed = (Math.random() - 0.5) * 0.02; // -0.01 ~ 0.01 회전 속도
-      const scaleSpeed = Math.random() * 0.001 + 0.0005; // 0.0005-0.0015 크기 변화 속도
-
-      // 구겨진 사각형 그리기
-      graphics.fillStyle(color, alpha);
-      const points = [];
-      const segments = 8;
-      const rotation = Math.random() * Math.PI * 2;
-
-      for (let j = 0; j < segments; j++) {
-        const angle = (j / segments) * Math.PI * 2 + rotation;
-        const radius = size / 2 + (Math.random() - 0.5) * 20;
-        const px = x + Math.cos(angle) * radius;
-        const py = y + Math.sin(angle) * radius;
-        points.push({ x: px, y: py });
-      }
-
-      graphics.beginPath();
-      graphics.moveTo(points[0].x, points[0].y);
-      for (let j = 1; j < points.length; j++) {
-        graphics.lineTo(points[j].x, points[j].y);
-      }
-      graphics.closePath();
-      graphics.fill();
-
-      // 동적 사각형 정보 저장
-      this.dynamicSquares.push({
-        graphics,
-        baseX: x,
-        baseY: y,
-        speed,
-        rotationSpeed,
-        scaleSpeed,
-        currentRotation: rotation,
-        currentScale: 1.0,
-      });
-    }
-
-    console.log("🎨 동적 사각형들 생성됨:", dynamicSquareCount);
   }
 
   // ===== 기존 접근 메서드들 =====
@@ -799,224 +580,15 @@ export default class MapRenderer {
     };
   }
 
-  /** 🎨 플레이어 위치 업데이트 (패럴랙스 효과용) */
-  public updatePlayerPosition(playerX: number, playerY: number): void {
-    const deltaX = playerX - this.lastPlayerX;
-    const deltaY = playerY - this.lastPlayerY;
-
-    // 디버깅: 플레이어 움직임 확인
-    if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
-      // console.log("🎨 플레이어 움직임:", { deltaX, deltaY, playerX, playerY });
-    }
-
-    // 🎨 동적 사각형들 업데이트 (크기 변화만)
-    this.updateDynamicSquares(deltaX, deltaY);
-
-    this.lastPlayerX = playerX;
-    this.lastPlayerY = playerY;
-  }
-
-  /** 🎨 동적 사각형들 업데이트 (크기 변화만) */
-  private updateDynamicSquares(deltaX: number, deltaY: number): void {
-    this.dynamicSquares.forEach((square, index) => {
-      // 개별 크기 변화 효과 (호흡하는 듯한 효과)
-      square.currentScale += Math.sin(Date.now() * square.scaleSpeed) * 0.01;
-      square.graphics.setScale(square.currentScale);
-    });
-  }
-
   /** 리소스 정리 */
   public destroy(): void {
     this.clearBackgroundImages();
     this.clearPlatforms(); // ⭐ 플랫폼 물리 바디도 정리
-
-    // 🎨 동적 사각형들 정리
-    this.dynamicSquares.forEach((square) => square.graphics.destroy());
-    this.dynamicSquares = [];
-
-    // 🌿 정글 요소들 정리
-    this.jungleElements.forEach((element) => element.destroy());
-    this.jungleElements = [];
-
-    // 🌟 플랫폼 야광 효과들 정리
-    this.platformGlowEffects.forEach((glowGraphics) => glowGraphics.destroy());
-    this.platformGlowEffects.clear();
 
     this.graphics?.destroy();
     this.backgroundGraphics?.destroy();
     this.shadowSystem?.destroy();
 
     console.log("MapRenderer destroyed");
-  }
-
-  /** 💡 플랫폼 아래 조명 효과 추가 */
-  private addPlatformLighting(width: number, height: number): void {
-    // 플랫폼 아래 조명 효과는 현재 구현하지 않음 (야광 효과로 대체)
-    // 필요시 나중에 구현 가능
-  }
-
-  /** 🌿 정글 분위기 요소들 추가 */
-  private addJungleElements(width: number, height: number): void {
-    // 기존 정글 요소들 정리
-    if (this.jungleElements) {
-      this.jungleElements.forEach((element) => element.destroy());
-      this.jungleElements = [];
-    }
-
-    this.jungleElements = [];
-
-    // 🌿 나뭇잎들 추가
-    this.addJungleLeaves(width, height);
-
-    // 🌿 덩굴들 추가
-    this.addJungleVines(width, height);
-
-    // 🌿 정글 장식 요소들 추가
-    this.addJungleDecorations(width, height);
-
-    console.log("🌿 정글 요소들 생성됨");
-  }
-
-  /** 🌿 나뭇잎들 추가 */
-  private addJungleLeaves(width: number, height: number): void {
-    const leafCount = 15;
-    const leafColors = [
-      0x2d5a2d, // 진한 초록
-      0x3a6b3a, // 중간 초록
-      0x4a7c4a, // 밝은 초록
-      0x5a8d5a, // 연한 초록
-      0x1a4a1a, // 어두운 초록
-    ];
-
-    for (let i = 0; i < leafCount; i++) {
-      const x = Math.random() * width;
-      const y = Math.random() * (height * 0.7); // 상단 70% 영역에만
-      const size = Math.random() * 40 + 20;
-      const color = leafColors[Math.floor(Math.random() * leafColors.length)];
-      const alpha = Math.random() * 0.4 + 0.2;
-      const rotation = Math.random() * Math.PI * 2;
-
-      const leaf = this.scene.add.graphics();
-      leaf.setDepth(-250);
-      leaf.setScrollFactor(0.1); // 패럴랙스 효과
-
-      // 나뭇잎 모양 그리기 (타원형)
-      leaf.fillStyle(color, alpha);
-      leaf.fillEllipse(x, y, size, size * 0.6);
-
-      // 나뭇잎 테두리
-      leaf.lineStyle(1, color, alpha * 0.5);
-      leaf.strokeEllipse(x, y, size, size * 0.6);
-
-      // 나뭇잎 중앙 줄기
-      leaf.lineStyle(1, color, alpha * 0.8);
-      leaf.beginPath();
-      leaf.moveTo(x, y - size * 0.3);
-      leaf.lineTo(x, y + size * 0.3);
-      leaf.strokePath();
-
-      this.jungleElements.push(leaf);
-    }
-  }
-
-  /** 🌿 덩굴들 추가 */
-  private addJungleVines(width: number, height: number): void {
-    const vineCount = 8;
-    const vineColors = [
-      0x1a4a1a, // 어두운 초록
-      0x2d5a2d, // 진한 초록
-      0x3a6b3a, // 중간 초록
-    ];
-
-    for (let i = 0; i < vineCount; i++) {
-      const startX = Math.random() * width;
-      const startY = 0;
-      const endY = Math.random() * (height * 0.8) + height * 0.2;
-      const segments = Math.floor(Math.random() * 8) + 5;
-      const color = vineColors[Math.floor(Math.random() * vineColors.length)];
-      const alpha = Math.random() * 0.3 + 0.1;
-
-      const vine = this.scene.add.graphics();
-      vine.setDepth(-240);
-      vine.setScrollFactor(0.05); // 약간의 패럴랙스
-
-      vine.lineStyle(3, color, alpha);
-      vine.beginPath();
-      vine.moveTo(startX, startY);
-
-      // 곡선 모양의 덩굴 그리기
-      for (let j = 1; j <= segments; j++) {
-        const progress = j / segments;
-        const y = startY + (endY - startY) * progress;
-        const x = startX + Math.sin(progress * Math.PI * 2) * 30;
-
-        vine.lineTo(x, y);
-      }
-
-      vine.strokePath();
-
-      // 덩굴에 작은 나뭇잎들 추가
-      for (let j = 0; j < 3; j++) {
-        const leafProgress = Math.random();
-        const leafY = startY + (endY - startY) * leafProgress;
-        const leafX = startX + Math.sin(leafProgress * Math.PI * 2) * 30;
-        const leafSize = Math.random() * 15 + 8;
-
-        vine.fillStyle(color, alpha * 0.7);
-        vine.fillEllipse(leafX, leafY, leafSize, leafSize * 0.5);
-      }
-
-      this.jungleElements.push(vine);
-    }
-  }
-
-  /** 🌿 정글 장식 요소들 추가 */
-  private addJungleDecorations(width: number, height: number): void {
-    const decorationCount = 12;
-    const decorationColors = [
-      0x2d5a2d, // 진한 초록
-      0x3a6b3a, // 중간 초록
-      0x4a7c4a, // 밝은 초록
-      0x1a4a1a, // 어두운 초록
-    ];
-
-    for (let i = 0; i < decorationCount; i++) {
-      const x = Math.random() * width;
-      const y = Math.random() * height;
-      const size = Math.random() * 25 + 10;
-      const color =
-        decorationColors[Math.floor(Math.random() * decorationColors.length)];
-      const alpha = Math.random() * 0.3 + 0.1;
-      const type = Math.floor(Math.random() * 3); // 0: 원형, 1: 삼각형, 2: 십자형
-
-      const decoration = this.scene.add.graphics();
-      decoration.setDepth(-245);
-      decoration.setScrollFactor(0.08);
-
-      decoration.fillStyle(color, alpha);
-
-      switch (type) {
-        case 0: // 원형 (열매나 꽃)
-          decoration.fillCircle(x, y, size);
-          decoration.lineStyle(1, color, alpha * 0.6);
-          decoration.strokeCircle(x, y, size);
-          break;
-        case 1: // 삼각형 (나뭇잎)
-          decoration.beginPath();
-          decoration.moveTo(x, y - size);
-          decoration.lineTo(x - size * 0.8, y + size * 0.5);
-          decoration.lineTo(x + size * 0.8, y + size * 0.5);
-          decoration.closePath();
-          decoration.fill();
-          break;
-        case 2: // 십자형 (작은 꽃)
-          decoration.fillCircle(x, y, size * 0.3);
-          decoration.fillRect(x - size, y - size * 0.2, size * 2, size * 0.4);
-          decoration.fillRect(x - size * 0.2, y - size, size * 0.4, size * 2);
-          break;
-      }
-
-      this.jungleElements.push(decoration);
-    }
   }
 }

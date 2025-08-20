@@ -1,5 +1,5 @@
 // src/game/shadow/ShadowRenderer.ts - 블렌드 완전 제거 + 긴 사다리꼴
-import { Platform } from "../Config";
+import { Platform } from "../config";
 import { ShadowCalculator } from "./ShadowCalculator";
 import {
   ShadowRendererConfig,

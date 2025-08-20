@@ -7,43 +7,43 @@ import { Animation, CharacterKeyframe } from "../types";
  * 4단계로 구성된 자연스러운 걸음 사이클
  */
 const WALKING_KEYFRAMES: CharacterKeyframe[] = [
-  // 0.0: 왼쪽 다리 앞(굽힘), 오른쪽 다리 뒤(같은 방향 꺾임) - 극한 앞뒤 배치
+  // 0.0: 왼발이 뒤, 오른발이 앞 (시작 자세)
   {
     time: 0.0,
     leftLeg: {
       hip: { x: -10, y: 10 },
-      knee: { x: -6, y: 15 }, // 앞다리 무릎 굽힘
-      foot: { x: -6, y: 25 }, // 앞다리 발 더 앞으로 (극한)
+      knee: { x: -15, y: 25 },
+      foot: { x: -18, y: 40 },
     },
     rightLeg: {
       hip: { x: 10, y: 10 },
-      knee: { x: 4, y: 20 }, // 뒷다리 무릎 같은 방향 꺾임
-      foot: { x: 6, y: 35 }, // 뒷다리 발 더 뒤로 (극한)
+      knee: { x: 5, y: 25 },
+      foot: { x: 0, y: 40 },
     },
     leftArm: {
       hip: { x: -10, y: 0 },
-      knee: { x: -20, y: 5 }, // 왼쪽 팔 앞으로
-      foot: { x: -30, y: 12 },
+      knee: { x: -20, y: 5 },
+      foot: { x: -35, y: 12 },
     },
     rightArm: {
       hip: { x: 10, y: 0 },
-      knee: { x: 25, y: 8 }, // 오른쪽 팔 뒤로
-      foot: { x: 35, y: 15 },
+      knee: { x: 20, y: 5 },
+      foot: { x: 35, y: 12 },
     },
   },
 
-  // 0.25: 왼쪽 다리 들어올림 (공중) - 극한 앞뒤 배치
+  // 0.25: 왼발 들어올림 (공중)
   {
     time: 0.25,
     leftLeg: {
       hip: { x: -10, y: 8 }, // 엉덩이가 약간 올라감
-      knee: { x: -4, y: 10 }, // 무릎 앞으로 올라옴
-      foot: { x: -4, y: 15 }, // 발 더 앞으로 (극한)
+      knee: { x: -8, y: 15 }, // 무릎이 앞으로 올라옴
+      foot: { x: -5, y: 20 }, // 발이 공중에
     },
     rightLeg: {
       hip: { x: 10, y: 10 },
-      knee: { x: 6, y: 25 }, // 지지하는 다리 자연스럽게 꺾임
-      foot: { x: 8, y: 35 }, // 지지하는 발 더 뒤로 (극한)
+      knee: { x: 12, y: 30 }, // 지지하는 다리는 더 펴짐
+      foot: { x: 15, y: 40 },
     },
     leftArm: {
       hip: { x: -10, y: 0 },
@@ -57,43 +57,43 @@ const WALKING_KEYFRAMES: CharacterKeyframe[] = [
     },
   },
 
-  // 0.5: 오른쪽 다리 앞(굽힘), 왼쪽 다리 뒤(같은 방향 꺾임) - 극한 앞뒤 배치
+  // 0.5: 왼발이 앞, 오른발이 뒤 (반대 자세)
   {
     time: 0.5,
     leftLeg: {
       hip: { x: -10, y: 10 },
-      knee: { x: -4, y: 20 }, // 뒷다리 무릎 같은 방향 꺾임
-      foot: { x: -6, y: 35 }, // 뒷다리 발 더 뒤로 (극한)
+      knee: { x: -5, y: 25 },
+      foot: { x: 0, y: 40 },
     },
     rightLeg: {
       hip: { x: 10, y: 10 },
-      knee: { x: 6, y: 15 }, // 앞다리 무릎 굽힘
-      foot: { x: 6, y: 25 }, // 앞다리 발 더 앞으로 (극한)
+      knee: { x: 15, y: 25 },
+      foot: { x: 18, y: 40 },
     },
     leftArm: {
       hip: { x: -10, y: 0 },
-      knee: { x: -25, y: 8 }, // 팔이 뒤로
-      foot: { x: -35, y: 15 },
+      knee: { x: -20, y: 5 },
+      foot: { x: -35, y: 12 },
     },
     rightArm: {
       hip: { x: 10, y: 0 },
-      knee: { x: 20, y: 5 }, // 팔이 앞으로
-      foot: { x: 30, y: 12 },
+      knee: { x: 20, y: 5 },
+      foot: { x: 35, y: 12 },
     },
   },
 
-  // 0.75: 오른쪽 다리 들어올림 (공중) - 극한 앞뒤 배치
+  // 0.75: 오른발 들어올림 (공중)
   {
     time: 0.75,
     leftLeg: {
       hip: { x: -10, y: 10 },
-      knee: { x: -6, y: 25 }, // 지지하는 다리 자연스럽게 꺾임
-      foot: { x: -8, y: 35 }, // 지지하는 발 더 뒤로 (극한)
+      knee: { x: -12, y: 30 }, // 지지하는 다리
+      foot: { x: -15, y: 40 },
     },
     rightLeg: {
       hip: { x: 10, y: 8 }, // 엉덩이가 약간 올라감
-      knee: { x: 4, y: 10 }, // 무릎 앞으로 올라옴
-      foot: { x: 4, y: 15 }, // 발 더 앞으로 (극한)
+      knee: { x: 8, y: 15 }, // 무릎이 앞으로 올라옴
+      foot: { x: 5, y: 20 }, // 발이 공중에
     },
     leftArm: {
       hip: { x: -10, y: 0 },
@@ -121,113 +121,36 @@ export const walkingAnimation: Animation = {
 };
 
 /**
- * 역동적인 달리기 애니메이션
+ * 빠른 걷기/달리기 애니메이션 (속도만 다름)
  */
 export const runningAnimation: Animation = {
   name: "running",
-  duration: 0.4, // 더 빠른 사이클
+  duration: 0.5, // 더 빠른 사이클
   loop: true,
-  keyframes: [
-    // 0.0: 왼쪽 다리 앞(굽힘), 오른쪽 다리 뒤(같은 방향 꺾임) - 극한 앞뒤 배치
-    {
-      time: 0.0,
-      leftLeg: {
-        hip: { x: -12, y: 8 },
-        knee: { x: -8, y: 12 }, // 앞다리 무릎 굽힘
-        foot: { x: -8, y: 18 }, // 앞다리 발 더 앞으로 (극한)
-      },
-      rightLeg: {
-        hip: { x: 12, y: 8 },
-        knee: { x: 6, y: 15 }, // 뒷다리 무릎 같은 방향 꺾임
-        foot: { x: 8, y: 25 }, // 뒷다리 발 더 뒤로 (극한)
-      },
-      leftArm: {
-        hip: { x: -12, y: -2 },
-        knee: { x: -25, y: 0 }, // 왼쪽 팔 앞으로
-        foot: { x: -35, y: 5 },
-      },
-      rightArm: {
-        hip: { x: 12, y: -2 },
-        knee: { x: 28, y: 2 }, // 오른쪽 팔 뒤로
-        foot: { x: 40, y: 8 },
-      },
+  keyframes: WALKING_KEYFRAMES.map((kf) => ({
+    ...kf,
+    // 달릴 때는 동작이 더 크게
+    leftLeg: {
+      hip: kf.leftLeg.hip,
+      knee: { x: kf.leftLeg.knee.x * 1.2, y: kf.leftLeg.knee.y },
+      foot: { x: kf.leftLeg.foot.x * 1.3, y: kf.leftLeg.foot.y },
     },
-
-    // 0.25: 왼쪽 다리 들어올림 (공중) - 극한 앞뒤 배치
-    {
-      time: 0.25,
-      leftLeg: {
-        hip: { x: -12, y: 5 }, // 엉덩이 올라감
-        knee: { x: -5, y: 8 }, // 무릎 앞으로 올라옴
-        foot: { x: -5, y: 12 }, // 발 더 앞으로 (극한)
-      },
-      rightLeg: {
-        hip: { x: 12, y: 8 },
-        knee: { x: 8, y: 18 }, // 지지하는 다리 자연스럽게 꺾임
-        foot: { x: 10, y: 28 }, // 지지하는 발 더 뒤로 (극한)
-      },
-      leftArm: {
-        hip: { x: -12, y: -2 },
-        knee: { x: -20, y: -3 }, // 팔 앞으로
-        foot: { x: -28, y: 0 },
-      },
-      rightArm: {
-        hip: { x: 12, y: -2 },
-        knee: { x: 32, y: 5 }, // 팔 뒤로
-        foot: { x: 45, y: 12 },
-      },
+    rightLeg: {
+      hip: kf.rightLeg.hip,
+      knee: { x: kf.rightLeg.knee.x * 1.2, y: kf.rightLeg.knee.y },
+      foot: { x: kf.rightLeg.foot.x * 1.3, y: kf.rightLeg.foot.y },
     },
-
-    // 0.5: 오른쪽 다리 앞(굽힘), 왼쪽 다리 뒤(같은 방향 꺾임) - 극한 앞뒤 배치
-    {
-      time: 0.5,
-      leftLeg: {
-        hip: { x: -12, y: 8 },
-        knee: { x: -6, y: 15 }, // 뒷다리 무릎 같은 방향 꺾임
-        foot: { x: -8, y: 25 }, // 뒷다리 발 더 뒤로 (극한)
-      },
-      rightLeg: {
-        hip: { x: 12, y: 8 },
-        knee: { x: 8, y: 12 }, // 앞다리 무릎 굽힘
-        foot: { x: 8, y: 18 }, // 앞다리 발 더 앞으로 (극한)
-      },
-      leftArm: {
-        hip: { x: -12, y: -2 },
-        knee: { x: -28, y: 2 }, // 팔 뒤로
-        foot: { x: -40, y: 8 },
-      },
-      rightArm: {
-        hip: { x: 12, y: -2 },
-        knee: { x: 25, y: 0 }, // 팔 앞으로
-        foot: { x: 35, y: 5 },
-      },
+    leftArm: {
+      hip: kf.leftArm.hip,
+      knee: { x: kf.leftArm.knee.x * 1.1, y: kf.leftArm.knee.y },
+      foot: { x: kf.leftArm.foot.x * 1.1, y: kf.leftArm.foot.y },
     },
-
-    // 0.75: 오른쪽 다리 들어올림 (공중) - 극한 앞뒤 배치
-    {
-      time: 0.75,
-      leftLeg: {
-        hip: { x: -12, y: 8 },
-        knee: { x: -8, y: 18 }, // 지지하는 다리 자연스럽게 꺾임
-        foot: { x: -10, y: 28 }, // 지지하는 발 더 뒤로 (극한)
-      },
-      rightLeg: {
-        hip: { x: 12, y: 5 }, // 엉덩이 올라감
-        knee: { x: 5, y: 8 }, // 무릎 앞으로 올라옴
-        foot: { x: 5, y: 12 }, // 발 더 앞으로 (극한)
-      },
-      leftArm: {
-        hip: { x: -12, y: -2 },
-        knee: { x: -32, y: 5 }, // 팔 뒤로
-        foot: { x: -45, y: 12 },
-      },
-      rightArm: {
-        hip: { x: 12, y: -2 },
-        knee: { x: 20, y: -3 }, // 팔 앞으로
-        foot: { x: 28, y: 0 },
-      },
+    rightArm: {
+      hip: kf.rightArm.hip,
+      knee: { x: kf.rightArm.knee.x * 1.1, y: kf.rightArm.knee.y },
+      foot: { x: kf.rightArm.foot.x * 1.1, y: kf.rightArm.foot.y },
     },
-  ],
+  })),
   blendable: true,
   priority: 15,
 };

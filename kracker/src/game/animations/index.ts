@@ -76,8 +76,6 @@ export const AnimationMap = {
 
   // Jump 애니메이션들
   jump: JumpAnimations.jump,
-  "jump-left": JumpAnimations["jump-left"],
-  "jump-right": JumpAnimations["jump-right"],
   fall: JumpAnimations.fall,
   land: JumpAnimations.land,
 } as const;
@@ -120,8 +118,6 @@ export const AVAILABLE_ANIMATIONS = [
 
   // Jump
   "jump",
-  "jump-left",
-  "jump-right",
   "fall",
   "land",
 ] as const;
