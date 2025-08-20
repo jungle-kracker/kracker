@@ -7,6 +7,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 전역 배경을 검정으로 고정하여 라우팅/전환 시 흰색 플래시를 방지 */
+html, body, #root {
+  background-color: #000000;
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
