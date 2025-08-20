@@ -1,8 +1,9 @@
 // src/game/render/gun.ts - 완전히 새로운 총구 로직
 import { CharacterColors, GunPose } from "../types/player.types";
+import { createGradientColors } from "./character.core";
 
 /**
- * 🔥 새로운 총 그리기 - 간단하고 정확함
+ * 🔥 새로운 총 그리기 - 단순하게
  */
 export function drawGun(
   gunGfx: any,
@@ -15,7 +16,8 @@ export function drawGun(
 ) {
   gunGfx.clear();
 
-  const gunColor = (colors as any).gun ?? 0x333333;
+  // 총 색상을 몸통 색상과 동일하게 설정
+  const gunColor = colors.head;
   const baseLength = 30;
   const gunLength = baseLength + shootRecoil * 3;
   const gunWidth = 4;
@@ -24,14 +26,14 @@ export function drawGun(
   const gunEndX = armEndX + Math.cos(gunAngle) * gunLength;
   const gunEndY = armEndY + Math.sin(gunAngle) * gunLength;
 
-  // 총신 그리기
+  // 총신 그리기 (단순하게)
   gunGfx.lineStyle(gunWidth, gunColor);
   gunGfx.beginPath();
   gunGfx.moveTo(armEndX, armEndY);
   gunGfx.lineTo(gunEndX, gunEndY);
   gunGfx.strokePath();
 
-  // 손잡이 그리기
+  // 손잡이 그리기 (단순하게)
   const handleLength = 10;
   const handleAngle = gunAngle + (isLeft ? -Math.PI / 2 : Math.PI / 2);
   const handleEndX = armEndX + Math.cos(handleAngle) * handleLength;

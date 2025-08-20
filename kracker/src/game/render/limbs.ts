@@ -1,6 +1,7 @@
 // src/game/render/limbs.ts
 import { CharacterColors, GfxRefs } from "../types/player.types";
 import { drawGun } from "./gun";
+import { createGradientColors } from "./character.core";
 import {
   getIdleKeyframeAtTime,
   getWalkingKeyframeAtTime,
@@ -49,6 +50,29 @@ export function drawCurve(
       Math.pow(t, 2) * endY;
     graphics.lineTo(x, y);
   }
+}
+
+/**
+ * 단순한 팔다리 그리기 (그라데이션 제거)
+ */
+function drawLimbWithGradient(
+  graphics: any,
+  startX: number,
+  startY: number,
+  controlX: number,
+  controlY: number,
+  endX: number,
+  endY: number,
+  color: number,
+  thickness: number = 3
+) {
+  graphics.clear();
+
+  // 단순한 선 (그라데이션 제거)
+  graphics.lineStyle(thickness, color);
+  graphics.beginPath();
+  drawCurve(graphics, startX, startY, controlX, controlY, endX, endY);
+  graphics.strokePath();
 }
 
 /**
@@ -151,10 +175,7 @@ function getCurrentKeyframe(animationState: AnimationState): CharacterKeyframe {
 }
 
 /**
- * 왼쪽 팔 조준 그리기 (완전히 새로운 로직)
- */
-/**
- * 왼쪽 팔 조준 그리기 (각도 제한 없음)
+ * 왼쪽 팔 조준 그리기 (그라데이션 적용)
  */
 function drawLeftArmAiming(
   armGraphics: any,
@@ -164,7 +185,8 @@ function drawLeftArmAiming(
   mouseY: number,
   color: number,
   shootRecoil: number,
-  gunGraphics: any
+  gunGraphics: any,
+  colors: CharacterColors
 ) {
   const armLength = 25;
   const recoilOffset = shootRecoil * 3;
@@ -182,35 +204,25 @@ function drawLeftArmAiming(
   const controlX = shoulderX + Math.cos(angle - 0.4) * (armLength * 0.6);
   const controlY = shoulderY + Math.sin(angle - 0.4) * (armLength * 0.6);
 
-  // 팔 그리기
-  armGraphics.clear();
-  armGraphics.lineStyle(3, color);
-  armGraphics.beginPath();
-  drawCurve(
+  // 그라데이션 팔 그리기
+  drawLimbWithGradient(
     armGraphics,
     shoulderX,
     shoulderY,
     controlX,
     controlY,
     armEndX,
-    armEndY
-  );
-  armGraphics.strokePath();
-
-  // 총 그리기
-  drawGun(
-    gunGraphics,
-    armEndX,
     armEndY,
-    angle,
-    true,
-    { limbs: color } as CharacterColors,
-    shootRecoil
+    color,
+    3
   );
+
+  // 총 그리기 (올바른 색상 전달)
+  drawGun(gunGraphics, armEndX, armEndY, angle, true, colors, shootRecoil);
 }
 
 /**
- * 오른쪽 팔 조준 그리기 (각도 제한 없음)
+ * 오른쪽 팔 조준 그리기 (그라데이션 적용)
  */
 function drawRightArmAiming(
   armGraphics: any,
@@ -220,7 +232,8 @@ function drawRightArmAiming(
   mouseY: number,
   color: number,
   shootRecoil: number,
-  gunGraphics: any
+  gunGraphics: any,
+  colors: CharacterColors
 ) {
   const armLength = 25;
   const recoilOffset = shootRecoil * 3;
@@ -238,31 +251,21 @@ function drawRightArmAiming(
   const controlX = shoulderX + Math.cos(angle + 0.4) * (armLength * 0.6);
   const controlY = shoulderY + Math.sin(angle + 0.4) * (armLength * 0.6);
 
-  // 팔 그리기
-  armGraphics.clear();
-  armGraphics.lineStyle(3, color);
-  armGraphics.beginPath();
-  drawCurve(
+  // 그라데이션 팔 그리기
+  drawLimbWithGradient(
     armGraphics,
     shoulderX,
     shoulderY,
     controlX,
     controlY,
     armEndX,
-    armEndY
-  );
-  armGraphics.strokePath();
-
-  // 총 그리기
-  drawGun(
-    gunGraphics,
-    armEndX,
     armEndY,
-    angle,
-    false,
-    { limbs: color } as CharacterColors,
-    shootRecoil
+    color,
+    3
   );
+
+  // 총 그리기 (올바른 색상 전달)
+  drawGun(gunGraphics, armEndX, armEndY, angle, false, colors, shootRecoil);
 }
 /**
  * 메인 limbs 그리기 함수 - 새로운 키프레임 시스템 사용
@@ -368,7 +371,7 @@ export function drawLimbs(
 }
 
 /**
- * 키프레임 데이터를 기반으로 팔다리 그리기 (조준하지 않을 때)
+ * 키프레임 데이터를 기반으로 팔다리 그리기 (조준하지 않을 때, 그라데이션 적용)
  */
 function drawLimbsFromKeyframe(
   refs: GfxRefs,
@@ -383,8 +386,8 @@ function drawLimbsFromKeyframe(
   // 총 숨기기
   gun.clear();
 
-  // 왼쪽 팔 그리기
-  drawLimb(
+  // 왼쪽 팔 그리기 (그라데이션)
+  drawLimbWithGradient(
     leftArm,
     baseX + keyframe.leftArm.hip.x,
     baseY + keyframe.leftArm.hip.y + crouchOffset,
@@ -392,11 +395,12 @@ function drawLimbsFromKeyframe(
     baseY + keyframe.leftArm.knee.y + crouchOffset,
     baseX + keyframe.leftArm.foot.x,
     baseY + keyframe.leftArm.foot.y + crouchOffset,
-    colors.limbs
+    colors.limbs,
+    3
   );
 
-  // 오른쪽 팔 그리기
-  drawLimb(
+  // 오른쪽 팔 그리기 (그라데이션)
+  drawLimbWithGradient(
     rightArm,
     baseX + keyframe.rightArm.hip.x,
     baseY + keyframe.rightArm.hip.y + crouchOffset,
@@ -404,11 +408,12 @@ function drawLimbsFromKeyframe(
     baseY + keyframe.rightArm.knee.y + crouchOffset,
     baseX + keyframe.rightArm.foot.x,
     baseY + keyframe.rightArm.foot.y + crouchOffset,
-    colors.limbs
+    colors.limbs,
+    3
   );
 
-  // 왼쪽 다리 그리기
-  drawLimb(
+  // 왼쪽 다리 그리기 (그라데이션)
+  drawLimbWithGradient(
     leftLeg,
     baseX + keyframe.leftLeg.hip.x,
     baseY + keyframe.leftLeg.hip.y + crouchOffset,
@@ -416,11 +421,12 @@ function drawLimbsFromKeyframe(
     baseY + keyframe.leftLeg.knee.y + crouchOffset,
     baseX + keyframe.leftLeg.foot.x,
     baseY + keyframe.leftLeg.foot.y + crouchOffset,
-    colors.limbs
+    colors.limbs,
+    3
   );
 
-  // 오른쪽 다리 그리기
-  drawLimb(
+  // 오른쪽 다리 그리기 (그라데이션)
+  drawLimbWithGradient(
     rightLeg,
     baseX + keyframe.rightLeg.hip.x,
     baseY + keyframe.rightLeg.hip.y + crouchOffset,
@@ -428,12 +434,13 @@ function drawLimbsFromKeyframe(
     baseY + keyframe.rightLeg.knee.y + crouchOffset,
     baseX + keyframe.rightLeg.foot.x,
     baseY + keyframe.rightLeg.foot.y + crouchOffset,
-    colors.limbs
+    colors.limbs,
+    3
   );
 }
 
 /**
- * 조준할 때 팔다리 그리기 (한쪽 팔은 총, 나머지는 키프레임)
+ * 조준할 때 팔다리 그리기 (한쪽 팔은 총, 나머지는 키프레임, 그라데이션 적용)
  */
 function drawLimbsWithAiming(
   refs: GfxRefs,
@@ -449,8 +456,8 @@ function drawLimbsWithAiming(
 ) {
   const { leftArm, rightArm, leftLeg, rightLeg, gun } = refs;
 
-  // 다리는 항상 키프레임 사용
-  drawLimb(
+  // 다리는 항상 키프레임 사용 (그라데이션)
+  drawLimbWithGradient(
     leftLeg,
     baseX + keyframe.leftLeg.hip.x,
     baseY + keyframe.leftLeg.hip.y + crouchOffset,
@@ -458,10 +465,11 @@ function drawLimbsWithAiming(
     baseY + keyframe.leftLeg.knee.y + crouchOffset,
     baseX + keyframe.leftLeg.foot.x,
     baseY + keyframe.leftLeg.foot.y + crouchOffset,
-    colors.limbs
+    colors.limbs,
+    3
   );
 
-  drawLimb(
+  drawLimbWithGradient(
     rightLeg,
     baseX + keyframe.rightLeg.hip.x,
     baseY + keyframe.rightLeg.hip.y + crouchOffset,
@@ -469,7 +477,8 @@ function drawLimbsWithAiming(
     baseY + keyframe.rightLeg.knee.y + crouchOffset,
     baseX + keyframe.rightLeg.foot.x,
     baseY + keyframe.rightLeg.foot.y + crouchOffset,
-    colors.limbs
+    colors.limbs,
+    3
   );
 
   if (isMouseOnRight) {
@@ -485,11 +494,12 @@ function drawLimbsWithAiming(
       mouseY,
       colors.limbs,
       shootRecoil,
-      gun
+      gun,
+      colors
     );
 
-    // 왼팔은 키프레임 사용
-    drawLimb(
+    // 왼팔은 키프레임 사용 (그라데이션)
+    drawLimbWithGradient(
       leftArm,
       baseX + keyframe.leftArm.hip.x,
       baseY + keyframe.leftArm.hip.y + crouchOffset,
@@ -497,7 +507,8 @@ function drawLimbsWithAiming(
       baseY + keyframe.leftArm.knee.y + crouchOffset,
       baseX + keyframe.leftArm.foot.x,
       baseY + keyframe.leftArm.foot.y + crouchOffset,
-      colors.limbs
+      colors.limbs,
+      3
     );
   } else {
     // 왼팔로 조준
@@ -512,11 +523,12 @@ function drawLimbsWithAiming(
       mouseY,
       colors.limbs,
       shootRecoil,
-      gun
+      gun,
+      colors
     );
 
-    // 오른팔은 키프레임 사용
-    drawLimb(
+    // 오른팔은 키프레임 사용 (그라데이션)
+    drawLimbWithGradient(
       rightArm,
       baseX + keyframe.rightArm.hip.x,
       baseY + keyframe.rightArm.hip.y + crouchOffset,
@@ -524,13 +536,14 @@ function drawLimbsWithAiming(
       baseY + keyframe.rightArm.knee.y + crouchOffset,
       baseX + keyframe.rightArm.foot.x,
       baseY + keyframe.rightArm.foot.y + crouchOffset,
-      colors.limbs
+      colors.limbs,
+      3
     );
   }
 }
 
 /**
- * 개별 limb(팔/다리) 그리기 헬퍼 함수
+ * 개별 limb(팔/다리) 그리기 헬퍼 함수 (기존 버전 - 호환성 유지)
  */
 function drawLimb(
   graphics: any,

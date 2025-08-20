@@ -44,7 +44,7 @@ export const CHARACTER_PRESETS = {
   },
   빨간색: {
     head: 0xd76a6a, // 빨간 머리
-    limbs: 0xee9841, // 어두운 빨강 팔다리
+    limbs: 0xc14747, // 어두운 빨강 팔다리
     gun: 0xd76a6a, // 다크 레드 총
   },
   주황색: {

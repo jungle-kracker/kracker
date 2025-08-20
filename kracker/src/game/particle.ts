@@ -1,5 +1,6 @@
 // src/game/particle.ts
 import Phaser from "phaser";
+import { createGradientColors } from "./render/character.core";
 
 export class ParticleSystem {
   readonly scene: Phaser.Scene;
@@ -43,7 +44,7 @@ export class ParticleSystem {
     // });
   }
 
-  // 메인 파티클 생성 함수
+  // 메인 파티클 생성 함수 (그라데이션 적용)
   createParticleExplosion(x: number, y: number, color: number = 0xee9841) {
     // 씬 유효성 검사
     if (!this.isSceneValid()) {
@@ -59,43 +60,75 @@ export class ParticleSystem {
     }
 
     try {
-      const emitter = this.scene.add.particles(x, y, "particle_circle", {
-        // 한 번에 여러 개 뿌리기
-        quantity: { min: 1, max: 2 },
+      // 그라데이션 색상 생성
+      const gradientColors = createGradientColors(color);
 
-        // 속도 (멀리 튀는 애 + 가까이 있는 애)
+      // 메인 파티클 (기본 색상)
+      const mainEmitter = this.scene.add.particles(x, y, "particle_circle", {
+        quantity: { min: 1, max: 2 },
         speed: { min: 10, max: 100 },
         angle: { min: 90, max: 180 },
-
-        // 중력 (밑으로 빨려 내려감)
         gravityY: -100,
-
-        // 생존 시간
         lifespan: { min: 400, max: 700 },
-
-        // 크기 → 큰 거 + 작은 거 섞임
         scale: { start: 2, end: 0 },
-
-        // 투명도 → 서서히 사라짐
         alpha: { start: 1, end: 0 },
-
-        // 회전은 필요 없음 (원형이라 의미X)
         rotate: 0,
-
-        // 한 번만 발사
         emitting: false,
+        tint: gradientColors.base,
+      });
 
-        // 캐릭터 색상 적용
-        tint: color,
+      // 하이라이트 파티클 (밝은 색상)
+      const highlightEmitter = this.scene.add.particles(
+        x,
+        y,
+        "particle_circle",
+        {
+          quantity: { min: 1, max: 1 },
+          speed: { min: 15, max: 80 },
+          angle: { min: 90, max: 180 },
+          gravityY: -80,
+          lifespan: { min: 300, max: 500 },
+          scale: { start: 1.5, end: 0 },
+          alpha: { start: 0.8, end: 0 },
+          rotate: 0,
+          emitting: false,
+          tint: gradientColors.light,
+        }
+      );
+
+      // 그림자 파티클 (어두운 색상)
+      const shadowEmitter = this.scene.add.particles(x, y, "particle_circle", {
+        quantity: { min: 1, max: 1 },
+        speed: { min: 8, max: 60 },
+        angle: { min: 90, max: 180 },
+        gravityY: -120,
+        lifespan: { min: 500, max: 800 },
+        scale: { start: 1.8, end: 0 },
+        alpha: { start: 0.6, end: 0 },
+        rotate: 0,
+        emitting: false,
+        tint: gradientColors.dark,
       });
 
       // 💥 폭발 실행
-      emitter.explode(Phaser.Math.Between(8, 15));
+      mainEmitter.explode(Phaser.Math.Between(8, 15));
+      highlightEmitter.explode(Phaser.Math.Between(4, 8));
+      shadowEmitter.explode(Phaser.Math.Between(4, 8));
+
+      mainEmitter.setDepth(10);
+      highlightEmitter.setDepth(10);
+      shadowEmitter.setDepth(10);
 
       // 2초 뒤 정리
       this.scene.time.delayedCall(1500, () => {
-        if (emitter && emitter.active) {
-          emitter.destroy();
+        if (mainEmitter && mainEmitter.active) {
+          mainEmitter.destroy();
+        }
+        if (highlightEmitter && highlightEmitter.active) {
+          highlightEmitter.destroy();
+        }
+        if (shadowEmitter && shadowEmitter.active) {
+          shadowEmitter.destroy();
         }
       });
     } catch (error) {
@@ -114,6 +147,8 @@ export class ParticleSystem {
     if (!this.ensureParticleTexture()) return;
 
     try {
+      const gradientColors = createGradientColors(color);
+
       const emitter = this.scene.add.particles(x, y, "particle_circle", {
         quantity: { min: 1, max: 1 },
         speed: { min: 10, max: 100 },
@@ -124,10 +159,11 @@ export class ParticleSystem {
         alpha: { start: 1, end: 0 },
         rotate: 0,
         emitting: false,
-        tint: color,
+        tint: gradientColors.base,
       });
 
       emitter.explode(Phaser.Math.Between(8, 15));
+      emitter.setDepth(10);
 
       this.scene.time.delayedCall(1500, () => {
         if (emitter && emitter.active) {
@@ -144,6 +180,8 @@ export class ParticleSystem {
     if (!this.ensureParticleTexture()) return;
 
     try {
+      const gradientColors = createGradientColors(color);
+
       const emitter = this.scene.add.particles(x, y, "particle_circle", {
         quantity: { min: 1, max: 2 },
         speed: { min: 10, max: 100 },
@@ -154,10 +192,11 @@ export class ParticleSystem {
         alpha: { start: 1, end: 0 },
         rotate: 0,
         emitting: false,
-        tint: color,
+        tint: gradientColors.base,
       });
 
       emitter.explode(Phaser.Math.Between(8, 15));
+      emitter.setDepth(10);
 
       this.scene.time.delayedCall(1500, () => {
         if (emitter && emitter.active) {
@@ -174,6 +213,8 @@ export class ParticleSystem {
     if (!this.ensureParticleTexture()) return;
 
     try {
+      const gradientColors = createGradientColors(color);
+
       const emitter = this.scene.add.particles(x, y, "particle_circle", {
         quantity: { min: 1, max: 2 },
         speed: { min: 10, max: 100 },
@@ -184,10 +225,11 @@ export class ParticleSystem {
         alpha: { start: 1, end: 0 },
         rotate: 0,
         emitting: false,
-        tint: color,
+        tint: gradientColors.base,
       });
 
       emitter.explode(Phaser.Math.Between(8, 15));
+      emitter.setDepth(10);
 
       this.scene.time.delayedCall(1500, () => {
         if (emitter && emitter.active) {
@@ -221,7 +263,7 @@ export class ParticleSystem {
 
       // 더 많은 파티클 생성
       emitter.explode(Phaser.Math.Between(20, 30));
-      emitter.setDepth(1000); // 높은 depth로 설정
+      emitter.setDepth(10); // 플랫폼보다 뒤로 (플랫폼 depth: 20)
 
       // 추가로 작은 하얀 파티클들
       const smallEmitter = this.scene.add.particles(x, y, "particle_white", {
@@ -238,7 +280,7 @@ export class ParticleSystem {
       });
 
       smallEmitter.explode(Phaser.Math.Between(15, 25));
-      smallEmitter.setDepth(1000); // 높은 depth로 설정
+      smallEmitter.setDepth(10); // 플랫폼보다 뒤로 (플랫폼 depth: 20)
 
       // 더 오래 지속되도록 정리 시간 연장
       this.scene.time.delayedCall(2500, () => {
@@ -341,7 +383,10 @@ export class ParticleSystem {
       });
 
       bigEmitter.explode();
+      bigEmitter.setDepth(10); // 플랫폼보다 뒤로 (플랫폼 depth: 20)
+
       smallEmitter.explode();
+      smallEmitter.setDepth(10); // 플랫폼보다 뒤로 (플랫폼 depth: 20)
 
       this.scene.time.delayedCall(2500, () => {
         if (bigEmitter && bigEmitter.active) {
@@ -368,3 +413,6 @@ export class ParticleSystem {
     // 이벤트 리스너 정리는 씬에서 자동으로 처리됨
   }
 }
+
+// TypeScript 모듈 오류 해결을 위한 빈 export
+export {};

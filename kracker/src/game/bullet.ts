@@ -90,10 +90,10 @@ export class Bullet {
       speed: 800,
       damage: 25,
       radius: 6,
-      color: 0xffe96a,
-      tailColor: 0xffe96a, // 🔥 총알과 같은 색상으로 기본값 변경
+      color: 0xffaa40, // 연한 주황색으로 변경
+      tailColor: 0xffaa40, // 연한 주황색으로 변경
       tailLength: 200,
-      gravity: { x: 0, y: 300 },
+      gravity: { x: 0, y: 30 },
       useWorldGravity: false,
       lifetime: 8000,
       ...config,
@@ -122,6 +122,9 @@ export class Bullet {
     this.sprite = this.scene.physics.add.image(x, y, key);
     this.sprite.setRotation(angle);
     this.sprite.setDepth(100);
+
+    // 글로우 효과를 위한 블렌드 모드 설정
+    this.sprite.setBlendMode(Phaser.BlendModes.ADD);
 
     // 2) 충돌 시스템 인식용 세팅
     bulletGroup.add(this.sprite);
@@ -166,43 +169,139 @@ export class Bullet {
     }
 
     try {
-      // Canvas 방식으로 안전하게 텍스처 생성
-      const size = this.config.radius * 2;
+      // Canvas 방식으로 안전하게 텍스처 생성 (글로우 효과 포함)
+      const size = this.config.radius * 4; // 글로우를 위해 더 큰 캔버스
       const canvas = this.scene.textures.createCanvas(key, size, size);
 
       if (canvas) {
         const ctx = canvas.getContext();
         if (ctx) {
-          // 원 그리기
-          ctx.fillStyle = "#e6d535ff";
+          const centerX = size / 2;
+          const centerY = size / 2;
+          const radius = this.config.radius;
+
+          // 글로우 효과 (외부 후광) - 은은하게
+          const gradient1 = ctx.createRadialGradient(
+            centerX,
+            centerY,
+            0,
+            centerX,
+            centerY,
+            radius * 2.5
+          );
+          gradient1.addColorStop(0, "rgba(255, 200, 150, 0.1)"); // 매우 은은한 연한 주황색
+          gradient1.addColorStop(0.4, "rgba(255, 180, 120, 0.05)"); // 더 은은한 연한 주황색
+          gradient1.addColorStop(0.7, "rgba(255, 160, 100, 0.02)"); // 거의 투명한 연한 주황색
+          gradient1.addColorStop(1, "rgba(255, 140, 80, 0)"); // 투명
+
+          ctx.fillStyle = gradient1;
+          ctx.fillRect(0, 0, size, size);
+
+          // 중간 글로우 (내부 후광) - 은은하게
+          const gradient2 = ctx.createRadialGradient(
+            centerX,
+            centerY,
+            0,
+            centerX,
+            centerY,
+            radius * 1.8
+          );
+          gradient2.addColorStop(0, "rgba(255, 200, 150, 0.2)"); // 은은한 연한 주황색
+          gradient2.addColorStop(0.6, "rgba(255, 180, 120, 0.1)"); // 더 은은한 연한 주황색
+          gradient2.addColorStop(1, "rgba(255, 160, 100, 0)"); // 투명
+
+          ctx.fillStyle = gradient2;
+          ctx.fillRect(0, 0, size, size);
+
+          // 메인 총알 본체 (밝은 중심부)
+          const gradient3 = ctx.createRadialGradient(
+            centerX,
+            centerY,
+            0,
+            centerX,
+            centerY,
+            radius
+          );
+          gradient3.addColorStop(0, "#ffffff"); // 흰색 중심
+          gradient3.addColorStop(0.3, "#ffcc80"); // 밝은 연한 주황색
+          gradient3.addColorStop(0.7, "#ffaa40"); // 중간 연한 주황색
+          gradient3.addColorStop(1, "#ff8800"); // 진한 주황색
+
+          ctx.fillStyle = gradient3;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 핵심 하이라이트 (가장 밝은 부분) - 은은하게
+          const gradient4 = ctx.createRadialGradient(
+            centerX - radius * 0.3,
+            centerY - radius * 0.3,
+            0,
+            centerX - radius * 0.3,
+            centerY - radius * 0.3,
+            radius * 0.6
+          );
+          gradient4.addColorStop(0, "#ffffff"); // 흰색
+          gradient4.addColorStop(0.5, "rgba(255, 255, 255, 0.4)"); // 은은한 반투명 흰색
+          gradient4.addColorStop(1, "rgba(255, 255, 255, 0)"); // 투명
+
+          ctx.fillStyle = gradient4;
           ctx.beginPath();
           ctx.arc(
-            this.config.radius,
-            this.config.radius,
-            this.config.radius,
+            centerX - radius * 0.3,
+            centerY - radius * 0.3,
+            radius * 0.6,
             0,
             Math.PI * 2
           );
           ctx.fill();
+
           canvas.refresh();
         }
       }
     } catch (error) {
       console.warn("Canvas texture creation failed, using fallback:", error);
 
-      // 폴백: Graphics로 텍스처 생성
+      // 폴백: Graphics로 텍스처 생성 (글로우 효과 포함)
       try {
         const graphics = this.scene.add.graphics();
-        graphics.fillStyle(0xffe96a, 1);
+
+        // 글로우 효과 (외부 후광) - 은은하게
+        graphics.fillStyle(0xffcc80, 0.1);
         graphics.fillCircle(
-          this.config.radius,
-          this.config.radius,
+          this.config.radius * 2,
+          this.config.radius * 2,
+          this.config.radius * 2.5
+        );
+
+        // 중간 글로우 (내부 후광) - 은은하게
+        graphics.fillStyle(0xffcc80, 0.2);
+        graphics.fillCircle(
+          this.config.radius * 2,
+          this.config.radius * 2,
+          this.config.radius * 1.8
+        );
+
+        // 메인 총알 본체
+        graphics.fillStyle(0xffaa40, 1);
+        graphics.fillCircle(
+          this.config.radius * 2,
+          this.config.radius * 2,
           this.config.radius
         );
+
+        // 핵심 하이라이트 - 은은하게
+        graphics.fillStyle(0xffffff, 0.4);
+        graphics.fillCircle(
+          this.config.radius * 1.7,
+          this.config.radius * 1.7,
+          this.config.radius * 0.6
+        );
+
         graphics.generateTexture(
           key,
-          this.config.radius * 2,
-          this.config.radius * 2
+          this.config.radius * 4,
+          this.config.radius * 4
         );
         graphics.destroy();
       } catch (fallbackError) {
@@ -373,6 +472,15 @@ export class Bullet {
 
     // 🔥 총알과 똑같은 색상 사용 (config.color)
     const tailColor = this.config.color;
+
+    // 테일 글로우 효과 (은은하게)
+    this.tail.fillStyle(tailColor, 0.15);
+    this.tail.beginPath();
+    this.tail.moveTo(wing1X, wing1Y);
+    this.tail.lineTo(wing2X, wing2Y);
+    this.tail.lineTo(tailEndX, tailEndY);
+    this.tail.closePath();
+    this.tail.fillPath();
 
     // 메인 삼각형 그리기
     this.tail.fillStyle(tailColor, 0.8);
@@ -681,14 +789,17 @@ export function doShoot(opts: {
       typeof (opts.collisionSystem as any).getBulletGroup === "function" &&
       opts.collisionSystem) ||
     ((opts.scene as any).__collisionSystem &&
-      typeof (opts.scene as any).__collisionSystem.getBulletGroup === "function" &&
+      typeof (opts.scene as any).__collisionSystem.getBulletGroup ===
+        "function" &&
       (opts.scene as any).__collisionSystem);
 
   if (cs) {
     bulletGroup = cs.getBulletGroup();
     console.log("🧨 Using CollisionSystem bulletGroup");
   } else {
-    console.warn("⚠️ CollisionSystem 없음, 임시 그룹 생성(플레이어 피격 판정 비활성)");
+    console.warn(
+      "⚠️ CollisionSystem 없음, 임시 그룹 생성(플레이어 피격 판정 비활성)"
+    );
     bulletGroup = opts.scene.physics.add.group({
       runChildUpdate: true,
       allowGravity: true,

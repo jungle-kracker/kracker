@@ -98,6 +98,13 @@ export default class Player {
   private wobble = 0;
   private shootRecoil = 0;
 
+  // 동적 색상 그라데이션 관련
+  private colorAnimationTime = 0;
+  private colorAnimationSpeed = 0.02;
+  private baseColor: number;
+  private dynamicColors: number[] = [];
+  private isGameScene = false;
+
   // 입력 핸들
   private keysHandle: KeysHandle | null = null;
   private pointerHandle: PointerHandle | null = null;
@@ -148,9 +155,27 @@ export default class Player {
     this.y = y;
     this.platforms = platforms;
 
+    // 게임 씬인지 확인 (GameScene에서만 동적 색상 적용)
+    this.isGameScene =
+      scene.constructor.name === "GameScene" ||
+      scene.scene?.key === "GameScene";
+
     this.colorPreset = preset;
     this.colors = (CHARACTER_PRESETS as any)[preset] as CharacterColors;
     this.particleSystem = new ParticleSystem(this.scene, false);
+
+    // 동적 색상 초기화
+    this.baseColor = this.colors.head;
+    this.dynamicColors = [
+      0xff6b35, // 주황색
+      0xff8e53, // 밝은 주황
+      0xffa726, // 연한 주황
+      0xffb74d, // 더 연한 주황
+      0xffcc02, // 금색
+      0xffd54f, // 밝은 금색
+      0xffe082, // 연한 금색
+      0xffecb3, // 매우 연한 금색
+    ];
 
     // 그래픽 생성
     this.gfx = createCharacter(this.scene, this.x, this.y, this.colors);
@@ -225,6 +250,57 @@ export default class Player {
     this.gfx.body?.setAlpha?.(alpha);
   }
 
+  private updateDynamicColor(deltaMs: number) {
+    // 게임 씬에서만 동적 색상 적용
+    if (!this.isGameScene) {
+      return;
+    }
+
+    // 움직임 상태에 따라 색상 변화 속도 조절
+    let speedMultiplier = 1;
+    if (this.lastMovementState === "walking") {
+      speedMultiplier = 2;
+    } else if (this.lastMovementState === "wallgrab") {
+      speedMultiplier = 3;
+    } else if (this.isShooting) {
+      speedMultiplier = 4;
+    }
+
+    this.colorAnimationTime +=
+      deltaMs * this.colorAnimationSpeed * speedMultiplier;
+
+    // 색상 배열에서 현재 색상 선택
+    const colorIndex =
+      Math.floor(this.colorAnimationTime) % this.dynamicColors.length;
+    const nextColorIndex = (colorIndex + 1) % this.dynamicColors.length;
+
+    const progress =
+      this.colorAnimationTime - Math.floor(this.colorAnimationTime);
+
+    // 색상 보간
+    const currentColor = this.dynamicColors[colorIndex];
+    const nextColor = this.dynamicColors[nextColorIndex];
+
+    const r1 = (currentColor >> 16) & 0xff;
+    const g1 = (currentColor >> 8) & 0xff;
+    const b1 = currentColor & 0xff;
+
+    const r2 = (nextColor >> 16) & 0xff;
+    const g2 = (nextColor >> 8) & 0xff;
+    const b2 = nextColor & 0xff;
+
+    const r = Math.round(r1 + (r2 - r1) * progress);
+    const g = Math.round(g1 + (g2 - g1) * progress);
+    const b = Math.round(b1 + (b2 - b1) * progress);
+
+    const interpolatedColor = (r << 16) | (g << 8) | b;
+
+    // 몸통 색상 업데이트
+    if (this.gfx.body && typeof this.gfx.body.setFillStyle === "function") {
+      this.gfx.body.setFillStyle(interpolatedColor);
+    }
+  }
+
   private updateCrouch(key: KeyState) {
     // 벽잡기 중에는 웅크리기 불가
     if (key.crouch && this.isGrounded && !this.wall.isWallGrabbing) {
@@ -254,6 +330,9 @@ export default class Player {
 
     // 1) 무적 처리
     this.updateInvulnerability(deltaMs * 3);
+
+    // 2) 동적 색상 업데이트
+    this.updateDynamicColor(deltaMs);
 
     // 2) 입력 스냅샷
     const key = this.readInputs();

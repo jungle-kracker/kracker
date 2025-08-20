@@ -185,15 +185,16 @@ export class UIManager {
     const prev = this.nameTags.get(playerId);
     prev?.destroy();
 
-    const text = this.scene.add.text(0, 0, nickname, {
-      fontFamily: "Apple SD Gothic Neo",
-      fontSize: "14px",
-      color: "#FFFFFF",
-      align: "center",
-      padding: { left: 3, right: 3, top: 1, bottom: 1 },
-    })
-      .setOrigin(0.5, 1)    // 중앙 정렬, 아래쪽 기준
-      .setScrollFactor(1)   // 월드 좌표 따라다님(카메라 스크롤 반영)
+    const text = this.scene.add
+      .text(0, 0, nickname, {
+        fontFamily: "Apple SD Gothic Neo",
+        fontSize: "14px",
+        color: "#FFFFFF",
+        align: "center",
+        padding: { left: 3, right: 3, top: 1, bottom: 1 },
+      })
+      .setOrigin(0.5, 1) // 중앙 정렬, 아래쪽 기준
+      .setScrollFactor(1) // 월드 좌표 따라다님(카메라 스크롤 반영)
       .setDepth(this.NAME_TAG_DEPTH);
 
     // 너무 길면 자동 축소
@@ -205,7 +206,11 @@ export class UIManager {
   }
 
   // 닉네임 태그 위치 갱신 (hpBarTopY 바로 위에 촘촘히)
-  public updateNameTagPosition(playerId: string, worldX: number, hpBarTopY: number): void {
+  public updateNameTagPosition(
+    playerId: string,
+    worldX: number,
+    hpBarTopY: number
+  ): void {
     const tag = this.nameTags.get(playerId);
     if (!tag) return;
     tag.setPosition(worldX, hpBarTopY - 15);
@@ -217,7 +222,8 @@ export class UIManager {
     if (!tag) return this.createNameTag(playerId, nickname);
     tag.setText(nickname);
     // 길이 다시 보정
-    if (tag.width > this.NAME_TAG_MAX_WIDTH) tag.setScale(this.NAME_TAG_MAX_WIDTH / tag.width);
+    if (tag.width > this.NAME_TAG_MAX_WIDTH)
+      tag.setScale(this.NAME_TAG_MAX_WIDTH / tag.width);
     else tag.setScale(1);
   }
 
@@ -230,7 +236,7 @@ export class UIManager {
 
   // 전부 제거 (씬 종료/전환용)
   public destroyAllNameTags(): void {
-    this.nameTags.forEach(t => t.destroy());
+    this.nameTags.forEach((t) => t.destroy());
     this.nameTags.clear();
   }
 
