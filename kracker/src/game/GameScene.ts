@@ -137,6 +137,8 @@ export default class GameScene extends Phaser.Scene {
   private sceneState: any = GAME_STATE.SCENE_STATES.LOADING;
   private isInitialized: boolean = false;
 
+  // 증강 스냅샷: playerId -> Record<augmentId, { id, startedAt }>
+  private augmentByPlayer: Map<string, Record<string, { id: string; startedAt: number }>> = new Map();
   // 퍼포먼스 모니터링
   private performanceTimer: number = 0;
   private frameCount: number = 0;
@@ -264,6 +266,14 @@ export default class GameScene extends Phaser.Scene {
     // 체력 업데이트 수신
     this.networkManager.onHealthUpdate((data) => {
       this.handleHealthUpdate(data);
+    });
+    // 🆕 증강 스냅샷 수신
+    (this.networkManager as any).onAugmentSnapshot?.((data: any) => {
+      try {
+        (data.players || []).forEach((p: any) => {
+          this.augmentByPlayer.set(p.id, p.augments || {});
+        });
+      } catch {}
     });
 
     // 플레이어 입장/퇴장
@@ -604,6 +614,24 @@ export default class GameScene extends Phaser.Scene {
   // ☆ 게임 이벤트 처리
   private handleGameEvent(event: any): void {
     switch (event.type) {
+      case "status":
+        // 상태이상(예: slow) 적용: 간단히 이동 속도 스케일을 일정 시간 낮춤
+        try {
+          const pid = event.playerId;
+          const data = event.data || {};
+          if (data.status === "slow") {
+            if (pid === this.myPlayerId && this.player) {
+              // 로컬 플레이어: 이동 속도 스케일 적용
+              const mult = data.multiplier ?? 0.7;
+              const ms = data.ms ?? 1500;
+              (this.player as any).__speedMul = mult;
+              setTimeout(() => {
+                (this.player as any).__speedMul = 1.0;
+              }, ms);
+            }
+          }
+        } catch {}
+        break;
       case "showHealthBar":
         // 체력바 표시 이벤트 처리
         const playerId = event.data?.playerId || event.playerId;
@@ -1576,6 +1604,8 @@ export default class GameScene extends Phaser.Scene {
       burstDelay: 100,
     });
     this.shootingManager.initialize();
+    // 🆕 증강 조회 연결
+    this.shootingManager.setAugmentResolver((pid: string) => this.augmentByPlayer.get(pid));
 
     (this.shootingManager as any)?.setCollisionSystem?.(this.collisionSystem);
 

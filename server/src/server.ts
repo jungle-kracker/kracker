@@ -15,6 +15,8 @@ type Player = {
   ready: boolean;
   health?: number; // 체력 추가
   wins?: number;   // 🆕 라운드 승리 스택
+  // 🆕 활성 증강: augmentId -> { id, startedAt }
+  augments?: Record<string, { id: string; startedAt: number }>;
 };
 
 type Room = {
@@ -515,7 +517,14 @@ io.on("connection", (socket) => {
           return;
         }
 
-        const newHealth = Math.max(0, currentHealth - hit.damage);
+        // 서버 권위 대미지 계산 (증강 반영)
+        const shooter = room.players[payload.playerId];
+        let damage = hit.damage ?? 25;
+        // 빨리뽑기: 고정 추가 대미지
+        if (shooter?.augments && shooter.augments["빨리뽑기"]) {
+          damage += 5;
+        }
+        const newHealth = Math.max(0, currentHealth - damage);
 
         // 서버에 체력 업데이트
         target.health = newHealth;
@@ -524,9 +533,43 @@ io.on("connection", (socket) => {
         io.to(roomId).emit("game:healthUpdate", {
           playerId: hit.targetPlayerId,
           health: newHealth,
-          damage: hit.damage,
+          damage: damage,
           timestamp: Date.now(),
         });
+
+        // 독걸려랑: DoT 스케줄
+        if (shooter?.augments && shooter.augments["독걸려랑"] && newHealth > 0) {
+          const victimId = hit.targetPlayerId;
+          let ticks = 3;
+          const dot = 5;
+          const timer = setInterval(() => {
+            const r = rooms.get(roomId);
+            if (!r) return clearInterval(timer);
+            const v = r.players[victimId];
+            if (!v) return clearInterval(timer);
+            const h = v.health ?? 100;
+            if (h <= 0) return clearInterval(timer);
+            const nh = Math.max(0, h - dot);
+            v.health = nh;
+            io.to(roomId).emit("game:healthUpdate", {
+              playerId: victimId,
+              health: nh,
+              damage: dot,
+              timestamp: Date.now(),
+            });
+            ticks -= 1;
+            if (nh <= 0 || ticks <= 0) clearInterval(timer);
+          }, 1000);
+        }
+
+        // 끈적여요: 둔화 상태 방송 (클라에서 이동속도 적용)
+        if (shooter?.augments && shooter.augments["끈적여요"]) {
+          io.to(roomId).emit("game:event", {
+            type: "status",
+            playerId: hit.targetPlayerId,
+            data: { status: "slow", ms: 1500, multiplier: 0.7 },
+          });
+        }
 
         // 사망 브로드캐스트
         if (newHealth <= 0) {
@@ -727,6 +770,24 @@ io.on("connection", (socket) => {
         io.to(rid).emit("augment:complete", {
           round: payload.round,
           selections: roundSelection.selections,
+        });
+
+        // 🆕 서버 저장: 각 플레이어의 활성 증강 갱신(간단 모델)
+        Object.entries(roundSelection.selections).forEach(([pid, augId]) => {
+          const p = room.players[pid];
+          if (!p) return;
+          if (!p.augments) p.augments = {};
+          p.augments[augId] = { id: augId, startedAt: Date.now() };
+        });
+
+        // 🆕 증강 상태 전체 방송(스냅샷)
+        io.to(rid).emit("augment:snapshot", {
+          players: Object.values(room.players).map((p) => ({
+            id: p.id,
+            augments: p.augments || {},
+          })),
+          round: payload.round,
+          t: Date.now(),
         });
 
         // 2초 대기하는 동안: 모든 플레이어 체력 100% 회복 및 브로드캐스트,
