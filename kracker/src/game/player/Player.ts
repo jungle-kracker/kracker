@@ -372,10 +372,12 @@ export default class Player {
       const moveMul = this.isCrouching ? 0.5 : 1;
 
       if (key.left && !key.right) {
-        this.velocityX = -GAME_CONFIG.playerSpeed * moveMul;
+        const speedMul = (this as any).__speedMul ?? 1.0;
+        this.velocityX = -GAME_CONFIG.playerSpeed * moveMul * speedMul;
         this.legSwing += 0.3;
       } else if (key.right && !key.left) {
-        this.velocityX = GAME_CONFIG.playerSpeed * moveMul;
+        const speedMul = (this as any).__speedMul ?? 1.0;
+        this.velocityX = GAME_CONFIG.playerSpeed * moveMul * speedMul;
         this.legSwing += 0.3;
       } else {
         this.velocityX = dampen(this.velocityX, 0.8, 10);
