@@ -147,14 +147,18 @@ export class NetworkManager {
     });
 
     // 플레이어 사격 수신
-    socket.on(
-      "game:playerShoot",
-      (data: { playerId: string; shoot: ShootData }) => {
-        if (data.playerId !== this.myPlayerId && this.onPlayerShootCallback) {
-          this.onPlayerShootCallback(data.playerId, data.shoot);
-        }
+    socket.on("state:shoot", (data: any) => {
+      if (data.id !== this.myPlayerId && this.onPlayerShootCallback) {
+        const shootData: ShootData = {
+          x: data.x,
+          y: data.y,
+          angle: data.angle,
+          gunX: data.x,
+          gunY: data.y,
+        };
+        this.onPlayerShootCallback(data.id, shootData);
       }
-    );
+    });
 
     // 총알 충돌 수신
     socket.on("game:bulletHit", (data: BulletHit) => {
@@ -215,10 +219,10 @@ export class NetworkManager {
       timestamp: Date.now(),
     };
 
-    socket.emit("game:shoot", {
-      roomId: this.roomId,
-      playerId: this.myPlayerId,
-      shoot: data,
+    socket.emit("input:shoot", {
+      x: shootData.x,
+      y: shootData.y,
+      angle: shootData.angle,
     });
 
     console.log(
@@ -358,7 +362,7 @@ export class NetworkManager {
     socket.off("connect");
     socket.off("disconnect");
     socket.off("game:playerMove");
-    socket.off("game:playerShoot");
+    socket.off("state:shoot");
     socket.off("game:bulletHit");
     socket.off("game:event");
     socket.off("game:playerJoined");

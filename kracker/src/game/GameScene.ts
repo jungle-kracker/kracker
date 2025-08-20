@@ -252,22 +252,51 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // ☆ 원격 플레이어 사격 처리
+  // GameScene.ts의 handleRemotePlayerShoot 함수 수정
   private handleRemotePlayerShoot(playerId: string, shootData: any): void {
+    if (!this.sys || !this.sys.isActive()) return;
     const remotePlayer = this.remotePlayers.get(playerId);
     if (!remotePlayer) return;
 
-    // 사격 파티클 효과
-    this.createParticleEffect(shootData.gunX, shootData.gunY, false);
+    console.log(`사격 데이터 수신:`, shootData);
 
-    // 원격 플레이어가 사격하는 방향으로 향하도록
+    // 1. 씬 상태 확인
+    if (!this.scene || !this.scene.add) {
+      console.warn("씬이 초기화되지 않아 원격 사격 처리 불가");
+      return;
+    }
+
+    // 2. 총구 폭발 파티클 효과 (안전하게)
+    const gunX = shootData.gunX || shootData.x;
+    const gunY = shootData.gunY || shootData.y;
+
+    try {
+      this.createParticleEffect(gunX, gunY, false);
+    } catch (error) {
+      console.warn("파티클 효과 생성 실패:", error);
+    }
+
+    // 3. ShootingManager에서 원격 총알 생성 (안전하게)
+    try {
+      if (this.shootingManager) {
+        this.shootingManager.createRemotePlayerBullet({
+          gunX: gunX,
+          gunY: gunY,
+          angle: shootData.angle,
+          color: 0xff4444, // 빨간색으로 구분
+          shooterId: playerId,
+        });
+      }
+    } catch (error) {
+      console.warn("원격 총알 생성 실패:", error);
+    }
+
+    // 4. 플레이어 방향 업데이트
     const deltaX = shootData.x - remotePlayer.lastPosition.x;
     remotePlayer.networkState.facing = deltaX < 0 ? "left" : "right";
 
-    console.log(
-      `🔫 원격 플레이어 ${remotePlayer.name} 사격: (${shootData.x}, ${shootData.y})`
-    );
+    console.log(`원격 플레이어 ${remotePlayer.name} 사격 처리 완료`);
   }
-
   // ☆ 이알 충돌 처리
   private handleBulletHit(hitData: any): void {
     // 충돌 파티클 효과
@@ -281,6 +310,85 @@ export default class GameScene extends Phaser.Scene {
       this.shakeCamera(200, 0.01);
 
       console.log(`💥 내가 이알에 맞음! 데미지: ${hitData.damage}`);
+    }
+  }
+  // GameScene.ts 내부 아무 private 메서드 구역에 추가
+  private detectBulletHitsAgainstPlayers(): void {
+    if (!this.shootingManager) return;
+
+    const bullets: any[] = this.shootingManager.getAllBullets();
+    const myId = this.myPlayerId;
+    if (!myId) return;
+
+    // 내 AABB
+    const myBounds = this.player.getBounds(); // 기존 findPlayerAtPosition에서 쓰던 것과 동일
+
+    // 헬퍼
+    const pointInRect = (
+      px: number,
+      py: number,
+      r: { x: number; y: number; width: number; height: number }
+    ) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height;
+
+    for (const b of bullets) {
+      if (!b || b._hitProcessed) continue;
+
+      const bx = b.x ?? b.position?.x ?? b.body?.x;
+      const by = b.y ?? b.position?.y ?? b.body?.y;
+      if (bx == null || by == null) continue;
+
+      // 원격 총알이 나를 맞춘 경우
+      if (b.ownerId && b.ownerId !== myId) {
+        if (pointInRect(bx, by, myBounds)) {
+          b._hitProcessed = true;
+
+          // 서버에 타격 전송
+          this.networkManager?.sendBulletHit({
+            bulletId: b.id || `bullet_${Date.now()}`,
+            targetPlayerId: myId,
+            damage: this.shootingManager?.getDamage() ?? 25,
+            x: bx,
+            y: by,
+          });
+
+          // 클라 예측 데미지(옵션) — 서버 이벤트로 정정됨
+          this.player.takeDamage(this.shootingManager?.getDamage() ?? 25);
+          this.shakeCamera(150, 0.008);
+        }
+        continue;
+      }
+
+      // 내 총알이 원격 플레이어를 맞춘 경우
+      if (b.ownerId === myId) {
+        const playerIds = Array.from(this.remotePlayers.keys());
+        for (let i = 0; i < playerIds.length; i++) {
+          const pid = playerIds[i];
+          const remote = this.remotePlayers.get(pid);
+          const body = remote?.gfxRefs?.body;
+          if (!body) continue;
+
+          // 간단한 몸통 AABB (기존 findPlayerAtPosition과 동일 기준)
+          const bounds = {
+            x: body.x - 20,
+            y: body.y - 20,
+            width: 40,
+            height: 40,
+          };
+          if (pointInRect(bx, by, bounds)) {
+            b._hitProcessed = true;
+
+            this.networkManager?.sendBulletHit({
+              bulletId: b.id || `bullet_${Date.now()}`,
+              targetPlayerId: pid,
+              damage: this.shootingManager?.getDamage() ?? 25,
+              x: bx,
+              y: by,
+            });
+
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -337,7 +445,7 @@ export default class GameScene extends Phaser.Scene {
 
     // ⭐ 네트워크 매니저 초기화
     this.networkManager.initialize(gameData.room.roomId, gameData.myPlayerId);
-
+    this.shootingManager?.setOwnerId(gameData.myPlayerId);
     // ⭐ 내 플레이어 데이터 찾기
     const myPlayerData = gameData.players.find((p) => p.id === this.myPlayerId);
 
@@ -534,10 +642,6 @@ export default class GameScene extends Phaser.Scene {
 
     const { x, y } = remotePlayer.lastPosition;
     const facing = remotePlayer.networkState.facing;
-
-    console.log(
-      `🎨 ${remotePlayer.name} 렌더링: (${x}, ${y}), facing: ${facing}`
-    );
 
     // ⭐ 몸통 위치 업데이트
     if (refs.body) {
@@ -796,7 +900,7 @@ export default class GameScene extends Phaser.Scene {
       burstDelay: 100,
     });
     this.shootingManager.initialize();
-    
+
     (this.shootingManager as any)?.setCollisionSystem?.(this.collisionSystem);
 
     // 사격 시스템 충돌 설정
@@ -1104,6 +1208,7 @@ export default class GameScene extends Phaser.Scene {
   private updateGameLogic(): void {
     this.cullBulletsOutsideViewport();
     this.clampPlayerInsideWorld();
+    this.detectBulletHitsAgainstPlayers();
   }
 
   private updatePerformanceMonitoring(time: number, deltaTime: number): void {
@@ -1488,12 +1593,31 @@ export default class GameScene extends Phaser.Scene {
     y: number,
     fancy: boolean = false
   ): void {
-    if (fancy) {
-      this.particleSystem.createFancyParticleExplosion(x, y);
-    } else {
-      this.particleSystem.createParticleExplosion(x, y);
+    // ParticleSystem이 제대로 초기화되었는지 확인
+    if (!this.particleSystem) {
+      console.warn("ParticleSystem이 초기화되지 않음");
+      return;
     }
-    Debug.log.debug(LogCategory.PARTICLE, "파티클 효과 생성", { x, y, fancy });
+
+    // 씬 상태 확인
+    if (
+      !this.scene ||
+      !this.scene.add ||
+      this.sceneState !== GAME_STATE.SCENE_STATES.RUNNING
+    ) {
+      console.warn("씬이 준비되지 않아 파티클 효과 생성 건너뜀");
+      return;
+    }
+
+    try {
+      if (fancy) {
+        this.particleSystem.createFancyParticleExplosion(x, y);
+      } else {
+        this.particleSystem.createParticleExplosion(x, y);
+      }
+    } catch (error) {
+      console.warn("파티클 효과 생성 중 오류:", error);
+    }
   }
 
   // 맵 전환
