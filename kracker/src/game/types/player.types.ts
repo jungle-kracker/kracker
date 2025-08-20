@@ -51,7 +51,7 @@ export interface GfxRefs {
   leftLeg: any; // Phaser.GameObjects.Graphics
   rightLeg: any; // Phaser.GameObjects.Graphics
   gun: any; // Phaser.GameObjects.Graphics
-  
+
   //머리 위 HP바
   hpBarBg?: any;
   hpBarFill?: any;

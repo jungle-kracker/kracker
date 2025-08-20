@@ -74,6 +74,12 @@ export class UIManager {
   private uiContainer?: Phaser.GameObjects.Container;
   private uiElements: Map<string, UITextElement> = new Map();
 
+  // === [닉네임 태그 관리] ====================================
+  private nameTags: Map<string, Phaser.GameObjects.Text> = new Map();
+  // HUD 컨테이너(UI 텍스트)는 depth 1000이므로 그 아래 혹은 위로 적절히
+  private readonly NAME_TAG_DEPTH = 990;
+  private readonly NAME_TAG_MAX_WIDTH = 110; // 너무 긴 닉네임 자동 축소
+
   // UI 상태
   private isVisible: boolean = true;
   private currentYOffset: number = 0;
@@ -171,6 +177,61 @@ export class UIManager {
     }
 
     Debug.log.debug(LogCategory.UI, "상태 텍스트 생성 완료");
+  }
+
+  // 닉네임 태그 생성
+  public createNameTag(playerId: string, nickname: string): void {
+    // 기존 태그 있으면 제거
+    const prev = this.nameTags.get(playerId);
+    prev?.destroy();
+
+    const text = this.scene.add.text(0, 0, nickname, {
+      fontFamily: "Apple SD Gothic Neo",
+      fontSize: "14px",
+      color: "#FFFFFF",
+      align: "center",
+      padding: { left: 3, right: 3, top: 1, bottom: 1 },
+    })
+      .setOrigin(0.5, 1)    // 중앙 정렬, 아래쪽 기준
+      .setScrollFactor(1)   // 월드 좌표 따라다님(카메라 스크롤 반영)
+      .setDepth(this.NAME_TAG_DEPTH);
+
+    // 너무 길면 자동 축소
+    if (text.width > this.NAME_TAG_MAX_WIDTH) {
+      text.setScale(this.NAME_TAG_MAX_WIDTH / text.width);
+    }
+
+    this.nameTags.set(playerId, text);
+  }
+
+  // 닉네임 태그 위치 갱신 (hpBarTopY 바로 위에 촘촘히)
+  public updateNameTagPosition(playerId: string, worldX: number, hpBarTopY: number): void {
+    const tag = this.nameTags.get(playerId);
+    if (!tag) return;
+    tag.setPosition(worldX, hpBarTopY - 15);
+  }
+
+  // 닉네임 변경 시 텍스트 교체
+  public setNameTagText(playerId: string, nickname: string): void {
+    const tag = this.nameTags.get(playerId);
+    if (!tag) return this.createNameTag(playerId, nickname);
+    tag.setText(nickname);
+    // 길이 다시 보정
+    if (tag.width > this.NAME_TAG_MAX_WIDTH) tag.setScale(this.NAME_TAG_MAX_WIDTH / tag.width);
+    else tag.setScale(1);
+  }
+
+  // 특정 플레이어 태그 제거
+  public destroyNameTag(playerId: string): void {
+    const tag = this.nameTags.get(playerId);
+    if (tag) tag.destroy();
+    this.nameTags.delete(playerId);
+  }
+
+  // 전부 제거 (씬 종료/전환용)
+  public destroyAllNameTags(): void {
+    this.nameTags.forEach(t => t.destroy());
+    this.nameTags.clear();
   }
 
   // 텍스트 요소 추가 헬퍼
