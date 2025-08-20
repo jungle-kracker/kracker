@@ -9,10 +9,12 @@ interface NicknameModalProps {
 const NicknameModal: React.FC<NicknameModalProps> = ({ isOpen, onSubmit }) => {
   const [nickname, setNickname] = useState("");
   const [isValid, setIsValid] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   // 페이지 로드 시 저장된 닉네임 불러오기
   useEffect(() => {
     if (isOpen) {
+      setIsAnimating(true);
       const savedNickname = localStorage.getItem("userNickname");
       if (savedNickname) {
         setNickname(savedNickname);
@@ -42,7 +44,12 @@ const NicknameModal: React.FC<NicknameModalProps> = ({ isOpen, onSubmit }) => {
     const trimmedNickname = nickname.trim();
     // 로컬스토리지에 저장
     localStorage.setItem("userNickname", trimmedNickname);
-    onSubmit(trimmedNickname);
+    
+    // 사라질 때 트랜지션 적용
+    setIsAnimating(false);
+    setTimeout(() => {
+      onSubmit(trimmedNickname);
+    }, 300);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -63,7 +70,7 @@ const NicknameModal: React.FC<NicknameModalProps> = ({ isOpen, onSubmit }) => {
         inset: 0,
         width: "100dvw",
         height: "100dvh",
-        backgroundColor: "rgba(28,27,27,0.82)",
+        background: "rgba(28,27,27,0.82",
         backdropFilter: "blur(6px)",
         WebkitBackdropFilter: "blur(6px)",
         display: "grid",
@@ -71,6 +78,8 @@ const NicknameModal: React.FC<NicknameModalProps> = ({ isOpen, onSubmit }) => {
         zIndex: 1000,
         color: "#fff",
         touchAction: "none",
+        transform: isAnimating ? "translateX(0)" : "translateX(100%)",
+        transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
       {/* Title 섹션 */}
@@ -90,6 +99,9 @@ const NicknameModal: React.FC<NicknameModalProps> = ({ isOpen, onSubmit }) => {
             placeItems: "center",
             padding: "0 16px",
             minHeight: 120,
+            transform: "translateY(10px)",
+            opacity: 1,
+            transition: "transform 280ms ease",
           }}
         >
           {/* 제목 */}
@@ -143,6 +155,8 @@ const NicknameModal: React.FC<NicknameModalProps> = ({ isOpen, onSubmit }) => {
             width: "100%",
             maxWidth: 600,
             paddingBottom: 80,
+            transform: "translateY(20px)",
+            transition: "transform 300ms ease",
           }}
         >
           {/* 캐릭터 이미지 영역 */}

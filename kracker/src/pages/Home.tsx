@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import "../styles/global.css";
@@ -18,40 +18,56 @@ const Home: React.FC = () => {
   const [searchRoomOpen, setsearchRoomOpen] = useState(false);
   const [SettingOpen, setSettingOpen] = useState(false);
 
+  const [entered, setEntered] = useState(false);
+  const [exiting, setExiting] = useState(false);
+
   const navigate = useNavigate();
   const { playSfx } = useAudio();
   const nickname = localStorage.getItem("userNickname") || "Player";
 
+  useEffect(() => {
+    const t = setTimeout(() => setEntered(true), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  const navigateWithFade = (to: string, state?: any) => {
+    setExiting(true);
+    setTimeout(() => navigate(to, state ? { state } : undefined as any), 260);
+  };
+
   return (
     <>
-      <Background>
-        <Wrap>
-          <Title data-text="KRACKER">KRACKER</Title>
-          <Divider />
-          <Menu>
-            <MenuBtn
-              onMouseEnter={() => playSfx(hoverSfx)}
-              onClick={() => setCreateRoomOpen(true)}
-            >
-              방 만들기
-            </MenuBtn>
+      <PageTransitionOverlay $exiting={exiting} />
+      <PageRoot $entered={entered} $exiting={exiting} $dimmed={createRoomOpen || searchRoomOpen || SettingOpen}>
+        <Background>
+          <Wrap>
+            <Title data-text="KRACKER">KRACKER</Title>
+            <Divider />
+            <Menu>
+              <MenuBtn
+                onMouseEnter={() => playSfx(hoverSfx)}
+                onClick={() => setCreateRoomOpen(true)}
+              >
+                방 만들기
+              </MenuBtn>
 
-            <MenuBtn
-              onMouseEnter={() => playSfx(hoverSfx)}
-              onClick={() => setsearchRoomOpen(true)}
-            >
-              게임 찾기
-            </MenuBtn>
+              <MenuBtn
+                onMouseEnter={() => playSfx(hoverSfx)}
+                onClick={() => setsearchRoomOpen(true)}
+              >
+                게임 찾기
+              </MenuBtn>
 
-            <MenuBtn
-              onMouseEnter={() => playSfx(hoverSfx)}
-              onClick={() => setSettingOpen(true)}
-            >
-              게임 설정
-            </MenuBtn>
-          </Menu>
-        </Wrap>
-      </Background>
+              <MenuBtn
+                onMouseEnter={() => playSfx(hoverSfx)}
+                onClick={() => setSettingOpen(true)}
+              >
+                게임 설정
+              </MenuBtn>
+            </Menu>
+          </Wrap>
+        </Background>
+      </PageRoot>
 
       {/* 방 만들기 → 서버 ack로 받은 room 정보로 이동 */}
       <CreateRoomModal
@@ -61,23 +77,21 @@ const Home: React.FC = () => {
         onCreate={(data) => {
           setCreateRoomOpen(false);
           // 방 상태 최소 정보만 들고 로비로 이동
-          navigate("/lobby", {
-            state: {
-              room: {
-                roomId: data.roomId,
-                maxPlayers: data.maxPlayers,
-                status: data.status,
-                roomName: data.roomName,
-                visibility: data.visibility ?? "public",
-                gameMode: data.gameMode ?? "팀전",
-                players: (data.currentPlayers ?? []).map(p => ({
-                  id: p.id,
-                  nickname: p.nick ?? "Player",
-                  ready: p.ready,
-                  team: 1,
-                  color: undefined,
-                }))
-              },
+          navigateWithFade("/lobby", {
+            room: {
+              roomId: data.roomId,
+              maxPlayers: data.maxPlayers,
+              status: data.status,
+              roomName: data.roomName,
+              visibility: data.visibility ?? "public",
+              gameMode: data.gameMode ?? "팀전",
+              players: (data.currentPlayers ?? []).map(p => ({
+                id: p.id,
+                nickname: p.nick ?? "Player",
+                ready: p.ready,
+                team: 1,
+                color: undefined,
+              }))
             },
           });
         }}
@@ -90,27 +104,25 @@ const Home: React.FC = () => {
         nickname={nickname}
         onJoined={(room) => {
           setsearchRoomOpen(false);
-          navigate("/lobby", {
-            state: {
-              room: {
-                roomId: room.roomId,
-                maxPlayers: room.max ?? room.maxPlayers,
-                status: room.status,
-                roomName: room.roomName ?? room.name,
-                visibility:
-                  room.visibility ??
-                  (typeof room.isPublic === "boolean"
-                    ? (room.isPublic ? "public" : "private")
-                    : "public"),
-                gameMode: room.gameMode ?? "팀전",
-                players: (room.players ?? []).map((p: any) => ({
-                  id: p.id,
-                  nickname: p.nickname ?? p.nick ?? "Player",
-                  ready: !!p.ready,
-                  team: typeof p.team === "number" ? p.team : 1,
-                  color: p.color,
-                }))
-              },
+          navigateWithFade("/lobby", {
+            room: {
+              roomId: room.roomId,
+              maxPlayers: room.max ?? room.maxPlayers,
+              status: room.status,
+              roomName: room.roomName ?? room.name,
+              visibility:
+                room.visibility ??
+                (typeof room.isPublic === "boolean"
+                  ? (room.isPublic ? "public" : "private")
+                  : "public"),
+              gameMode: room.gameMode ?? "팀전",
+              players: (room.players ?? []).map((p: any) => ({
+                id: p.id,
+                nickname: p.nickname ?? p.nick ?? "Player",
+                ready: !!p.ready,
+                team: typeof p.team === "number" ? p.team : 1,
+                color: p.color,
+              }))
             },
           });
         }}
@@ -127,6 +139,24 @@ const Home: React.FC = () => {
 export default Home;
 
 /* ---------------- 스타일 ---------------- */
+
+const PageRoot = styled.div<{ $entered: boolean; $exiting: boolean; $dimmed: boolean }>`
+  position: relative;
+  min-height: 100vh;
+  opacity: ${({ $entered, $exiting }) => ($entered && !$exiting ? 1 : 0)};
+  filter: ${({ $dimmed }) => ($dimmed ? "blur(2px)" : "none")};
+  transition: opacity 260ms ease, filter 160ms ease;
+`;
+
+const PageTransitionOverlay = styled.div<{ $exiting: boolean }>`
+  position: fixed;
+  inset: 0;
+  background: #000000;
+  z-index: 9999;
+  opacity: ${({ $exiting }) => ($exiting ? 1 : 0)};
+  transition: opacity 260ms ease;
+  pointer-events: ${({ $exiting }) => ($exiting ? "auto" : "none")};
+`;
 
 const Background = styled.main`
   position: relative;

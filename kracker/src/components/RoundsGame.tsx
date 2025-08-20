@@ -2,6 +2,11 @@ import React, { useEffect, useRef, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import styled from "styled-components";
 import GameManager from "../game/GameManager";
+import RoundResultModal from "./modals/RoundResultModal";
+import FinalResultModal from "./modals/FinalResultModal";
+import type { PlayerRoundResult } from "./panels/RoundResultPanel";
+import AugmentSelectModal from "./modals/AugmentSelectModal";
+import { socket } from "../lib/socket";
 
 // ★ 게임 상태 타입 정의
 interface GamePlayer {
@@ -326,6 +331,16 @@ const RoundsGame: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [isGameReady, setIsGameReady] = React.useState(false);
   const [gameState, setGameState] = React.useState<GameState | null>(null);
+  // ★ 임시 라운드 결과 모달 상태
+  const [showRoundModal, setShowRoundModal] = React.useState(false);
+  const [roundPlayers, setRoundPlayers] = React.useState<PlayerRoundResult[]>([]);
+  const [showFinalModal, setShowFinalModal] = React.useState(false);
+  // ★ 현재 라운드 번호 상태
+  const [currentRound, setCurrentRound] = React.useState<number | undefined>(undefined);
+
+  // ★ 증강 선택 모달 상태
+  const [isAugmentSelectModalOpen, setIsAugmentSelectModalOpen] = React.useState(false);
+  const [isFinalResultModalOpen, setIsFinalResultModalOpen] = React.useState(false);
 
   // ★ 게임 상태 로드
   useEffect(() => {
@@ -525,6 +540,46 @@ const RoundsGame: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [handleBackToLobby]);
 
+  // 서버 지시에 따른 라운드 결과/증강 선택 동기화 수신
+  useEffect(() => {
+    const onRoundResult = (data: { players: PlayerRoundResult[]; round: number }) => {
+      setRoundPlayers(data.players);
+      setShowRoundModal(true);
+      // 현재 라운드 번호 저장
+      setCurrentRound(data.round);
+    };
+
+    const onRoundAugment = (data: {
+      players: Array<{ id: string; nickname: string; color: string }>;
+      round: number;
+    }) => {
+      // 결과 모달 닫고 증강 선택 모달 열기
+      setShowRoundModal(false);
+      setIsAugmentSelectModalOpen(true);
+      setCurrentRound(data.round);
+    };
+
+    const onAugmentComplete = (data: { round: number; selections: Record<string, string> }) => {
+      console.log(`🎯 라운드 ${data.round} 증강 선택 완료:`, data.selections);
+      // 증강 선택 완료 후 처리 (예: 다음 라운드 시작)
+      setIsAugmentSelectModalOpen(false);
+    };
+
+    socket.on("round:result", onRoundResult);
+    socket.on("round:augment", onRoundAugment);
+    socket.on("augment:complete", onAugmentComplete);
+
+    return () => {
+      socket.off("round:result", onRoundResult);
+      socket.off("round:augment", onRoundAugment);
+      socket.off("augment:complete", onAugmentComplete);
+    };
+  }, []);
+
+  const handleOpenFinalResult = () => {
+    setShowFinalModal(true);
+  };
+
   return (
     <Container>
       <GameCanvas ref={gameRef} />
@@ -605,8 +660,115 @@ const RoundsGame: React.FC = () => {
           </button>
         </ErrorMessage>
       )}
+
+      {/* ★ 임시: 라운드 결과 보기 버튼 */}
+      {/* 테스트 버튼 제거: 서버 이벤트로 전환 */}
+      {gameState && isGameReady && (
+        <FloatingTestBtn style={{ bottom: 64 }} onClick={handleOpenFinalResult}>
+          최종 결과 보기
+        </FloatingTestBtn>
+      )}
+
+      {/* ★ 임시: 라운드 종료 테스트 버튼 */}
+      {gameState && isGameReady && (
+        <button
+          onClick={() => {
+            // 테스트용 라운드 종료 데이터
+            const testPlayers = gameState.players.map((p, index) => ({
+              id: p.id,
+              nickname: p.name,
+              color: p.color || "#FF0000",
+              wins: Math.floor(Math.random() * 3) + 1, // 랜덤 승리 스택 (1-3)
+            }));
+            
+            // NetworkManager를 통해 라운드 종료 전송
+            if (gameManagerRef.current) {
+              const networkManager = (gameManagerRef.current as any).networkManager;
+              if (networkManager && typeof networkManager.sendRoundEnd === 'function') {
+                networkManager.sendRoundEnd(testPlayers);
+              } else {
+                console.warn("NetworkManager를 찾을 수 없거나 sendRoundEnd 함수가 없습니다.");
+              }
+            }
+          }}
+          style={{
+            position: "fixed",
+            bottom: "120px",
+            right: "20px",
+            zIndex: 1000,
+            padding: "10px 20px",
+            backgroundColor: "#4CAF50", // 초록색
+            color: "white",
+            border: "none",
+            borderRadius: "5px",
+            cursor: "pointer",
+          }}
+        >
+          라운드 종료 테스트
+        </button>
+      )}
+
+      {/* ★ 증강 선택 화면 테스트 버튼 - 제거 */}
+      {/* <button
+        onClick={() => setIsAugmentSelectModalOpen(true)}
+        style={{
+          position: "fixed",
+          bottom: "160px", // 최종 결과 보기 버튼 위에 배치
+          right: "20px",
+          zIndex: 1000,
+          padding: "10px 20px",
+          backgroundColor: "#FF6B6B", // 빨간색
+          color: "white",
+          border: "none",
+          borderRadius: "5px",
+          cursor: "pointer",
+        }}
+      >
+        증강 선택 화면
+      </button> */}
+
+      {/* ★ 최종 결과 모달 */}
+      <RoundResultModal
+        isOpen={showRoundModal}
+        players={roundPlayers}
+        onClose={() => setShowRoundModal(false)}
+      />
+
+      {/* ★ 증강 선택 모달 */}
+      <AugmentSelectModal
+        isOpen={isAugmentSelectModalOpen}
+        players={roundPlayers.map(p => ({ id: p.id, nickname: p.nickname, color: p.color }))}
+        currentRound={currentRound}
+        myPlayerId={gameState?.myPlayerId}
+        onClose={() => setIsAugmentSelectModalOpen(false)}
+      />
+
+      {/* ★ 최종 결과 모달 */}
+      <FinalResultModal
+        isOpen={isFinalResultModalOpen}
+        result="WIN"
+        onClose={() => setIsFinalResultModalOpen(false)}
+      />
     </Container>
   );
 };
 
 export default RoundsGame;
+
+// ★ 임시 테스트용 플로팅 버튼 스타일
+const FloatingTestBtn = styled.button`
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1100;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s ease;
+  &:hover { background: rgba(255, 255, 255, 0.25); }
+`;

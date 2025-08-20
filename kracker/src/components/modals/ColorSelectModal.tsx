@@ -48,6 +48,13 @@ const ColorSelectModal: React.FC<ColorSelectModalProps> = ({
     [player, palette]
   );
   const [picked, setPicked] = useState<string>(safePlayer.color);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setIsAnimating(true);
+    }
+  }, [open]);
 
   // ===== 마우스 추적 & 하이라이트(동일 방향) 이동 =====
   const faceRef = useRef<HTMLDivElement>(null);
@@ -143,17 +150,30 @@ const ColorSelectModal: React.FC<ColorSelectModalProps> = ({
     }
   }, [blockedSet, picked, selfColorLower, firstAvailable]);
 
-  if (!open || !player) return null;
-
   const handleConfirm = () => {
     const l = picked.toLowerCase();
     const finalColor = (blockedSet.has(l) && l !== selfColorLower) ? firstAvailable : picked;
     onConfirm({ ...safePlayer, color: finalColor });
-    onClose();
+    
+    // 사라질 때 트랜지션 적용
+    setIsAnimating(false);
+    setTimeout(() => {
+      onClose();
+    }, 300);
   };
 
+  if (!open || !player) return null;
+
   return (
-    <Overlay role="dialog" aria-modal="true" onMouseMove={(e) => setMouse({ x: e.clientX, y: e.clientY })}>
+    <Overlay 
+      role="dialog" 
+      aria-modal="true" 
+      onMouseMove={(e) => setMouse({ x: e.clientX, y: e.clientY })}
+      style={{
+        transform: isAnimating ? "translateY(0)" : "translateY(-100%)",
+        transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+      }}
+    >
       <TopBar>
         <TextBackButton onClick={handleConfirm} aria-label="나가기(확정)">
           나가기
