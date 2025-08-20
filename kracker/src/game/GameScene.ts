@@ -1,5 +1,5 @@
 // src/game/GameScene.ts - NetworkManager 통합된 멀티플레이어 GameScene
-import { Platform, Bullet, CHARACTER_PRESETS } from "./config";
+import { Platform, Bullet, CHARACTER_PRESETS } from "./Config";
 import Player from "./player/Player";
 import MapRenderer from "./MapRenderer";
 import { MapLoader } from "./maps/MapLoader";
@@ -514,6 +514,11 @@ export default class GameScene extends Phaser.Scene {
     const myId = this.myPlayerId;
     if (!myId) return;
 
+    // 디버깅: 총알 개수와 상태 로그
+    if (bullets.length > 0) {
+      console.log(`🔍 총알 감지 중: ${bullets.length}개, 내 ID: ${myId}`);
+    }
+
     // 내 원형 히트박스
     const myCircleBounds = this.player.getCircleBounds(); // 원형 히트박스 사용
 
@@ -536,16 +541,26 @@ export default class GameScene extends Phaser.Scene {
       const by = b.y ?? b.position?.y ?? b.body?.y;
       if (bx == null || by == null) continue;
 
+      // 디버깅: 총알 정보 로그
+      console.log(
+        `🔍 총알 체크: ID=${b.id}, 소유자=${b.ownerId}, 위치=(${bx.toFixed(
+          1
+        )}, ${by.toFixed(1)})`
+      );
+
       let hitDetected = false;
 
       // 원격 총알이 나를 맞춘 경우
       if (b.ownerId && b.ownerId !== myId) {
+        console.log(`🎯 원격 총알 체크: ${b.ownerId} -> ${myId}`);
         if (pointInCircle(bx, by, myCircleBounds)) {
           hitDetected = true;
           b._hitProcessed = true;
 
           const damage = this.shootingManager?.getDamage() ?? 25;
-          console.log(`🎯 내가 맞음! 데미지: ${damage}, 총알 소유자: ${b.ownerId}`);
+          console.log(
+            `🎯 내가 맞음! 데미지: ${damage}, 총알 소유자: ${b.ownerId}`
+          );
 
           // 서버에 타격 전송 (로컬 데미지 처리 제거)
           this.networkManager?.sendBulletHit({
@@ -564,18 +579,58 @@ export default class GameScene extends Phaser.Scene {
       // 내 총알이 원격 플레이어를 맞춘 경우
       if (!hitDetected && b.ownerId === myId) {
         const playerIds = Array.from(this.remotePlayers.keys());
+        console.log(`🎯 내 총알 체크: ${playerIds.length}명의 원격 플레이어`);
+
         for (let i = 0; i < playerIds.length; i++) {
           const pid = playerIds[i];
           const remote = this.remotePlayers.get(pid);
           const body = remote?.gfxRefs?.body;
-          if (!body) continue;
+          if (!body) {
+            console.log(`⚠️ 원격 플레이어 ${pid}의 body가 없음`);
+            continue;
+          }
 
-          // 원형 히트박스 사용
-          const circleBounds = {
+          // 원형 히트박스 사용 - 보간된 실제 위치 사용
+          const actualPosition = remote.lastPosition || {
             x: body.x,
             y: body.y,
+          };
+          const circleBounds = {
+            x: actualPosition.x,
+            y: actualPosition.y,
             radius: 18, // 18px 반지름으로 통일
           };
+
+          console.log(
+            `🎯 원격 플레이어 ${pid} 체크: 위치=(${actualPosition.x.toFixed(
+              1
+            )}, ${actualPosition.y.toFixed(1)})`
+          );
+
+          // 거리 계산 디버깅
+          const distanceX = bx - circleBounds.x;
+          const distanceY = by - circleBounds.y;
+          const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+          const radiusSquared = circleBounds.radius * circleBounds.radius;
+
+          console.log(
+            `🎯 거리 계산: 총알(${bx.toFixed(1)}, ${by.toFixed(
+              1
+            )}) -> 플레이어(${circleBounds.x.toFixed(
+              1
+            )}, ${circleBounds.y.toFixed(1)})`
+          );
+          console.log(
+            `🎯 거리: ${Math.sqrt(distanceSquared).toFixed(
+              1
+            )}px, 히트박스 반지름: ${circleBounds.radius}px`
+          );
+          console.log(
+            `🎯 충돌 판정: ${distanceSquared} <= ${radiusSquared} = ${
+              distanceSquared <= radiusSquared
+            }`
+          );
+
           if (pointInCircle(bx, by, circleBounds)) {
             hitDetected = true;
             b._hitProcessed = true;
@@ -772,6 +827,12 @@ export default class GameScene extends Phaser.Scene {
     if (this.player && this.myPlayerId) {
       this.player.setId(this.myPlayerId);
       console.log(`💚 플레이어 ID 설정: ${this.myPlayerId}`);
+    }
+
+    // ⭐ ShootingManager에 플레이어 ID 설정 (총알 소유자 식별용)
+    if (this.shootingManager && this.myPlayerId) {
+      this.shootingManager.setOwnerId(this.myPlayerId);
+      console.log(`🔫 ShootingManager ownerId 설정: ${this.myPlayerId}`);
     }
 
     // UI에 플레이어 정보 표시
@@ -1411,6 +1472,11 @@ export default class GameScene extends Phaser.Scene {
       reloadTime: 1000,
     });
     this.shootingManager.initialize();
+
+    // 플레이어 ID 설정 (총알 소유자 식별용)
+    if (this.myPlayerId) {
+      this.shootingManager.setOwnerId(this.myPlayerId);
+    }
 
     // 사격 시스템 충돌 설정
     this.shootingManager.setupCollisions(this.platformGroup);
@@ -2416,10 +2482,14 @@ export default class GameScene extends Phaser.Scene {
 
     // 원격 플레이어들 정보 추가
     this.remotePlayers.forEach((remotePlayer, playerId) => {
+      const health = remotePlayer.networkState.health;
+      console.log(
+        `🔍 UI용 체력 정보: ${remotePlayer.name} (${playerId}) = ${health}/100`
+      );
       players.push({
         id: playerId,
         name: remotePlayer.name,
-        health: remotePlayer.networkState.health,
+        health: health,
         maxHealth: 100,
         isLocalPlayer: false,
       });
