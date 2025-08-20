@@ -700,71 +700,8 @@ const RoundsGame: React.FC = () => {
         </ErrorMessage>
       )}
 
-      {/* ★ 임시: 라운드 결과 보기 버튼 */}
-      {/* 테스트 버튼 제거: 서버 이벤트로 전환 */}
-      {gameState && isGameReady && (
-        <FloatingTestBtn style={{ bottom: 64 }} onClick={handleOpenFinalResult}>
-          최종 결과 보기
-        </FloatingTestBtn>
-      )}
-
-      {/* ★ 임시: 라운드 종료 테스트 버튼 */}
-      {gameState && isGameReady && (
-        <button
-          onClick={() => {
-            // 테스트용 라운드 종료 데이터
-            const testPlayers = gameState.players.map((p, index) => ({
-              id: p.id,
-              nickname: p.name,
-              color: p.color || "#FF0000",
-              wins: Math.floor(Math.random() * 3) + 1, // 랜덤 승리 스택 (1-3)
-            }));
-            
-            // NetworkManager를 통해 라운드 종료 전송
-            if (gameManagerRef.current) {
-              const networkManager = (gameManagerRef.current as any).networkManager;
-              if (networkManager && typeof networkManager.sendRoundEnd === 'function') {
-                networkManager.sendRoundEnd(testPlayers);
-              } else {
-                console.warn("NetworkManager를 찾을 수 없거나 sendRoundEnd 함수가 없습니다.");
-              }
-            }
-          }}
-          style={{
-            position: "fixed",
-            bottom: "120px",
-            right: "20px",
-            zIndex: 1000,
-            padding: "10px 20px",
-            backgroundColor: "#4CAF50", // 초록색
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          라운드 종료 테스트
-        </button>
-      )}
-
-      {/* ★ 증강 선택 화면 테스트 버튼 - 제거 */}
-      {/* <button
-        onClick={() => setIsAugmentSelectModalOpen(true)}
-        style={{
-          position: "fixed",
-          bottom: "160px", // 최종 결과 보기 버튼 위에 배치
-          right: "20px",
-          zIndex: 1000,
-          padding: "10px 20px",
-          backgroundColor: "#FF6B6B", // 빨간색
-          color: "white",
-          border: "none",
-          borderRadius: "5px",
-          cursor: "pointer",
-        }}
-      >
-        증강 선택 화면
-      </button> */}
+      {/* 테스트 버튼들 제거 */}
+      {/* 모든 임시 테스트 버튼과 플로팅 버튼 제거 */}
 
       {/* ★ 최종 결과 모달 */}
       <RoundResultModal
@@ -793,21 +730,3 @@ const RoundsGame: React.FC = () => {
 };
 
 export default RoundsGame;
-
-// ★ 임시 테스트용 플로팅 버튼 스타일
-const FloatingTestBtn = styled.button`
-  position: absolute;
-  right: 20px;
-  bottom: 20px;
-  z-index: 1100;
-  padding: 10px 16px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  cursor: pointer;
-  font-size: 14px;
-  backdrop-filter: blur(4px);
-  transition: background 0.2s ease;
-  &:hover { background: rgba(255, 255, 255, 0.25); }
-`;

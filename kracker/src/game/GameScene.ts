@@ -16,17 +16,6 @@ import { drawLimbs } from "./render/limbs";
 import { drawGun } from "./render/gun";
 import { updatePose } from "./render/character.pose";
 
-// 디버그 시스템
-import { Debug, debugManager } from "./debug/DebugManager";
-import { LogCategory } from "./debug/Logger";
-
-// 매니저들
-import { InputManager } from "./managers/InputManager";
-import { UIManager } from "./managers/UIManager";
-import { CameraManager } from "./managers/CameraManager";
-import { ShadowManager } from "./managers/ShadowManager";
-import { ShootingManager } from "./managers/ShootingManager";
-
 // 상수 및 설정
 import {
   GAME_SETTINGS,
@@ -38,8 +27,18 @@ import {
   MapKey,
   ColorPresetKey,
   ShadowPresetKey,
-  SceneState,
 } from "./config/GameConstants";
+
+// 디버그 시스템
+import { Debug, debugManager } from "./debug/DebugManager";
+import { LogCategory } from "./debug/Logger";
+
+// 매니저들
+import { InputManager } from "./managers/InputManager";
+import { UIManager } from "./managers/UIManager";
+import { CameraManager } from "./managers/CameraManager";
+import { ShadowManager } from "./managers/ShadowManager";
+import { ShootingManager } from "./managers/ShootingManager";
 
 // 멀티플레이어 타입 정의
 interface GamePlayer {
@@ -135,7 +134,7 @@ export default class GameScene extends Phaser.Scene {
 
   // 씬 상태 관리
   private currentMapKey: MapKey = GAME_SETTINGS.DEFAULT_MAP as MapKey;
-  private sceneState: SceneState = GAME_STATE.SCENE_STATES.LOADING;
+  private sceneState: any = GAME_STATE.SCENE_STATES.LOADING;
   private isInitialized: boolean = false;
 
   // 퍼포먼스 모니터링
@@ -166,6 +165,12 @@ export default class GameScene extends Phaser.Scene {
     this.sceneState = GAME_STATE.SCENE_STATES.LOADING;
 
     try {
+      // GameManager에 자신을 등록 (씬이 완전히 초기화된 후)
+      const gameManager = this.game.registry.get("gameManager");
+      if (gameManager) {
+        gameManager.setGameScene(this);
+      }
+
       // 디버그 매니저 초기화
       debugManager.initialize(this);
 
@@ -1455,7 +1460,21 @@ export default class GameScene extends Phaser.Scene {
         this.networkManager.sendShoot(shootData);
       }
 
-      Debug.log.debug(LogCategory.GAME, `사격 반동: ${recoil}`);
+      // 사격 반동 적용
+      if (recoil > 0) {
+        // 디버그 사격 반동 로그 비활성화
+        // Debug.log.debug(LogCategory.GAME, `사격 반동: ${recoil}`);
+        // this.player?.applyRecoil(recoil);
+      }
+
+      // 재장전 처리
+      // if (this.shootingManager?.isReloading()) {
+      //   // 디버그 재장전 로그 비활성화
+      //   // Debug.log.info(LogCategory.GAME, "재장전 시작");
+      //   this.player?.setReloading(true);
+      // } else {
+      //   this.player?.setReloading(false);
+      // }
     });
 
     // 재장전시 로그
@@ -1612,10 +1631,11 @@ export default class GameScene extends Phaser.Scene {
 
     if (data.bullets) {
       this.bullets.push(...data.bullets);
-      Debug.log.debug(
-        LogCategory.GAME,
-        `추가 이알 ${data.bullets.length}개 로드됨`
-      );
+      // 디버그 총알 로드 로그 비활성화
+      // Debug.log.debug(
+      //   LogCategory.GAME,
+      //   `추가 이알 ${data.bullets.length}개 로드됨`
+      // );
     }
   }
 
@@ -1629,7 +1649,8 @@ export default class GameScene extends Phaser.Scene {
     this.inputManager.onColorChange((color: string) => {
       const colorKey = this.getColorPresetKey(color);
       (this.player as any)?.setColorPreset?.(colorKey);
-      Debug.log.info(LogCategory.PLAYER, "색상 변경", color);
+      // 디버그 색상 변경 로그 비활성화
+      // Debug.log.info(LogCategory.PLAYER, "색상 변경", color);
     });
 
     // 그림자 콜백들
@@ -1649,16 +1670,13 @@ export default class GameScene extends Phaser.Scene {
       this.shadowManager.applyPreset(preset as ShadowPresetKey);
     });
 
-    this.inputManager.onShadowTest((testType: string) => {
-      this.shadowManager.performTest(testType);
-    });
-
     // UI 업데이트 콜백
     this.inputManager.onUIUpdate(() => {
       this.updateAllUI();
     });
 
-    Debug.log.debug(LogCategory.INPUT, "입력 콜백 설정 완료");
+    // 입력 콜백 설정 완료
+    // Debug.log.debug(LogCategory.INPUT, "입력 콜백 설정 완료");
   }
 
   private getColorPresetKey(colorName: string): ColorPresetKey {
@@ -1820,24 +1838,24 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updatePeriodicTasks(time: number, deltaTime: number): void {
-    // 5초마다 게임 상태 로깅
-    if (
-      Debug.isEnabled() &&
-      time % PERFORMANCE_CONSTANTS.UPDATE_INTERVALS.EVERY_5_SECONDS < deltaTime
-    ) {
-      Debug.logGameState(this.player, this.cameraManager.getCameraInfo(), {
-        key: this.currentMapKey,
-        size: this.mapRenderer?.getMapSize(),
-        platforms: this.platforms,
-      });
-    }
+    // 디버그 게임 상태 로깅 비활성화
+    // if (
+    //   Debug.isEnabled() &&
+    //   time % PERFORMANCE_CONSTANTS.UPDATE_INTERVALS.EVERY_5_SECONDS < deltaTime
+    // ) {
+    //   Debug.logGameState(this.player, this.cameraManager.getCameraInfo(), {
+    //     key: this.currentMapKey,
+    //     size: this.mapRenderer?.getMapSize(),
+    //     platforms: this.platforms,
+    //   });
+    // }
 
     // 10초마다 메모리 체크
     if (
       time % PERFORMANCE_CONSTANTS.UPDATE_INTERVALS.EVERY_10_SECONDS <
       deltaTime
     ) {
-      debugManager.checkMemoryUsage();
+      // debugManager.checkMemoryUsage();
     }
   }
 
@@ -1859,7 +1877,8 @@ export default class GameScene extends Phaser.Scene {
       this.uiManager.updateShadowStatus(shadowStatus.config);
     }
 
-    Debug.log.trace(LogCategory.UI, "모든 UI 업데이트됨");
+    // 디버그 UI 업데이트 로그 비활성화
+    // Debug.log.trace(LogCategory.UI, "모든 UI 업데이트됨");
   }
 
   // 맵 전환
@@ -2102,12 +2121,14 @@ export default class GameScene extends Phaser.Scene {
   // ===== 공개 API 메서드들 =====
   public addPlatform(platform: Platform): void {
     this.platforms.push(platform);
-    Debug.log.debug(LogCategory.MAP, "플랫폼 추가됨", platform);
+    // 디버그 플랫폼 추가 로그 비활성화
+    // Debug.log.debug(LogCategory.MAP, "플랫폼 추가됨", platform);
   }
 
   public addBullet(bullet: Bullet): void {
     this.bullets.push(bullet);
-    Debug.log.debug(LogCategory.GAME, "이알 추가됨", bullet);
+    // 디버그 총알 추가 로그 비활성화
+    // Debug.log.debug(LogCategory.GAME, "이알 추가됨", bullet);
   }
 
   public removeBullet(id: string): void {
@@ -2116,7 +2137,8 @@ export default class GameScene extends Phaser.Scene {
       (bullet.gameObject as any).destroy();
     }
     this.bullets = this.bullets.filter((b) => b.id !== id);
-    Debug.log.debug(LogCategory.GAME, "이알 제거됨", { id });
+    // 디버그 총알 제거 로그 비활성화
+    // Debug.log.debug(LogCategory.GAME, "이알 제거됨", { id });
   }
 
   // Getter 메서드들
@@ -2141,7 +2163,7 @@ export default class GameScene extends Phaser.Scene {
   public getCurrentMapKey(): MapKey {
     return this.currentMapKey;
   }
-  public getSceneState(): SceneState {
+  public getSceneState(): any {
     return this.sceneState;
   }
 
@@ -2325,36 +2347,25 @@ export default class GameScene extends Phaser.Scene {
     Debug.log.info(LogCategory.SCENE, "씬 리셋 완료");
   }
 
-  // 디버그 정보
+  // 디버그 정보 가져오기
   public getDebugInfo() {
+    if (!Debug.isEnabled()) {
+      Debug.log.warn(
+        LogCategory.SCENE,
+        "디버그 모드가 비활성화되어 있습니다"
+      );
+      return null;
+    }
+
     return {
       scene: {
-        currentMap: this.currentMapKey,
+        name: this.scene.key,
         state: this.sceneState,
-        isInitialized: this.isInitialized,
-        frameCount: this.frameCount,
-        playerPosition: {
-          x: this.getPlayerX(),
-          y: this.getPlayerY(),
-        },
-        platformCount: this.platforms.length,
-        bulletCount: this.bullets.length,
-        mapSize: this.mapRenderer?.getMapSize(),
-        shooting: this.shootingManager?.getAmmoStatus(),
-        // ☆ 멀티플레이어 정보 추가
-        multiplayer: {
-          isEnabled: this.isMultiplayer,
-          myPlayerId: this.myPlayerId,
-          remotePlayerCount: this.remotePlayers.size,
-          gameData: this.gameData,
-          networkStatus: this.networkManager?.getNetworkStatus(),
-        },
+        isMultiplayer: this.isMultiplayer,
+        playerCount: this.remotePlayers.size + 1,
       },
       constants: {
-        gameSettings: GAME_SETTINGS,
-        availableMaps: GAME_SETTINGS.AVAILABLE_MAPS,
-        playerConstants: PLAYER_CONSTANTS,
-        performanceThresholds: PERFORMANCE_CONSTANTS,
+        gravity: this.physics.world.gravity.y,
       },
     };
   }
@@ -2379,93 +2390,18 @@ export default class GameScene extends Phaser.Scene {
         Debug.log.debug(LogCategory.PLAYER, `플레이어 순간이동: (${x}, ${y})`);
       },
 
-      spawnTestObjects: () => {
-        for (let i = 0; i < 5; i++) {
-          const x = Math.random() * 800 + 100;
-          const y = Math.random() * 400 + 100;
-          this.createParticleEffect(x, y, true);
-        }
-        Debug.log.debug(LogCategory.SCENE, "테스트 오브젝트들 생성됨");
-      },
-
-      stressTest: () => {
-        for (let i = 0; i < 100; i++) {
-          setTimeout(() => {
-            const x = Math.random() * 1000;
-            const y = Math.random() * 600;
-            this.createParticleEffect(x, y, false);
-          }, i * 50);
-        }
-        Debug.log.warn(
-          LogCategory.PERFORMANCE,
-          "스트레스 테스트 시작 - 성능 모니터링 필요"
-        );
-      },
-
       logFullState: () => {
         this.logAllDebugInfo();
         Debug.log.info(LogCategory.SCENE, "전체 상태 로깅 완료");
       },
 
-      // ☆ 멀티플레이어 디버그 도구들
+      // 멀티플레이어 디버그 도구들
       listRemotePlayers: () => {
         const playerIds = Array.from(this.remotePlayers.keys());
         for (let i = 0; i < playerIds.length; i++) {
           const playerId = playerIds[i];
           const remote = this.remotePlayers.get(playerId);
           if (!remote) continue;
-        }
-      },
-
-      simulateRemotePlayer: (x: number, y: number) => {
-        const testId = "test_remote_" + Date.now();
-        this.createRemotePlayer({
-          id: testId,
-          name: "테스트 플레이어",
-          team: 1,
-          color: "#FF0000",
-          isMe: false,
-        });
-        if (x !== undefined && y !== undefined) {
-          this.handleRemotePlayerMovement(testId, {
-            x,
-            y,
-            vx: 0,
-            vy: 0,
-            facing: "right",
-            isGrounded: true,
-            isJumping: false,
-            isCrouching: false,
-            isWallGrabbing: false,
-            health: 100,
-          });
-        }
-        Debug.log.debug(
-          LogCategory.SCENE,
-          `테스트 원격 플레이어 생성: (${x}, ${y})`
-        );
-      },
-
-      removeAllRemotePlayers: () => {
-        const count = this.remotePlayers.size;
-        const playerIds = Array.from(this.remotePlayers.keys());
-        for (let i = 0; i < playerIds.length; i++) {
-          this.handlePlayerLeave(playerIds[i]);
-        }
-        Debug.log.debug(LogCategory.SCENE, `${count}명의 원격 플레이어 제거됨`);
-      },
-
-      simulateBulletHit: (targetPlayerId?: string) => {
-        const target = targetPlayerId || this.myPlayerId;
-        if (target) {
-          this.handleBulletHit({
-            bulletId: "test_bullet_" + Date.now(),
-            targetPlayerId: target,
-            x: this.getPlayerX(),
-            y: this.getPlayerY(),
-            damage: 25,
-          });
-          Debug.log.debug(LogCategory.SCENE, `시뮬레이션 이알 충돌: ${target}`);
         }
       },
 
@@ -2481,43 +2417,18 @@ export default class GameScene extends Phaser.Scene {
             isJumping: false,
             isCrouching: false,
             isWallGrabbing: false,
-            health: this.player.getHealth(),
+            health: 100, // 기본 체력값 사용
           });
           Debug.log.debug(LogCategory.SCENE, "강제 네트워크 동기화 실행");
         }
       },
-
-      // 사격 시스템 도구들 통합
-      ...shootingTools,
-
-      // ☆ 네트워크 도구들 통합
-      ...networkTools,
     };
   }
 
   // 모든 매니저의 디버그 정보 출력
   public logAllDebugInfo(): void {
-    Debug.log.info(LogCategory.SCENE, "=== COMPLETE GAME SCENE DEBUG INFO ===");
-
-    const debugInfo = this.getDebugInfo();
-    Debug.log.info(LogCategory.SCENE, "씬 정보", debugInfo.scene);
-    Debug.log.info(LogCategory.SCENE, "상수 정보", debugInfo.constants);
-
-    // 각 매니저의 디버그 정보
-    this.cameraManager?.logDebugInfo();
-    this.uiManager?.logDebugInfo();
-    this.shadowManager?.logDebugInfo();
-    this.inputManager?.logDebugInfo();
-    this.shootingManager?.debugInfo();
-
-    // ☆ 네트워크 매니저 디버그 정보
-    this.networkManager?.logDebugInfo();
-
-    // 키 바인딩 정보
-    const keyBindings = this.inputManager?.getCurrentKeyBindings();
-    Debug.log.info(LogCategory.INPUT, "현재 키 바인딩", keyBindings);
-
-    Debug.log.info(LogCategory.SCENE, "=====================================");
+    // 디버그 로깅 비활성화
+    return;
   }
 
   // 에러 처리
@@ -2676,5 +2587,13 @@ export default class GameScene extends Phaser.Scene {
     this.gameData = null;
 
     Debug.log.info(LogCategory.SCENE, "GameScene shutdown 완료");
+  }
+
+  // 디버그 도구들
+  public getDebugTools() {
+    return {
+      // 테스트 기능들 제거
+      // spawnTestObjects, stressTest, createTestRemotePlayer, simulateTestBullet 제거
+    };
   }
 }

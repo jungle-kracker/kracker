@@ -5,6 +5,7 @@ import { initializeMaps } from "./maps/MapLoader";
 
 // 🆕 외부 GameScene 사용
 import GameScene from "./GameScene";
+import { NetworkManager } from "./managers/NetworkManager";
 
 // 🆕 디버그 시스템 import
 import { Debug, debugManager } from "./debug/DebugManager";
@@ -14,6 +15,7 @@ export default class GameManager {
   private parentElement: HTMLElement;
   private game: Phaser.Game | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private gameScene: GameScene | null = null;
 
   // 기준 해상도 설정 (게임 월드의 기본 크기)
   private readonly BASE_WIDTH = 1920;
@@ -315,6 +317,17 @@ export default class GameManager {
       Debug.log.performance("Frame Performance", info.delta);
       Debug.log.trace(LogCategory.PERFORMANCE, "Performance info", info);
     }
+  }
+
+  // 🆕 네트워크 매니저 접근
+  public getNetworkManager(): NetworkManager | null {
+    return this.getGameScene()?.getNetworkManager() || null;
+  }
+
+  // 🆕 GameScene 등록
+  public setGameScene(scene: GameScene): void {
+    this.gameScene = scene;
+    Debug.log.info(LogCategory.GAME, "GameScene 등록됨");
   }
 
   // 정리

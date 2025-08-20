@@ -56,19 +56,13 @@ export class DebugManager {
 
   // 키 바인딩 설정
   private setupKeyBindings(): void {
+    // 디버그 키 바인딩 비활성화
+    return;
+    
     if (!this.keyboardInput || !this.scene) return;
 
     const config = debugConfig.get();
     const keyBindings = config.keyBindings;
-
-    // 키 이벤트 리스너 등록
-    this.scene.input.keyboard?.on("keydown", (event: KeyboardEvent) => {
-      this.handleKeyDown(event.key, keyBindings);
-    });
-
-    this.scene.input.keyboard?.on("keyup", (event: KeyboardEvent) => {
-      this.handleKeyUp(event.key);
-    });
 
     logger.debug(
       LogCategory.GAME,

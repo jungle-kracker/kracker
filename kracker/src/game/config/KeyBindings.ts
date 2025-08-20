@@ -149,60 +149,13 @@ export const SHADOW_KEYS: KeyBindingGroup = {
     defaultKey: ",",
   },
 
-  // 테스트
-  testColor: {
-    key: "EIGHT",
-    description: "그림자 색상 테스트",
-    category: "그림자 테스트",
-    defaultKey: "8",
-  },
-  testDepth: {
-    key: "NINE",
-    description: "그림자 깊이 테스트",
-    category: "그림자 테스트",
-    defaultKey: "9",
-  },
-  forceTest: {
-    key: "ZERO",
-    description: "강제 그림자 테스트",
-    category: "그림자 테스트",
-    defaultKey: "0",
-  },
+  // 테스트 키 바인딩 제거
+  // testColor, testDepth, forceTest 제거
+
 } as const;
 
-// ===== 디버그 키 =====
-export const DEBUG_KEYS: KeyBindingGroup = {
-  togglePanel: {
-    key: "F1",
-    description: "디버그 패널 토글",
-    category: "디버그",
-    defaultKey: "F1",
-  },
-  toggleMode: {
-    key: "F2",
-    description: "디버그 모드 토글",
-    category: "디버그",
-    defaultKey: "F2",
-  },
-  cycleLogLevel: {
-    key: "F3",
-    description: "로그 레벨 순환",
-    category: "디버그",
-    defaultKey: "F3",
-  },
-  toggleSlowMotion: {
-    key: "F4",
-    description: "슬로우 모션 토글",
-    category: "디버그",
-    defaultKey: "F4",
-  },
-  takeScreenshot: {
-    key: "F12",
-    description: "스크린샷 찍기",
-    category: "디버그",
-    defaultKey: "F12",
-  },
-} as const;
+// ===== 디버그 키 제거 =====
+// DEBUG_KEYS 전체 제거
 
 // ===== 카메라 조작 키 (추가) =====
 export const CAMERA_KEYS: KeyBindingGroup = {
@@ -268,7 +221,6 @@ export const ALL_KEY_BINDINGS = {
   map: MAP_KEYS,
   color: COLOR_KEYS,
   shadow: SHADOW_KEYS,
-  debug: DEBUG_KEYS,
   camera: CAMERA_KEYS,
   game: GAME_KEYS,
 } as const;
@@ -625,7 +577,6 @@ export type KeyBindingCategory = keyof typeof ALL_KEY_BINDINGS;
 export type MapKeyAction = keyof typeof MAP_KEYS;
 export type ColorKeyAction = keyof typeof COLOR_KEYS;
 export type ShadowKeyAction = keyof typeof SHADOW_KEYS;
-export type DebugKeyAction = keyof typeof DEBUG_KEYS;
 export type CameraKeyAction = keyof typeof CAMERA_KEYS;
 export type GameKeyAction = keyof typeof GAME_KEYS;
 
@@ -634,7 +585,6 @@ export default {
   MAP_KEYS,
   COLOR_KEYS,
   SHADOW_KEYS,
-  DEBUG_KEYS,
   CAMERA_KEYS,
   GAME_KEYS,
   ALL_KEY_BINDINGS,

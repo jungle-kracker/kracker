@@ -58,36 +58,26 @@ export interface DebugSettings {
   };
 }
 
-// 개발 환경 기본 설정
+// 개발 환경 기본 설정 (디버그 비활성화)
 const developmentConfig: DebugSettings = {
-  enabled: true,
+  enabled: false,
 
   logging: {
-    level: LogLevel.DEBUG,
-    enabledCategories: [
-      LogCategory.GAME,
-      LogCategory.SCENE,
-      LogCategory.PLAYER,
-      LogCategory.MAP,
-      LogCategory.SHADOW,
-      LogCategory.INPUT,
-      LogCategory.UI,
-      LogCategory.CAMERA,
-      LogCategory.PERFORMANCE,
-    ],
-    showTimestamp: true,
+    level: LogLevel.ERROR,
+    enabledCategories: [LogCategory.GAME],
+    showTimestamp: false,
     showStackTrace: false,
   },
 
   ui: {
-    showDebugPanel: true,
-    showFPS: true,
-    showPlayerInfo: true,
+    showDebugPanel: false,
+    showFPS: false,
+    showPlayerInfo: false,
     showCameraInfo: false,
-    showMapInfo: true,
-    showPerformanceMetrics: true,
+    showMapInfo: false,
+    showPerformanceMetrics: false,
     position: "top-left",
-    opacity: 0.8,
+    opacity: 0,
   },
 
   game: {
@@ -96,27 +86,27 @@ const developmentConfig: DebugSettings = {
     showShadowBounds: false,
     showCameraBounds: false,
     slowMotion: false,
-    slowMotionFactor: 0.5,
+    slowMotionFactor: 1.0,
   },
 
   performance: {
-    enabled: true,
-    trackFPS: true,
-    trackMemory: true,
-    trackUpdateTime: true,
+    enabled: false,
+    trackFPS: false,
+    trackMemory: false,
+    trackUpdateTime: false,
     warningThresholds: {
-      fps: 45,
-      updateTime: 20,
-      memoryMB: 100,
+      fps: 30,
+      updateTime: 33,
+      memoryMB: 200,
     },
   },
 
   keyBindings: {
-    toggleDebugPanel: "F1",
-    toggleDebugMode: "F2",
-    cycleLogLevel: "F3",
-    toggleSlowMotion: "F4",
-    takeScreenshot: "F12",
+    toggleDebugPanel: "",
+    toggleDebugMode: "",
+    cycleLogLevel: "",
+    toggleSlowMotion: "",
+    takeScreenshot: "",
   },
 };
 

@@ -652,20 +652,16 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
         >
           시작하기
         </ActionButton>
+
+        {/* 로딩 모달 */}
+        <LoadingModal
+          isOpen={loadingModalOpen}
+          currentPlayers={players.length}
+          expectedPlayers={6} // 기본값
+          roomName={room?.roomName || "Unknown Room"}
+        />
       </Wrap>
     </>
-      >
-        시작하기
-      </ActionButton>
-
-      {/* 로딩 모달 */}
-      <LoadingModal
-        isOpen={loadingModalOpen}
-        currentPlayers={players.length}
-        expectedPlayers={6} // 기본값
-        roomName={room?.roomName || "Unknown Room"}
-      />
-    </Wrap>
   );
 };
 
