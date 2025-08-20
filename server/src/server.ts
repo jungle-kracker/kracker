@@ -42,6 +42,7 @@ type Room = {
   augmentSelections: Array<{
     round: number;
     selections: Record<string, string>; // playerId -> augmentId
+    completionScheduled?: boolean; // 🆕 완료 방송 예약 여부
   }>;
   // 🆕 라운드 종료 브로드캐스트 지연 중 여부
   isRoundEnding?: boolean;
@@ -666,6 +667,7 @@ io.on("connection", (socket) => {
         roundSelection = {
           round: payload.round,
           selections: {},
+          completionScheduled: false,
         };
         room.augmentSelections.push(roundSelection);
       }
@@ -677,36 +679,56 @@ io.on("connection", (socket) => {
         `[AUGMENT SELECT] room ${rid}, round ${payload.round}, player ${socket.id} -> ${payload.augmentId}`
       );
 
+      // 진행 상황 브로드캐스트 (실시간 동기화)
+      io.to(rid).emit("augment:progress", {
+        round: payload.round,
+        selections: roundSelection.selections,
+        selectedCount: Object.keys(roundSelection.selections).length,
+        totalPlayers: Object.keys(room.players).length,
+      });
+
       // 모든 플레이어가 선택했는지 확인
       const allPlayersSelected = Object.values(room.players).every(
         (player) => roundSelection!.selections[player.id]
       );
 
-      if (allPlayersSelected) {
+      if (allPlayersSelected && !roundSelection.completionScheduled) {
+        roundSelection.completionScheduled = true;
         console.log(
           `[AUGMENT COMPLETE] room ${rid}, round ${payload.round} - 모든 플레이어 선택 완료`
         );
-        
-        // 모든 플레이어에게 증강 선택 완료 알림
+
+        // 즉시 완료 방송
         io.to(rid).emit("augment:complete", {
           round: payload.round,
           selections: roundSelection.selections,
         });
 
-        // 🆕 다음 라운드를 위해 체력 리셋 (관전자 복귀)
-        const room = rooms.get(rid);
-        if (room) {
-          Object.values(room.players).forEach((p) => (p.health = 100));
-          // 각 플레이어에게 체력 리셋 브로드캐스트
-          Object.values(room.players).forEach((p) => {
-            io.to(rid).emit("game:healthUpdate", {
-              playerId: p.id,
-              health: 100,
-              damage: 0,
-              timestamp: Date.now(),
-            });
+        // 2초 대기하는 동안: 모든 플레이어 체력 100% 회복 및 브로드캐스트,
+        // 증강 선택 상태 초기화
+        Object.values(room.players).forEach((p) => {
+          p.health = 100;
+          io.to(rid).emit("game:healthUpdate", {
+            playerId: p.id,
+            health: 100,
+            damage: 0,
+            timestamp: Date.now(),
           });
-        }
+        });
+
+        // 선택 상태 초기화(서버)
+        roundSelection.selections = {};
+        io.to(rid).emit("augment:progress", {
+          round: payload.round,
+          selections: roundSelection.selections,
+          selectedCount: 0,
+          totalPlayers: Object.keys(room.players).length,
+        });
+
+        // 2초 후 완료 예약 상태 해제
+        setTimeout(() => {
+          roundSelection!.completionScheduled = false;
+        }, 2000);
       }
 
       ack?.({ ok: true, allSelected: allPlayersSelected });
@@ -805,21 +827,36 @@ function endRound(io: Server, room: Room) {
     players: payloadPlayers,
   });
 
+  // 결과 패널 표출 지시
   io.to(room.roomId).emit("round:result", {
     players: payloadPlayers,
     round: room.currentRound,
   });
 
-  setTimeout(() => {
-    io.to(room.roomId).emit("round:augment", {
-      players: Object.values(room.players).map((p) => ({
-        id: p.id,
-        nickname: p.nickname,
-        color: p.color || "#888888",
-      })),
-      round: room.currentRound,
-    });
-  }, 3000);
+  // 최종 승리 조건: 한 명이라도 wins >= 5 (팀전도 플레이어 wins로 판정)
+  const isFinal = Object.values(room.players).some((p) => (p.wins || 0) >= 5);
+
+  if (isFinal) {
+    // 3초 후 최종 결과 방송 (증강 선택으로 가지 않음)
+    setTimeout(() => {
+      io.to(room.roomId).emit("game:final", {
+        round: room.currentRound,
+        players: payloadPlayers,
+      });
+    }, 3000);
+  } else {
+    // 3초 후 증강 선택 화면으로 전환 지시
+    setTimeout(() => {
+      io.to(room.roomId).emit("round:augment", {
+        players: Object.values(room.players).map((p) => ({
+          id: p.id,
+          nickname: p.nickname,
+          color: p.color || "#888888",
+        })),
+        round: room.currentRound,
+      });
+    }, 3000);
+  }
 }
 
 // ──────────────────────────────────────────────────────────────
