@@ -11,24 +11,6 @@ export class DebugRenderer {
     this.scene = scene;
     this.graphics = scene.add.graphics();
     this.graphics.setDepth(1000); // 최상위 레이어에 표시
-
-    this.setupKeyboardInput();
-  }
-
-  private setupKeyboardInput(): void {
-    // 쉼표 키 이벤트 리스너 추가
-    this.scene.input.keyboard?.on("keydown-COMMA", () => {
-      this.toggleDebugMode();
-    });
-  }
-
-  private toggleDebugMode(): void {
-    this.isDebugMode = !this.isDebugMode;
-    console.log(`디버그 모드: ${this.isDebugMode ? "활성화" : "비활성화"}`);
-
-    if (!this.isDebugMode) {
-      this.clearAllDebugObjects();
-    }
   }
 
   public update(): void {

@@ -67,73 +67,23 @@ export class InputManager {
     Debug.log.info(LogCategory.INPUT, "모든 키보드 이벤트 등록 완료");
   }
 
-  // 🆕 모든 키 바인딩 설정
+  // 🆕 모든 키 바인딩 설정 - 게임 필수 기능만 유지
   private setupAllKeyBindings(): void {
-    // 맵 전환 키
-    Object.entries(MAP_KEYS).forEach(([action, binding]) => {
-      this.registerKey(binding.key, async () => {
-        const mapKey =
-          action === "level1"
-            ? "level1"
-            : action === "arena1"
-            ? "arena1"
-            : "sky_temple";
-        await this.handleMapChange(mapKey);
-      });
-    });
+    // 모든 추가 키바인드 제거됨 (게임 필수 기능만 유지)
+    // - WASD: 움직임
+    // - SPACE: 점프
+    // - S: 사격/웅크리기
+    // - SHIFT: 블링크
 
-    // 색상 변경 키
-    Object.entries(COLOR_KEYS).forEach(([action, binding]) => {
-      this.registerKey(binding.key, () => {
-        const colorMap: { [key: string]: string } = {
-          red: "빨간색",
-          orange: "주황색",
-          green: "초록색",
-          blue: "파란색",
-          purple: "보라색",
-          pink: "핑크색",
-          default: "기본",
-        };
-        this.handleColorChange(colorMap[action] || "기본");
-      });
-    });
-
-    // 그림자 키
-    this.setupShadowKeys();
-
-    Debug.log.debug(LogCategory.INPUT, "키 바인딩 설정 완료");
+    Debug.log.debug(
+      LogCategory.INPUT,
+      "키 바인딩 설정 완료 - 게임 필수 기능만 유지"
+    );
   }
 
-  // 🆕 그림자 키 설정
+  // 🆕 그림자 키 설정 - 제거됨
   private setupShadowKeys(): void {
-    const shadowActions = {
-      // 각도 조절
-      angle75: () => this.handleShadowAngleChange(75),
-      angle90: () => this.handleShadowAngleChange(90),
-      angle105: () => this.handleShadowAngleChange(105),
-
-      // 애니메이션 및 토글
-      animate: () => this.handleShadowAnimate(),
-      toggle: () => this.handleShadowToggle(),
-
-      // 프리셋
-      morning: () => this.handleShadowPreset("morning"),
-      noon: () => this.handleShadowPreset("noon"),
-      evening: () => this.handleShadowPreset("evening"),
-      night: () => this.handleShadowPreset("night"),
-
-      // 테스트
-      testColor: () => this.handleShadowTest("color"),
-      testDepth: () => this.handleShadowTest("depth"),
-      forceTest: () => this.handleShadowTest("force"),
-    };
-
-    Object.entries(SHADOW_KEYS).forEach(([action, binding]) => {
-      const handler = (shadowActions as any)[action];
-      if (handler) {
-        this.registerKey(binding.key, handler);
-      }
-    });
+    // 모든 그림자 키 설정 제거됨
   }
 
   // 🆕 키 등록 헬퍼

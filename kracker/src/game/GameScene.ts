@@ -6,7 +6,7 @@ import { MapLoader } from "./maps/MapLoader";
 import { ParticleSystem } from "./particle";
 
 import { NetworkManager } from "./managers/NetworkManager"; // ☆ 네트워크 매니저 추가
-import { DebugRenderer } from "./debug/DebugRenderer"; // ☆ 디버그 렌더러 추가
+// import { DebugRenderer } from "./debug/DebugRenderer"; // ☆ 디버그 렌더러 제거
 
 // ☆ 캐릭터 렌더링 관련 import 추가
 import { createCharacter, destroyCharacter } from "./render/character.core";
@@ -134,7 +134,7 @@ export default class GameScene extends Phaser.Scene {
   private cameraManager!: CameraManager;
   private shadowManager!: ShadowManager;
   private shootingManager!: ShootingManager;
-  private debugRenderer!: DebugRenderer; // ☆ 디버그 렌더러 추가
+  // private debugRenderer!: DebugRenderer; // ☆ 디버그 렌더러 제거
   private collisionSystem!: CollisionSystem;
 
   // 씬 상태 관리
@@ -232,34 +232,43 @@ export default class GameScene extends Phaser.Scene {
       }
 
       // 🧨 폭발 이벤트 수신 → 서버에 범위 타격 보고
-      this.events.on("bullet:explosion", (e: { x: number; y: number; radius: number; damage: number; ownerId?: string }) => {
-        try {
-          if (!this.networkManager) return;
-          const myId = this.myPlayerId;
-          // 내 총알만 보고
-          if (!myId || (e.ownerId && e.ownerId !== myId)) return;
+      this.events.on(
+        "bullet:explosion",
+        (e: {
+          x: number;
+          y: number;
+          radius: number;
+          damage: number;
+          ownerId?: string;
+        }) => {
+          try {
+            if (!this.networkManager) return;
+            const myId = this.myPlayerId;
+            // 내 총알만 보고
+            if (!myId || (e.ownerId && e.ownerId !== myId)) return;
 
-          // 원형 범위에 들어간 원격 플레이어를 찾음
-          const r2 = e.radius * e.radius;
-          const ids = Array.from(this.remotePlayers.keys());
-          for (let i = 0; i < ids.length; i++) {
-            const pid = ids[i];
-            const rp = this.remotePlayers.get(pid);
-            if (!rp || rp.networkState.health <= 0) continue;
-            const dx = (rp.lastPosition?.x || 0) - e.x;
-            const dy = (rp.lastPosition?.y || 0) - e.y;
-            if (dx * dx + dy * dy <= r2) {
-              this.networkManager.sendBulletHit({
-                bulletId: `explosion_${Date.now()}_${i}`,
-                targetPlayerId: pid,
-                damage: e.damage,
-                x: e.x,
-                y: e.y,
-              });
+            // 원형 범위에 들어간 원격 플레이어를 찾음
+            const r2 = e.radius * e.radius;
+            const ids = Array.from(this.remotePlayers.keys());
+            for (let i = 0; i < ids.length; i++) {
+              const pid = ids[i];
+              const rp = this.remotePlayers.get(pid);
+              if (!rp || rp.networkState.health <= 0) continue;
+              const dx = (rp.lastPosition?.x || 0) - e.x;
+              const dy = (rp.lastPosition?.y || 0) - e.y;
+              if (dx * dx + dy * dy <= r2) {
+                this.networkManager.sendBulletHit({
+                  bulletId: `explosion_${Date.now()}_${i}`,
+                  targetPlayerId: pid,
+                  damage: e.damage,
+                  x: e.x,
+                  y: e.y,
+                });
+              }
             }
-          }
-        } catch {}
-      });
+          } catch {}
+        }
+      );
     } catch (error) {
       this.sceneState = GAME_STATE.SCENE_STATES.ERROR;
       this.handleError(error as Error, "씬 생성");
@@ -314,16 +323,26 @@ export default class GameScene extends Phaser.Scene {
         } catch {}
         // 점프/중력 재적용
         try {
-          const eff: any = this.getAugmentAggregatedEffectsForPlayer(this.myPlayerId || "");
+          const eff: any = this.getAugmentAggregatedEffectsForPlayer(
+            this.myPlayerId || ""
+          );
           if (eff && this.player) {
-            (this.player as any).setJumpHeightMultiplier?.(eff.player.jumpHeightMul || 1);
+            (this.player as any).setJumpHeightMultiplier?.(
+              eff.player.jumpHeightMul || 1
+            );
             (this.player as any).setExtraJumps?.(eff.player.extraJumps || 0);
-            (this.player as any).setGravityMultiplier?.(eff.player.gravityMul || 1);
-            (this.player as any).setMoveSpeedMultiplier?.(eff.player.moveSpeedMul || 1);
+            (this.player as any).setGravityMultiplier?.(
+              eff.player.gravityMul || 1
+            );
+            (this.player as any).setMoveSpeedMultiplier?.(
+              eff.player.moveSpeedMul || 1
+            );
             (this.player as any).setBlinkEnabled?.(!!eff.player.blink);
             if ((eff.player.maxHealthDelta || 0) !== 0) {
               try {
-                this.player.setMaxHealth(100 + (eff.player.maxHealthDelta || 0));
+                this.player.setMaxHealth(
+                  100 + (eff.player.maxHealthDelta || 0)
+                );
               } catch {}
             }
           }
@@ -749,12 +768,18 @@ export default class GameScene extends Phaser.Scene {
 
             // 🐌 슬로우 상태이상: 내 증강에 slowOnHitMs/slowMul이 있으면 서버에 상태 이벤트 전송 요청
             try {
-              const eff = this.getAugmentAggregatedEffectsForPlayer(this.myPlayerId!);
+              const eff = this.getAugmentAggregatedEffectsForPlayer(
+                this.myPlayerId!
+              );
               if (eff && eff.bullet.slowOnHitMs > 0) {
                 this.networkManager?.sendGameEvent({
                   type: "status",
                   playerId: pid,
-                  data: { status: "slow", multiplier: eff.bullet.slowMul || 0.7, ms: eff.bullet.slowOnHitMs || 1500 },
+                  data: {
+                    status: "slow",
+                    multiplier: eff.bullet.slowMul || 0.7,
+                    ms: eff.bullet.slowOnHitMs || 1500,
+                  },
                 } as any);
               }
               // ⚡ 스턴 상태이상: stunMs가 있으면 서버에 상태 이벤트 전송 요청
@@ -771,19 +796,28 @@ export default class GameScene extends Phaser.Scene {
                 const impulse = impulseBase * (eff.bullet.knockbackMul || 1);
                 const rp = this.remotePlayers.get(pid);
                 const target = rp?.lastPosition || { x: bx, y: by };
-                const dx = (target.x - bx) || 0.0001;
-                const dy = (target.y - by) || 0.0001;
+                const dx = target.x - bx || 0.0001;
+                const dy = target.y - by || 0.0001;
                 const len = Math.sqrt(dx * dx + dy * dy) || 1;
                 const ux = dx / len;
                 const uy = dy / len;
                 this.networkManager?.sendGameEvent({
                   type: "status",
                   playerId: pid,
-                  data: { status: "knockback", vx: ux * impulse, vy: uy * impulse, ms: 0 },
+                  data: {
+                    status: "knockback",
+                    vx: ux * impulse,
+                    vy: uy * impulse,
+                    ms: 0,
+                  },
                 } as any);
               }
               // 💚 라이프스틸: lifestealOnHit가 있으면 나에게 힐 요청
-              if (eff && (eff.player.lifestealOnHit || 0) > 0 && this.myPlayerId) {
+              if (
+                eff &&
+                (eff.player.lifestealOnHit || 0) > 0 &&
+                this.myPlayerId
+              ) {
                 const healAmount = eff.player.lifestealOnHit;
                 this.networkManager?.sendGameEvent({
                   type: "heal",
@@ -866,7 +900,15 @@ export default class GameScene extends Phaser.Scene {
         stunMs: 0,
         knockbackMul: 1,
       },
-      player: { jumpHeightMul: 1, extraJumps: 0, gravityMul: 1, moveSpeedMul: 1, maxHealthDelta: 0, lifestealOnHit: 0, blink: false },
+      player: {
+        jumpHeightMul: 1,
+        extraJumps: 0,
+        gravityMul: 1,
+        moveSpeedMul: 1,
+        maxHealthDelta: 0,
+        lifestealOnHit: 0,
+        blink: false,
+      },
     };
 
     const keys = Object.keys(aug);
@@ -876,32 +918,69 @@ export default class GameScene extends Phaser.Scene {
       if (!def || !def.effects) continue;
       const e = def.effects;
       if (e.weapon) {
-        if (typeof e.weapon.reloadTimeDeltaMs === "number") result.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
-        if (typeof e.weapon.magazineDelta === "number") result.weapon.magazineDelta += e.weapon.magazineDelta;
-        if (typeof e.weapon.fireIntervalAddMs === "number") result.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
+        if (typeof e.weapon.reloadTimeDeltaMs === "number")
+          result.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
+        if (typeof e.weapon.magazineDelta === "number")
+          result.weapon.magazineDelta += e.weapon.magazineDelta;
+        if (typeof e.weapon.fireIntervalAddMs === "number")
+          result.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
       }
       if (e.bullet) {
-        if (typeof e.bullet.speedMul === "number") result.bullet.speedMul *= e.bullet.speedMul;
-        if (typeof e.bullet.damageMul === "number") result.bullet.damageMul *= e.bullet.damageMul;
-        if (typeof e.bullet.damageAdd === "number") result.bullet.damageAdd += e.bullet.damageAdd;
-        if (typeof e.bullet.sizeMul === "number") result.bullet.sizeMul *= e.bullet.sizeMul;
-        if (typeof e.bullet.homingStrength === "number") result.bullet.homingStrength = Math.max(result.bullet.homingStrength, e.bullet.homingStrength);
-        if (typeof e.bullet.bounceCount === "number") result.bullet.bounceCount += e.bullet.bounceCount;
-        if (typeof e.bullet.pierceCount === "number") result.bullet.pierceCount += e.bullet.pierceCount;
-        if (typeof e.bullet.explodeRadius === "number") result.bullet.explodeRadius = Math.max(result.bullet.explodeRadius, e.bullet.explodeRadius);
-        if (typeof e.bullet.slowOnHitMs === "number") result.bullet.slowOnHitMs = Math.max(result.bullet.slowOnHitMs, e.bullet.slowOnHitMs);
-        if (typeof e.bullet.slowMul === "number") result.bullet.slowMul = Math.min(result.bullet.slowMul, e.bullet.slowMul);
-        if (typeof e.bullet.stunMs === "number") result.bullet.stunMs = Math.max(result.bullet.stunMs, e.bullet.stunMs);
-        if (typeof e.bullet.knockbackMul === "number") result.bullet.knockbackMul *= e.bullet.knockbackMul;
+        if (typeof e.bullet.speedMul === "number")
+          result.bullet.speedMul *= e.bullet.speedMul;
+        if (typeof e.bullet.damageMul === "number")
+          result.bullet.damageMul *= e.bullet.damageMul;
+        if (typeof e.bullet.damageAdd === "number")
+          result.bullet.damageAdd += e.bullet.damageAdd;
+        if (typeof e.bullet.sizeMul === "number")
+          result.bullet.sizeMul *= e.bullet.sizeMul;
+        if (typeof e.bullet.homingStrength === "number")
+          result.bullet.homingStrength = Math.max(
+            result.bullet.homingStrength,
+            e.bullet.homingStrength
+          );
+        if (typeof e.bullet.bounceCount === "number")
+          result.bullet.bounceCount += e.bullet.bounceCount;
+        if (typeof e.bullet.pierceCount === "number")
+          result.bullet.pierceCount += e.bullet.pierceCount;
+        if (typeof e.bullet.explodeRadius === "number")
+          result.bullet.explodeRadius = Math.max(
+            result.bullet.explodeRadius,
+            e.bullet.explodeRadius
+          );
+        if (typeof e.bullet.slowOnHitMs === "number")
+          result.bullet.slowOnHitMs = Math.max(
+            result.bullet.slowOnHitMs,
+            e.bullet.slowOnHitMs
+          );
+        if (typeof e.bullet.slowMul === "number")
+          result.bullet.slowMul = Math.min(
+            result.bullet.slowMul,
+            e.bullet.slowMul
+          );
+        if (typeof e.bullet.stunMs === "number")
+          result.bullet.stunMs = Math.max(
+            result.bullet.stunMs,
+            e.bullet.stunMs
+          );
+        if (typeof e.bullet.knockbackMul === "number")
+          result.bullet.knockbackMul *= e.bullet.knockbackMul;
       }
       if (e.player) {
-        if (typeof e.player.jumpHeightMul === "number") result.player.jumpHeightMul *= e.player.jumpHeightMul;
-        if (typeof e.player.extraJumps === "number") result.player.extraJumps += e.player.extraJumps;
-        if (typeof e.player.gravityMul === "number") result.player.gravityMul *= e.player.gravityMul;
-        if (typeof e.player.moveSpeedMul === "number") result.player.moveSpeedMul *= e.player.moveSpeedMul;
-        if (typeof e.player.maxHealthDelta === "number") result.player.maxHealthDelta += e.player.maxHealthDelta;
-        if (typeof e.player.lifestealOnHit === "number") result.player.lifestealOnHit += e.player.lifestealOnHit;
-        if (typeof e.player.blink === "boolean") result.player.blink = result.player.blink || e.player.blink;
+        if (typeof e.player.jumpHeightMul === "number")
+          result.player.jumpHeightMul *= e.player.jumpHeightMul;
+        if (typeof e.player.extraJumps === "number")
+          result.player.extraJumps += e.player.extraJumps;
+        if (typeof e.player.gravityMul === "number")
+          result.player.gravityMul *= e.player.gravityMul;
+        if (typeof e.player.moveSpeedMul === "number")
+          result.player.moveSpeedMul *= e.player.moveSpeedMul;
+        if (typeof e.player.maxHealthDelta === "number")
+          result.player.maxHealthDelta += e.player.maxHealthDelta;
+        if (typeof e.player.lifestealOnHit === "number")
+          result.player.lifestealOnHit += e.player.lifestealOnHit;
+        if (typeof e.player.blink === "boolean")
+          result.player.blink = result.player.blink || e.player.blink;
       }
     }
     return result;
@@ -1974,6 +2053,10 @@ export default class GameScene extends Phaser.Scene {
       },
     });
     this.uiManager.initialize();
+    // 디버그 텍스트 완전 제거를 위해 강제 재생성
+    setTimeout(() => {
+      this.uiManager.forceRecreate();
+    }, 100);
 
     // 그림자 매니저
     this.shadowManager = new ShadowManager(this, this.mapRenderer);
@@ -2007,8 +2090,8 @@ export default class GameScene extends Phaser.Scene {
     this.setupInputCallbacks();
     this.inputManager.initialize();
 
-    // ☆ 디버그 렌더러 초기화
-    this.debugRenderer = new DebugRenderer(this);
+    // ☆ 디버그 렌더러 초기화 - 제거됨
+    // this.debugRenderer = new DebugRenderer(this);
 
     // UI 상태 업데이트
     this.updateAllUI();
@@ -2022,12 +2105,18 @@ export default class GameScene extends Phaser.Scene {
 
     // 증강에 따른 플레이어 점프/중력 보정 적용 (로컬)
     try {
-      const eff: any = this.getAugmentAggregatedEffectsForPlayer(this.myPlayerId || "");
+      const eff: any = this.getAugmentAggregatedEffectsForPlayer(
+        this.myPlayerId || ""
+      );
       if (eff && this.player) {
-        (this.player as any).setJumpHeightMultiplier?.(eff.player.jumpHeightMul || 1);
+        (this.player as any).setJumpHeightMultiplier?.(
+          eff.player.jumpHeightMul || 1
+        );
         (this.player as any).setExtraJumps?.(eff.player.extraJumps || 0);
         (this.player as any).setGravityMultiplier?.(eff.player.gravityMul || 1);
-        (this.player as any).setMoveSpeedMultiplier?.(eff.player.moveSpeedMul || 1);
+        (this.player as any).setMoveSpeedMultiplier?.(
+          eff.player.moveSpeedMul || 1
+        );
         (this.player as any).setBlinkEnabled?.(!!eff.player.blink);
         if ((eff.player.maxHealthDelta || 0) !== 0) {
           try {
@@ -2363,10 +2452,10 @@ export default class GameScene extends Phaser.Scene {
       this.shootingManager.update(); // 총알 업데이트 추가
     }
 
-    // ☆ 디버그 렌더러 업데이트
-    if (this.debugRenderer) {
-      this.debugRenderer.update();
-    }
+    // ☆ 디버그 렌더러 업데이트 - 제거됨
+    // if (this.debugRenderer) {
+    //   this.debugRenderer.update();
+    // }
 
     // 게임 로직 업데이트
     this.updateGameLogic();
@@ -3023,7 +3112,7 @@ export default class GameScene extends Phaser.Scene {
       this.inputManager?.destroy();
       this.shadowManager?.destroy();
       this.uiManager?.destroy();
-      this.debugRenderer?.destroy(); // ☆ 디버그 렌더러 정리
+      // this.debugRenderer?.destroy(); // ☆ 디버그 렌더러 정리 - 제거됨
     } catch (error) {
       // 매니저 정리 중 에러
     }
