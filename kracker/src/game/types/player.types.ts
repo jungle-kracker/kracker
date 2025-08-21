@@ -26,6 +26,7 @@ export interface KeyState {
   jump: boolean;
   shoot: boolean;
   crouch: boolean;
+  blink?: boolean;
 }
 
 // 포인터(마우스) 스냅샷

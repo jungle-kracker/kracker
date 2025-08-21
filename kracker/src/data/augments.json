@@ -1,21 +1,238 @@
 [
-  { "id": "독걸려랑", "name": "독걸려랑", "description": "총알에 독 효과를 추가합니다.", "imageFile": "독걸려랑.svg", "effects": { "weapon": { "magazineDelta": -2, "reloadTimeDeltaMs": 1000 }, "bullet": { "poisonDps": 5, "poisonTicks": 3 } } },
-  { "id": "기생충", "name": "기생충", "description": "상대방의 체력을 빼앗습니다.", "imageFile": "기생충.svg", "effects": { "bullet": { "damageAdd": -10 }, "player": { "lifestealOnHit": 15 } } },
-  { "id": "벌이야!", "name": "벌이야!", "description": "총알 속도 증가 + 위치추적 연출", "imageFile": "벌이야.svg", "effects": { "bullet": { "speedMul": 1.2, "homingStrength": 0.03 } } },
-  { "id": "앗따거", "name": "앗따거", "description": "총알에 경직 효과를 추가합니다.", "imageFile": "앗따거.svg", "effects": { "bullet": { "damageAdd": 5, "speedMul": 0.8, "stunMs": 250 } } },
-  { "id": "끈적여요", "name": "끈적여요", "description": "총알에 느림 효과를 추가합니다.", "imageFile": "끈적여요.svg", "effects": { "bullet": { "speedMul": 0.8, "slowOnHitMs": 1500, "slowMul": 0.7 }, "player": { "maxHealthDelta": 10 } } },
-  { "id": "빨리뽑기", "name": "빨리뽑기", "description": "재장전 시간 감소 + 보유 탄환 +1", "imageFile": "빨리뽑기.svg", "effects": { "weapon": { "reloadTimeDeltaMs": -500, "magazineDelta": 1 } } },
-  { "id": "그날인류는떠올렸다", "name": "그날 인류는 떠올렸다", "description": "총알 크기 증가(+50%), 피해 +10, 속도 -10%", "imageFile": "그날인류는떠올렸다.svg", "effects": { "bullet": { "sizeMul": 1.5, "damageAdd": 10, "speedMul": 0.9 } } },
-  { "id": "준비끝", "name": "준비끝", "description": "준비 후에 쏘기: 발사 속도 감소, 피해 +50%", "imageFile": "준비끝.svg", "effects": { "weapon": { "fireIntervalAddMs": 1000 }, "bullet": { "damageMul": 1.5 } } },
-  { "id": "이건폭탄이여", "name": "이건 폭탄이여", "description": "총알 폭발 + 속도 -10%", "imageFile": "이건폭탄이여.svg", "effects": { "bullet": { "explodeRadius": 80, "speedMul": 0.9 } } },
-  { "id": "안아줘요", "name": "안아줘요", "description": "유도탄 + 보유 탄환 -3", "imageFile": "안아줘요.svg", "effects": { "bullet": { "homingStrength": 0.1 }, "weapon": { "magazineDelta": -3 } } },
-  { "id": "목표를포착했다", "name": "목표를 포착했다", "description": "일자로 쏨: 속도 +50%, 피해 -5", "imageFile": "목표를포착했다.svg", "effects": { "bullet": { "speedMul": 1.5, "damageAdd": -5, "spreadMul": 0 } } },
-  { "id": "팅팅탕탕", "name": "팅팅탕탕", "description": "바운스 + 재장전 시간 감소", "imageFile": "팅팅탕탕.svg", "effects": { "bullet": { "bounceCount": 1 }, "weapon": { "reloadTimeDeltaMs": -2000 } } },
-  { "id": "유령이다", "name": "유령이다", "description": "벽 관통 + 피해 -5", "imageFile": "유령이다.svg", "effects": { "bullet": { "pierceCount": 1, "damageAdd": -5 } } },
-  { "id": "잠깐만", "name": "잠깐만~", "description": "넉백 + 피해 +5", "imageFile": "잠깐만.svg", "effects": { "bullet": { "damageAdd": 5, "knockbackMul": 1.2 } } },
-  { "id": "끼얏호우", "name": "끼얏호우", "description": "점프 높이 -10%, 더블 점프", "imageFile": "끼얏호우.svg", "effects": { "player": { "jumpHeightMul": 0.9, "extraJumps": 1 } } },
-  { "id": "풍선처럼", "name": "풍선처럼", "description": "점프 높이 +20%, 중력 -30%", "imageFile": "풍선처럼.svg", "effects": { "player": { "jumpHeightMul": 1.2, "gravityMul": 0.7 } } },
-  { "id": "도망간다냥", "name": "도망간다냥", "description": "이동속도 +20%", "imageFile": "도망간다냥.svg", "effects": { "player": { "moveSpeedMul": 1.2 } } },
-  { "id": "먼저가요", "name": "먼저가요", "description": "순간이동 + 피해 +5(연출)", "imageFile": "먼저가요.svg", "effects": { "player": { "blink": true }, "bullet": { "damageAdd": 5 } } }
+  {
+    "id": "독걸려랑",
+    "name": "독걸려랑",
+    "description": "총알에 독 효과를 추가합니다. 보유 탄환 개수(탄창) -2 . 재장전 시간 +1초",
+    "imageFile": "독걸려랑.svg",
+    "effects": {
+      "weapon": {
+        "magazineDelta": -2,
+        "reloadTimeDeltaMs": 1000
+      },
+      "bullet": {
+        "poisonDps": 5,
+        "poisonTicks": 3
+      }
+    }
+  },
+  {
+    "id": "기생충",
+    "name": "기생충",
+    "description": "상대방의 체력을 빼앗습니다. 데미지 감소 -10. 피격 시 체력회복 +15",
+    "imageFile": "기생충.svg",
+    "effects": {
+      "bullet": {
+        "damageAdd": -10
+      },
+      "player": {
+        "lifestealOnHit": 15
+      }
+    }
+  },
+  {
+    "id": "벌이야!",
+    "name": "벌이야!",
+    "description": "총알에 독 효과를 추가합니다. +20% 총알 속도 증가. + 위치 추적(유도 탄)",
+    "imageFile": "벌이야.svg",
+    "effects": {
+      "bullet": {
+        "speedMul": 1.2,
+        "homingStrength": 0.5
+      }
+    }
+  },
+  {
+    "id": "앗따거",
+    "name": "앗따거",
+    "description": "총알에 정지 효과를 추가합니다. 정지 효과 +1초. 데미지 증가 +5. 총알 속도 감소 -20%",
+    "imageFile": "앗따거.svg",
+    "effects": {
+      "bullet": {
+        "damageAdd": 5,
+        "speedMul": 0.8,
+        "stunMs": 1000
+      }
+    }
+  },
+  {
+    "id": "끈적여요",
+    "name": "끈적여요",
+    "description": "총알에 느림 효과를 추가합니다. 총알 속도 감소 -20%. 체력증가 +10",
+    "imageFile": "끈적여요.svg",
+    "effects": {
+      "bullet": {
+        "speedMul": 0.8,
+        "slowOnHitMs": 1500,
+        "slowMul": 0.5
+      },
+      "player": {
+        "maxHealthDelta": 10
+      }
+    }
+  },
+  {
+    "id": "빨리뽑기",
+    "name": "빨리뽑기",
+    "description": "재장전 시간 감소합니다. 보유 탄환 개수(탄창) +1. 재장전 시간 -500ms",
+    "imageFile": "빨리뽑기.svg",
+    "effects": {
+      "weapon": {
+        "reloadTimeDeltaMs": -500,
+        "magazineDelta": 1
+      }
+    }
+  },
+  {
+    "id": "그날인류는떠올렸다",
+    "name": "그날 인류는 떠올렸다",
+    "description": "총알 크기 증가(+50%), 데미지 증가 +10, 총알 속도 감소 -10%",
+    "imageFile": "그날인류는떠올렸다.svg",
+    "effects": {
+      "bullet": {
+        "sizeMul": 1.5,
+        "damageAdd": 10,
+        "speedMul": 0.9
+      }
+    }
+  },
+  {
+    "id": "준비끝",
+    "name": "준비끝",
+    "description": "준비 후에 쏘기: 발사 속도 감소 -1초, 데미지 증가 +50%",
+    "imageFile": "준비끝.svg",
+    "effects": {
+      "weapon": {
+        "fireIntervalAddMs": 1000
+      },
+      "bullet": {
+        "damageMul": 1.5
+      }
+    }
+  },
+  {
+    "id": "이건폭탄이여",
+    "name": "이건 폭탄이여",
+    "description": "총알이 폭발합니다. 폭발. 총알 속도 감소 -10%",
+    "imageFile": "이건폭탄이여.svg",
+    "effects": {
+      "bullet": {
+        "explodeRadius": 80,
+        "speedMul": 0.9
+      }
+    }
+  },
+  {
+    "id": "안아줘요",
+    "name": "안아줘요",
+    "description": "유도탄 + 보유 탄환 개수(탄창) -3",
+    "imageFile": "안아줘요.svg",
+    "effects": {
+      "bullet": {
+        "homingStrength": 0.5
+      },
+      "weapon": {
+        "magazineDelta": -3
+      }
+    }
+  },
+  {
+    "id": "목표를포착했다",
+    "name": "목표를 포착했다",
+    "description": "일자로 쏨: 총알 속도 증가 +50%, 데미지 증가 +5",
+    "imageFile": "목표를포착했다.svg",
+    "effects": {
+      "bullet": {
+        "speedMul": 1.5,
+        "damageAdd": 5,
+        "spreadMul": 0
+      }
+    }
+  },
+  {
+    "id": "팅팅탕탕",
+    "name": "팅팅탕탕",
+    "description": "총알에 바운스 추가 + 재장전 시간 감소 -2초",
+    "imageFile": "팅팅탕탕.svg",
+    "effects": {
+      "bullet": {
+        "bounceCount": 1
+      },
+      "weapon": {
+        "reloadTimeDeltaMs": -2000
+      }
+    }
+  },
+  {
+    "id": "유령이다",
+    "name": "유령이다",
+    "description": "벽 관통 + 데미지 감소 -5",
+    "imageFile": "유령이다.svg",
+    "effects": {
+      "bullet": {
+        "pierceCount": 1,
+        "damageAdd": -5
+      }
+    }
+  },
+  {
+    "id": "잠깐만",
+    "name": "잠깐만~",
+    "description": "총알에 넉백, 데미지 증가 +5",
+    "imageFile": "잠깐만.svg",
+    "effects": {
+      "bullet": {
+        "damageAdd": 5,
+        "knockbackMul": 2
+      }
+    }
+  },
+  {
+    "id": "끼얏호우",
+    "name": "끼얏호우",
+    "description": "점프 높이 -10%, 더블 점프 가능",
+    "imageFile": "끼얏호우.svg",
+    "effects": {
+      "player": {
+        "jumpHeightMul": 0.9,
+        "extraJumps": 1
+      }
+    }
+  },
+  {
+    "id": "풍선처럼",
+    "name": "풍선처럼",
+    "description": "점프 높이 +20%, 중력 -30%",
+    "imageFile": "풍선처럼.svg",
+    "effects": {
+      "player": {
+        "jumpHeightMul": 1.2,
+        "gravityMul": 0.7
+      }
+    }
+  },
+  {
+    "id": "도망간다냥",
+    "name": "도망간다냥",
+    "description": "이동속도 +20%",
+    "imageFile": "도망간다냥.svg",
+    "effects": {
+      "player": {
+        "moveSpeedMul": 1.2
+      }
+    }
+  },
+  {
+    "id": "먼저가요",
+    "name": "먼저가요",
+    "description": "순간이동 + 데미지 증가 +5 + (연출)",
+    "imageFile": "먼저가요.svg",
+    "effects": {
+      "player": {
+        "blink": true
+      },
+      "bullet": {
+        "damageAdd": 5
+      }
+    }
+  }
 ]
-

@@ -1,5 +1,11 @@
 // src/game/managers/ShootingManager.ts - 사격 시스템 전담 매니저
 import { ShootingSystem } from "../bullet";
+// 증강 데이터 로드 (JSON)
+// tsconfig에 resolveJsonModule이 켜져 있으므로 직접 import 가능
+// 배열 형태: [{ id, name, description, imageFile, effects }]
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import AUGMENT_DEFS from "../../data/augments.json";
 import { Debug, debugManager } from "../debug/DebugManager";
 import { LogCategory } from "../debug/Logger";
 import Player from "../player/Player";
@@ -71,6 +77,14 @@ export class ShootingManager {
       this.handleRecoil(recoil);
       this.onShotCallback?.(recoil);
     });
+
+    // 증강으로 무기 파라미터 보정 (초기 1회)
+    try {
+      const aug = this.ownerId && this.augmentResolver ? this.augmentResolver(this.ownerId) : undefined;
+      const agg = this.aggregateAugments(aug);
+      // 재장전/탄창/발사간격 보정
+      this.applyWeaponAugments(agg.weapon);
+    } catch {}
 
     // UI 생성
     this.createUI();
@@ -173,9 +187,21 @@ export class ShootingManager {
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
     // ShootingSystem으로 사격 시도
     // 증강 파라미터 계산
-    const aug = this.ownerId && this.getAugmentsFor ? this.getAugmentsFor(this.ownerId) : undefined;
-    let speedMul = 1.0;
-    if (aug?.["벌이야!"]) speedMul *= 1.2; // 카드: +20% 총알 속도 증가
+    const aug = this.ownerId && this.augmentResolver ? this.augmentResolver(this.ownerId) : undefined;
+    const agg = this.aggregateAugments(aug);
+
+    // 총알 기본치 기반 파라미터 구성
+    const baseSpeed = this.config.muzzleVelocity;
+    const baseDamage = this.config.damage;
+    const baseRadius = 6;
+
+    const bulletConfig = {
+      speed: baseSpeed * agg.bullet.speedMul,
+      damage: Math.max(0, Math.round(baseDamage * agg.bullet.damageMul + agg.bullet.damageAdd)),
+      radius: Math.max(2, Math.round(baseRadius * agg.bullet.sizeMul)),
+      homingStrength: agg.bullet.homingStrength,
+      explodeRadius: agg.bullet.explodeRadius,
+    } as const;
 
     const shotFired = this.shootingSystem.tryShoot(
       gunX,
@@ -186,8 +212,10 @@ export class ShootingManager {
         // 커스텀 총알 설정
         color: 0xffffff,
         tailColor: 0xffffff,
-        radius: 10,
-        speed: this.config.muzzleVelocity * speedMul,
+        radius: bulletConfig.radius,
+        speed: bulletConfig.speed,
+        damage: bulletConfig.damage,
+        homingStrength: bulletConfig.homingStrength,
         gravity: { x: 0, y: 500 },
         useWorldGravity: false,
         lifetime: 8000,
@@ -211,18 +239,20 @@ export class ShootingManager {
             if (aug?.["유령이다"]) {
               b.setData && b.setData("__ghost", true);
             }
-            if (aug?.["팅팅탕탕"]) {
-              const cur = (b.getData && b.getData("__bounce")) || 0;
-              b.setData && b.setData("__bounce", cur + 1);
+            // 총알 소유자 정보 주입 (폭발 등 이벤트용)
+            if (b && typeof b.setData === "function") {
+              b.setData("__ownerId", this.ownerId || "local");
             }
-            if (aug?.["안아줘요"]) {
-              // 간이 유도
-              const ref = b.getData ? b.getData("__bulletRef") : null;
-              if (ref && typeof ref.getConfig === "function") {
-                // homingStrength은 BulletConfig에 있음
-                (ref as any).getConfig().homingStrength = 0.05;
-              }
-            }
+            (b as any).__ownerId = this.ownerId || "local";
+
+            // 바운스/관통 카운트 반영
+            const curBounce = (b.getData && b.getData("__bounce")) || 0;
+            const totalBounce = (curBounce || 0) + (agg.bullet.bounceCount || 0);
+            if (totalBounce > 0) b.setData && b.setData("__bounce", totalBounce);
+
+            const curPierce = (b.getData && b.getData("__pierce")) || 0;
+            const totalPierce = (curPierce || 0) + (agg.bullet.pierceCount || 0);
+            if (totalPierce > 0) b.setData && b.setData("__pierce", totalPierce);
           } catch {}
         }
       });
@@ -335,6 +365,113 @@ export class ShootingManager {
       // 재장전 중일 때 총알 원형들을 깜빡이게
       this.blinkAmmoGraphics();
     }
+  }
+
+  // ===== 증강 효과 집계 =====
+  private aggregateAugments(
+    aug?: Record<string, { id: string; startedAt: number }>
+  ): {
+    weapon: { reloadTimeDeltaMs: number; magazineDelta: number; fireIntervalAddMs: number };
+    bullet: {
+      speedMul: number;
+      damageMul: number;
+      damageAdd: number;
+      sizeMul: number;
+      homingStrength: number;
+      bounceCount: number;
+      pierceCount: number;
+      explodeRadius: number;
+      slowOnHitMs: number;
+      slowMul: number;
+      stunMs: number;
+      knockbackMul: number;
+    };
+    player: { jumpHeightMul: number; extraJumps: number; gravityMul: number; moveSpeedMul: number; maxHealthDelta: number; lifestealOnHit: number; blink: boolean };
+  } {
+    const result = {
+      weapon: { reloadTimeDeltaMs: 0, magazineDelta: 0, fireIntervalAddMs: 0 },
+      bullet: {
+        speedMul: 1,
+        damageMul: 1,
+        damageAdd: 0,
+        sizeMul: 1,
+        homingStrength: 0,
+        bounceCount: 0,
+        pierceCount: 0,
+        explodeRadius: 0,
+        slowOnHitMs: 0,
+        slowMul: 1,
+        stunMs: 0,
+        knockbackMul: 1,
+      },
+      player: { jumpHeightMul: 1, extraJumps: 0, gravityMul: 1, moveSpeedMul: 1, maxHealthDelta: 0, lifestealOnHit: 0, blink: false },
+    } as const;
+
+    const mutable: any = JSON.parse(JSON.stringify(result));
+    if (!aug) return mutable;
+
+    const defs: Array<any> = (AUGMENT_DEFS as any) || [];
+    const defById = new Map<string, any>();
+    for (let i = 0; i < defs.length; i++) defById.set(defs[i].id, defs[i]);
+
+    const keys = Object.keys(aug);
+    for (let i = 0; i < keys.length; i++) {
+      const id = keys[i];
+      const def = defById.get(id);
+      if (!def || !def.effects) continue;
+
+      const e = def.effects;
+      if (e.weapon) {
+        if (typeof e.weapon.reloadTimeDeltaMs === "number") mutable.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
+        if (typeof e.weapon.magazineDelta === "number") mutable.weapon.magazineDelta += e.weapon.magazineDelta;
+        if (typeof e.weapon.fireIntervalAddMs === "number") mutable.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
+      }
+
+      if (e.bullet) {
+        if (typeof e.bullet.speedMul === "number") mutable.bullet.speedMul *= e.bullet.speedMul;
+        if (typeof e.bullet.damageMul === "number") mutable.bullet.damageMul *= e.bullet.damageMul;
+        if (typeof e.bullet.damageAdd === "number") mutable.bullet.damageAdd += e.bullet.damageAdd;
+        if (typeof e.bullet.sizeMul === "number") mutable.bullet.sizeMul *= e.bullet.sizeMul;
+        if (typeof e.bullet.homingStrength === "number") mutable.bullet.homingStrength = Math.max(mutable.bullet.homingStrength, e.bullet.homingStrength);
+        if (typeof e.bullet.bounceCount === "number") mutable.bullet.bounceCount += e.bullet.bounceCount;
+        if (typeof e.bullet.pierceCount === "number") mutable.bullet.pierceCount += e.bullet.pierceCount;
+        if (typeof e.bullet.explodeRadius === "number") mutable.bullet.explodeRadius = Math.max(mutable.bullet.explodeRadius, e.bullet.explodeRadius);
+        if (typeof e.bullet.slowOnHitMs === "number") mutable.bullet.slowOnHitMs = Math.max(mutable.bullet.slowOnHitMs, e.bullet.slowOnHitMs);
+        if (typeof e.bullet.slowMul === "number") mutable.bullet.slowMul = Math.min(mutable.bullet.slowMul, e.bullet.slowMul);
+        if (typeof e.bullet.stunMs === "number") mutable.bullet.stunMs = Math.max(mutable.bullet.stunMs, e.bullet.stunMs);
+        if (typeof e.bullet.knockbackMul === "number") mutable.bullet.knockbackMul *= e.bullet.knockbackMul;
+      }
+
+      if (e.player) {
+        if (typeof e.player.jumpHeightMul === "number") mutable.player.jumpHeightMul *= e.player.jumpHeightMul;
+        if (typeof e.player.extraJumps === "number") mutable.player.extraJumps += e.player.extraJumps;
+        if (typeof e.player.gravityMul === "number") mutable.player.gravityMul *= e.player.gravityMul;
+        if (typeof e.player.moveSpeedMul === "number") mutable.player.moveSpeedMul *= e.player.moveSpeedMul;
+        if (typeof e.player.maxHealthDelta === "number") mutable.player.maxHealthDelta += e.player.maxHealthDelta;
+        if (typeof e.player.lifestealOnHit === "number") mutable.player.lifestealOnHit += e.player.lifestealOnHit;
+        if (typeof e.player.blink === "boolean") mutable.player.blink = mutable.player.blink || e.player.blink;
+      }
+    }
+
+    return mutable;
+  }
+
+  // ===== 증강 적용/재적용 API =====
+  public applyWeaponAugments(weaponAgg: { reloadTimeDeltaMs: number; magazineDelta: number; fireIntervalAddMs: number }): void {
+    try {
+      const reload = this.config.reloadTime + (weaponAgg?.reloadTimeDeltaMs || 0);
+      const mag = this.config.magazineSize + (weaponAgg?.magazineDelta || 0);
+      const addInterval = Math.max(0, weaponAgg?.fireIntervalAddMs || 0);
+      this.shootingSystem.setReloadTime(reload);
+      this.shootingSystem.setMagazineSize(mag);
+      this.shootingSystem.setFireIntervalAddMs(addInterval);
+    } catch {}
+  }
+
+  public reapplyWeaponAugments(): void {
+    const aug = this.ownerId && this.augmentResolver ? this.augmentResolver(this.ownerId) : undefined;
+    const agg = this.aggregateAugments(aug);
+    this.applyWeaponAugments(agg.weapon);
   }
 
   /**
@@ -454,15 +591,6 @@ export class ShootingManager {
     this.ownerId = id;
   }
 
-  public setAugmentResolver(
-    resolver: (
-      playerId: string
-    ) => Record<string, { id: string; startedAt: number }> | undefined
-  ) {
-    this.augmentResolver = resolver;
-    this.getAugmentsFor = resolver;
-  }
-
   public getAllBullets(): any[] {
     return this.shootingSystem?.getAllBullets() || [];
   }
@@ -485,6 +613,13 @@ export class ShootingManager {
 
   public getBulletGroup(): Phaser.Physics.Arcade.Group {
     return this.shootingSystem.getBulletGroup();
+  }
+
+  // 증강 조회 콜백을 등록(씬에서 세팅)
+  public setAugmentResolver(
+    fn: (playerId: string) => Record<string, { id: string; startedAt: number }> | undefined
+  ) {
+    this.augmentResolver = fn;
   }
 
   public getShootingSystem(): ShootingSystem {
@@ -556,6 +691,10 @@ export class ShootingManager {
 
     // 총알 발사 (시각적 효과용)
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
+    // 원격 사수의 증강 반영
+    const remoteAug = this.augmentResolver ? this.augmentResolver(shootData.shooterId) : undefined;
+    const rAgg = this.aggregateAugments(remoteAug);
+
     const shotFired = this.shootingSystem.tryShoot(
       shootData.gunX,
       shootData.gunY,
@@ -564,8 +703,11 @@ export class ShootingManager {
       {
         color: shootData.color || 0xff4444, // 빨간색
         tailColor: shootData.color || 0xff4444,
-        radius: 6,
-        speed: this.config.muzzleVelocity * 0.8, // 약간 느리게
+        radius: Math.max(2, Math.round(6 * rAgg.bullet.sizeMul)),
+        speed: this.config.muzzleVelocity * rAgg.bullet.speedMul * 0.8,
+        damage: Math.max(0, Math.round(this.config.damage * rAgg.bullet.damageMul + rAgg.bullet.damageAdd)),
+        homingStrength: rAgg.bullet.homingStrength,
+        explodeRadius: rAgg.bullet.explodeRadius,
         gravity: { x: 0, y: 500 },
         useWorldGravity: false,
         lifetime: 3000, // 짧은 수명
@@ -583,6 +725,19 @@ export class ShootingManager {
           b.ownerId = shootData.shooterId; // 🔹 발사자(원격 플레이어) id
           b._remote = true;
           b._hitProcessed = false;
+          // 시각 효과 및 물리 플래그 반영
+          try {
+            if (remoteAug?.["유령이다"]) {
+              b.setData && b.setData("__ghost", true);
+            }
+            const curB = (b.getData && b.getData("__bounce")) || 0;
+            const totalB = (curB || 0) + (rAgg.bullet.bounceCount || 0);
+            if (totalB > 0) b.setData && b.setData("__bounce", totalB);
+
+            const curP = (b.getData && b.getData("__pierce")) || 0;
+            const totalP = (curP || 0) + (rAgg.bullet.pierceCount || 0);
+            if (totalP > 0) b.setData && b.setData("__pierce", totalP);
+          } catch {}
         }
       });
     }
