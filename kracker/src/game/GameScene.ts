@@ -229,16 +229,8 @@ export default class GameScene extends Phaser.Scene {
   async create(data: any) {
     // 중복 호출 방지
     if (this.isInitialized) {
-      console.log("⚠️ create 메서드가 이미 초기화된 씬에서 중복 호출됨. 무시합니다.");
       return;
     }
-
-    console.log("🎮 GameScene.create() 호출됨", {
-      hasData: !!data,
-      dataKeys: data ? Object.keys(data) : [],
-      isInitialized: this.isInitialized,
-      isMultiplayer: this.isMultiplayer
-    });
 
     this.sceneState = GAME_STATE.SCENE_STATES.LOADING;
 
@@ -295,125 +287,14 @@ export default class GameScene extends Phaser.Scene {
       this.sceneState = GAME_STATE.SCENE_STATES.RUNNING;
       this.isInitialized = true;
 
-      console.log("✅ GameScene 초기화 완료", {
-        sceneState: this.sceneState,
-        isInitialized: this.isInitialized,
-        hasPendingData: !!this.pendingMultiplayerData,
-        isMultiplayer: this.isMultiplayer
-      });
-
       // 대기열에 멀티플레이 초기화 데이터가 있으면 지금 처리
-      if (this.pendingMultiplayerData && !this.isMultiplayer) {
-        console.log("🔄 대기 중인 멀티플레이어 데이터 처리");
+      if (this.pendingMultiplayerData && !this.isMultiplayer && !this.isInitialized) {
         const queued = this.pendingMultiplayerData;
         this.pendingMultiplayerData = null;
         this.initializeMultiplayer(queued);
       }
-
-      // 🧨 폭발 이벤트 수신 → 서버에 범위 타격 보고
-      this.events.on(
-        "bullet:explosion",
-        (e: {
-          x: number;
-          y: number;
-          radius: number;
-          damage: number;
-          ownerId?: string;
-        }) => {
-          try {
-            if (!this.networkManager) return;
-            const myId = this.myPlayerId;
-            // 내 총알만 보고
-            if (!myId || (e.ownerId && e.ownerId !== myId)) return;
-
-            // 원형 범위에 들어간 원격 플레이어와 나 자신을 찾음
-            const r2 = e.radius * e.radius;
-            // 1) 내 플레이어 포함 여부
-            try {
-              const px = this.getPlayerX();
-              const py = this.getPlayerY();
-              const dx0 = px - e.x;
-              const dy0 = py - e.y;
-              if (dx0 * dx0 + dy0 * dy0 <= r2) {
-                this.networkManager.sendBulletHit({
-                  bulletId: `explosion_${Date.now()}_me`,
-                  targetPlayerId: myId,
-                  damage: e.damage,
-                  x: e.x,
-                  y: e.y,
-                });
-              }
-            } catch {}
-
-            // 2) 원격 플레이어들
-            const ids = Array.from(this.remotePlayers.keys());
-            for (let i = 0; i < ids.length; i++) {
-              const pid = ids[i];
-              const rp = this.remotePlayers.get(pid);
-              if (!rp || rp.networkState.health <= 0) continue;
-              const dx = (rp.lastPosition?.x || 0) - e.x;
-              const dy = (rp.lastPosition?.y || 0) - e.y;
-              if (dx * dx + dy * dy <= r2) {
-                this.networkManager.sendBulletHit({
-                  bulletId: `explosion_${Date.now()}_${i}`,
-                  targetPlayerId: pid,
-                  damage: e.damage,
-                  x: e.x,
-                  y: e.y,
-                });
-              }
-            }
-          } catch {}
-        }
-      );
-
-      // 🔫 로컬 쏴용 소리 이벤트 처리
-      this.events.on("shoot:sound", (e: { playerId: string }) => {
-        playShootSound(0.3); // 로컬 플레이어 볼륨
-      });
-
-      // 💥 총알 타격 이벤트 수신 → 서버에 타격 보고
-      this.events.on(
-        "bullet:hitPlayer",
-        (e: {
-          bulletId: string;
-          targetPlayerId: string;
-          damage: number;
-          x: number;
-          y: number;
-          ownerId: string;
-        }) => {
-          try {
-            if (!this.networkManager) return;
-
-            // 내가 맞은 경우에만 서버에 보고
-            if (e.targetPlayerId === this.myPlayerId) {
-              console.log(
-                `💥 총알 타격 이벤트: 내가 맞음 - 데미지 ${e.damage}`
-              );
-
-              // 아파용 소리 재생 - 중복 방지 강화
-              playHitSound();
-
-              this.networkManager.sendBulletHit({
-                bulletId: e.bulletId,
-                targetPlayerId: e.targetPlayerId,
-                damage: e.damage,
-                x: e.x,
-                y: e.y,
-              });
-
-              // 카메라 흔들기만 적용 (체력은 서버에서 처리)
-              this.shakeCamera(150, 0.008);
-            }
-          } catch (error) {
-            console.warn("총알 타격 이벤트 처리 실패:", error);
-          }
-        }
-      );
     } catch (error) {
       this.sceneState = GAME_STATE.SCENE_STATES.ERROR;
-      this.handleError(error as Error, "씬 생성");
     }
   }
 
@@ -1210,22 +1091,18 @@ export default class GameScene extends Phaser.Scene {
 
       case "damage":
         // 데미지 이벤트 처리
-        console.log(`💥 데미지 이벤트: ${event.playerId}`);
         break;
 
       case "heal":
         // 힐 이벤트 처리
-        console.log(`💚 힐 이벤트: ${event.playerId}`);
         break;
 
       case "respawn":
         // 리스폰 이벤트 처리
-        console.log(`ㅊ 리스폰 이벤트: ${event.playerId}`);
         break;
 
       case "powerup":
         // 파워업 이벤트 처리
-        console.log(`⚡ 파워업 이벤트: ${event.playerId}`);
         break;
 
       case "respawnAll":

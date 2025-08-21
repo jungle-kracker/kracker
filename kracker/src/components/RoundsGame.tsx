@@ -397,11 +397,7 @@ const RoundsGame: React.FC = () => {
 
   // 모달 상태 변화 추적 (디버깅용)
   useEffect(() => {
-    console.log("🔍 증강 모달 상태 변화:", {
-      isAugmentSelectModalOpen,
-      isAugmentPhaseActive,
-      timestamp: new Date().toISOString(),
-    });
+    
   }, [isAugmentSelectModalOpen, isAugmentPhaseActive]);
 
   // ★ 게임 상태 로드
@@ -417,19 +413,18 @@ const RoundsGame: React.FC = () => {
           loadedGameState = JSON.parse(saved);
         }
       } catch (e) {
-        console.warn("sessionStorage에서 gameState 로드 실패:", e);
+        
       }
     }
 
     // 3. 게임 상태가 없으면 로비로 리다이렉트
     if (!loadedGameState) {
-      console.warn("게임 상태를 찾을 수 없어 로비로 이동합니다.");
       navigate("/", { replace: true });
       return;
     }
 
     setGameState(loadedGameState);
-    console.log("게임 상태 로드 완료:", loadedGameState);
+    
   }, [location.state, navigate]);
 
   // 게임 초기화 함수
@@ -438,12 +433,10 @@ const RoundsGame: React.FC = () => {
     
     // 이미 게임 매니저가 존재하고 초기화된 경우 중복 실행 방지
     if (gameManagerRef.current) {
-      console.log("⚠️ 게임 매니저가 이미 존재함. 중복 초기화 방지.");
       return;
     }
 
     try {
-      console.log("게임 초기화 시작 - 플레이어 수:", gameState.players.length);
       setIsLoading(true);
       setError(null);
 
@@ -454,31 +447,17 @@ const RoundsGame: React.FC = () => {
       const scene = gameManagerRef.current.getScene();
       const isSceneReady = gameManagerRef.current.isSceneReady();
       
-      console.log("🔍 씬 상태 확인:", {
-        hasScene: !!scene,
-        isSceneReady,
-        hasGameManager: !!gameManagerRef.current,
-        gameStateExists: !!gameState
-      });
       
       if (!scene || !isSceneReady) {
-        console.log("⏳ 씬 로딩 대기 중...");
         
         // 씬 로딩 완료를 기다리는 함수
         const waitForScene = (retryCount = 0) => {
           const retryScene = gameManagerRef.current?.getScene();
           const retryIsReady = gameManagerRef.current?.isSceneReady();
           
-          console.log("🔄 씬 대기 재시도:", {
-            retryCount,
-            hasScene: !!retryScene,
-            isReady: retryIsReady,
-            hasGameState: !!gameState
-          });
           
           if (retryScene && retryIsReady && gameState) {
-            console.log("🔄 씬 준비됨, 멀티플레이어 초기화 실행");
-
+            
             const gameData = {
               players: gameState.players,
               myPlayerId: gameState.myPlayerId,
@@ -489,25 +468,23 @@ const RoundsGame: React.FC = () => {
               spawnPositions: (gameState as any).spawnPositions,
             };
 
-            console.log("🎮 멀티플레이어 데이터 전달:", gameData);
-
+            
             if (
               typeof (retryScene as any).initializeMultiplayer === "function"
             ) {
               (retryScene as any).initializeMultiplayer(gameData);
             } else {
-              console.error("❌ initializeMultiplayer 함수를 찾을 수 없음");
+              
             }
             
             // 씬이 준비된 후에만 로딩 완료
             setIsGameReady(true);
             setIsLoading(false);
-            console.log("✅ 게임 초기화 완료 (씬 대기 후)");
+            
           } else if (retryCount < 50) { // 최대 5초 대기 (50 * 100ms)
             // 아직 씬이 준비되지 않았으면 다시 시도
             setTimeout(() => waitForScene(retryCount + 1), 100);
           } else {
-            console.error("❌ 씬 로딩 시간 초과 (5초)");
             setError("게임 씬 로딩 시간이 초과되었습니다.");
             setIsLoading(false);
           }
@@ -530,25 +507,19 @@ const RoundsGame: React.FC = () => {
           spawnPositions: (gameState as any).spawnPositions,
         };
 
-        console.log("🎮 게임 씬에 플레이어 데이터 전달:", gameData);
-        console.log("🔍 myPlayerId 확인:", {
-          myPlayerId: gameState.myPlayerId,
-          type: typeof gameState.myPlayerId,
-          length: gameState.myPlayerId?.length,
-        });
+        
 
         if (typeof (scene as any).initializeMultiplayer === "function") {
           (scene as any).initializeMultiplayer(gameData);
         } else {
-          console.error("❌ initializeMultiplayer 함수를 찾을 수 없음");
+          
         }
       }
 
       setIsGameReady(true);
       setIsLoading(false);
-      console.log("✅ 게임 초기화 성공 (즉시)");
+      
     } catch (error) {
-      console.error("게임 초기화 실패:", error);
       setError(
         error instanceof Error
           ? error.message
@@ -561,18 +532,15 @@ const RoundsGame: React.FC = () => {
   // 게임 정리 함수
   const cleanupGame = useCallback(() => {
     if (gameManagerRef.current) {
-      console.log("게임 정리 시작");
       gameManagerRef.current.destroy();
       gameManagerRef.current = null;
       setIsGameReady(false);
-      console.log("게임 정리 완료");
     }
   }, []);
 
   // 게임 상태가 로드되면 초기화
   useEffect(() => {
     if (gameState && !gameManagerRef.current) {
-      console.log("🎮 게임 상태 로드됨, 게임 초기화 시작");
       const timer = setTimeout(initializeGame, 100);
       return () => {
         clearTimeout(timer);
@@ -586,7 +554,6 @@ const RoundsGame: React.FC = () => {
   useEffect(() => {
     return () => {
       if (gameManagerRef.current) {
-        console.log("🧹 컴포넌트 언마운트, 게임 정리");
         cleanupGame();
       }
     };
@@ -595,15 +562,11 @@ const RoundsGame: React.FC = () => {
   // 윈도우 포커스 이벤트 처리
   useEffect(() => {
     const handleFocus = () => {
-      if (isGameReady && gameManagerRef.current) {
-        console.log("게임 포커스 복구");
-      }
+      
     };
 
     const handleBlur = () => {
-      if (isGameReady && gameManagerRef.current) {
-        console.log("게임 포커스 잃음");
-      }
+      
     };
 
     window.addEventListener("focus", handleFocus);
@@ -618,11 +581,7 @@ const RoundsGame: React.FC = () => {
   // 페이지 가시성 변화 처리
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        console.log("페이지가 숨겨짐");
-      } else {
-        console.log("페이지가 보임");
-      }
+      
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -679,14 +638,6 @@ const RoundsGame: React.FC = () => {
       players: Array<{ id: string; nickname: string; color: string }>;
       round: number;
     }) => {
-      console.log(`🎯 라운드 증강 이벤트 수신: 라운드 ${data.round}`);
-      console.log("🔍 증강 모달 상태 변경:", {
-        before: { isAugmentSelectModalOpen, isAugmentPhaseActive },
-        action: "OPEN_AUGMENT_MODAL",
-        round: data.round,
-        timestamp: new Date().toISOString(),
-      });
-
       // 결과 모달 닫고 증강 선택 모달 열기
       setShowRoundModal(false);
       setIsAugmentSelectModalOpen(true);
@@ -696,7 +647,6 @@ const RoundsGame: React.FC = () => {
     };
 
     const onFinal = (data: { round: number; players: PlayerRoundResult[] }) => {
-      console.log(`🏁 최종 결과 라운드 ${data.round}`);
       setShowRoundModal(false);
       setIsAugmentSelectModalOpen(false);
       setIsFinalResultModalOpen(true);
@@ -716,48 +666,17 @@ const RoundsGame: React.FC = () => {
         // 완료 직후 서버가 selections를 초기화하며 보내는 0/.. 진행 이벤트는 스킵
         return;
       }
-      console.log(
-        `📡 증강 진행 상황: ${data.selectedCount}/${data.totalPlayers}`,
-        data.selections
-      );
-      console.log("🔍 상세 선택 정보:", {
-        round: data.round,
-        selections: data.selections,
-        progress: `${data.selectedCount}/${data.totalPlayers}`,
-        timestamp: new Date().toISOString(),
-      });
-      setAugmentEvents((prev) =>
-        [{ type: "progress", payload: data, t: Date.now() }, ...prev].slice(
-          0,
-          12
-        )
-      );
+      
     };
 
     const onAugmentComplete = (data: {
       round: number;
       selections: Record<string, string>;
     }) => {
-      console.log(`🎯 라운드 ${data.round} 증강 선택 완료:`, data.selections);
-      console.log("🏁 증강 선택 완료 상세:", {
-        round: data.round,
-        selections: data.selections,
-        playerCount: Object.keys(data.selections).length,
-        timestamp: new Date().toISOString(),
-      });
-
-      // 모달을 안전하게 닫기
-      if (isAugmentSelectModalOpen) {
-        setIsAugmentSelectModalOpen(false);
-      }
+      setIsAugmentSelectModalOpen(false);
       setIsAugmentPhaseActive(false);
       hasCompletedRef.current = true;
-      setAugmentEvents((prev) =>
-        [{ type: "complete", payload: data, t: Date.now() }, ...prev].slice(
-          0,
-          12
-        )
-      );
+      
     };
 
     const onAugmentSnapshot = (data: {
@@ -767,25 +686,7 @@ const RoundsGame: React.FC = () => {
         Record<string, { id: string; startedAt: number }>
       >;
     }) => {
-      console.log(`📸 라운드 ${data.round} 증강 스냅샷 수신:`, data.players);
-      console.log("📊 증강 스냅샷 상세 분석:", {
-        round: data.round,
-        playerCount: Object.keys(data.players).length,
-        playerAugments: Object.entries(data.players).map(
-          ([playerId, augments]) => ({
-            playerId,
-            augmentCount: Object.keys(augments).length,
-            augmentIds: Object.keys(augments),
-            timestamp: new Date().toISOString(),
-          })
-        ),
-      });
-      setAugmentEvents((prev) =>
-        [{ type: "snapshot", payload: data, t: Date.now() }, ...prev].slice(
-          0,
-          12
-        )
-      );
+      
     };
 
     socket.on("round:result", onRoundResult);
@@ -865,7 +766,6 @@ const RoundsGame: React.FC = () => {
             <button
               onClick={() => {
                 if (!testAugmentId) return;
-                console.log(`🎯 증강 테스트 전송: 라운드 ${currentRound ?? 1}`);
                 socket.emit(
                   "augment:select",
                   {
@@ -875,12 +775,9 @@ const RoundsGame: React.FC = () => {
                   },
                   (res: any) => {
                     if (res?.ok) {
-                      console.log("✅ 증강 테스트 전송 성공", {
-                        testAugmentId,
-                        round: currentRound ?? 1,
-                      });
+                      
                     } else {
-                      console.warn("❌ 증강 테스트 전송 실패", res?.error);
+                      
                     }
                   }
                 );
@@ -899,12 +796,9 @@ const RoundsGame: React.FC = () => {
                   },
                   (res: any) => {
                     if (res?.ok) {
-                      console.log("✅ 도망간다냥 증강 테스트 전송 성공");
+                      
                     } else {
-                      console.warn(
-                        "❌ 도망간다냥 증강 테스트 전송 실패",
-                        res?.error
-                      );
+                      
                     }
                   }
                 );
@@ -923,12 +817,9 @@ const RoundsGame: React.FC = () => {
                   },
                   (res: any) => {
                     if (res?.ok) {
-                      console.log("✅ 풍선처럼 증강 테스트 전송 성공");
+                      
                     } else {
-                      console.warn(
-                        "❌ 풍선처럼 증강 테스트 전송 실패",
-                        res?.error
-                      );
+                      
                     }
                   }
                 );
@@ -947,12 +838,9 @@ const RoundsGame: React.FC = () => {
                   },
                   (res: any) => {
                     if (res?.ok) {
-                      console.log("✅ 먼저가요 증강 테스트 전송 성공");
+                      
                     } else {
-                      console.warn(
-                        "❌ 먼저가요 증강 테스트 전송 실패",
-                        res?.error
-                      );
+                      
                     }
                   }
                 );
@@ -966,7 +854,6 @@ const RoundsGame: React.FC = () => {
                   console.warn("❌ 방 ID가 없어서 증강 지우기 실패");
                   return;
                 }
-                console.log("🗑️ 모든 증강 지우기 요청");
                 socket.emit(
                   "augment:clear",
                   {
@@ -974,7 +861,6 @@ const RoundsGame: React.FC = () => {
                   },
                   (res: any) => {
                     if (res?.ok) {
-                      console.log("✅ 모든 증강 지우기 성공");
                       setAugmentEvents((prev) =>
                         [
                           {
@@ -986,7 +872,6 @@ const RoundsGame: React.FC = () => {
                         ].slice(0, 12)
                       );
                     } else {
-                      console.warn("❌ 모든 증강 지우기 실패", res?.error);
                       setAugmentEvents((prev) =>
                         [
                           {
@@ -1115,7 +1000,6 @@ const RoundsGame: React.FC = () => {
         roomId={gameState?.room?.roomId}
         autoCloseWhenAll={false} // 자동 닫기 비활성화
         onClose={() => {
-          console.log("🎯 증강 선택 모달 수동 닫힘");
           setIsAugmentSelectModalOpen(false);
           setIsAugmentPhaseActive(false);
         }}
