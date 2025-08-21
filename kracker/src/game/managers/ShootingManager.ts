@@ -80,7 +80,10 @@ export class ShootingManager {
 
     // 증강으로 무기 파라미터 보정 (초기 1회)
     try {
-      const aug = this.ownerId && this.augmentResolver ? this.augmentResolver(this.ownerId) : undefined;
+      const aug =
+        this.ownerId && this.augmentResolver
+          ? this.augmentResolver(this.ownerId)
+          : undefined;
       const agg = this.aggregateAugments(aug);
       // 재장전/탄창/발사간격 보정
       this.applyWeaponAugments(agg.weapon);
@@ -204,7 +207,10 @@ export class ShootingManager {
 
     const bulletConfig = {
       speed: baseSpeed * agg.bullet.speedMul,
-      damage: Math.max(0, Math.round(baseDamage * agg.bullet.damageMul + agg.bullet.damageAdd)),
+      damage: Math.max(
+        0,
+        Math.round(baseDamage * agg.bullet.damageMul + agg.bullet.damageAdd)
+      ),
       radius: Math.max(2, Math.round(baseRadius * agg.bullet.sizeMul)),
       homingStrength: agg.bullet.homingStrength,
       explodeRadius: agg.bullet.explodeRadius,
@@ -223,7 +229,7 @@ export class ShootingManager {
         speed: bulletConfig.speed,
         damage: bulletConfig.damage,
         homingStrength: bulletConfig.homingStrength,
-        gravity: { x: 0, y: 500 },
+        gravity: { x: 0, y: 3000 },
         useWorldGravity: false,
         lifetime: 8000,
       }
@@ -254,12 +260,16 @@ export class ShootingManager {
 
             // 바운스/관통 카운트 반영
             const curBounce = (b.getData && b.getData("__bounce")) || 0;
-            const totalBounce = (curBounce || 0) + (agg.bullet.bounceCount || 0);
-            if (totalBounce > 0) b.setData && b.setData("__bounce", totalBounce);
+            const totalBounce =
+              (curBounce || 0) + (agg.bullet.bounceCount || 0);
+            if (totalBounce > 0)
+              b.setData && b.setData("__bounce", totalBounce);
 
             const curPierce = (b.getData && b.getData("__pierce")) || 0;
-            const totalPierce = (curPierce || 0) + (agg.bullet.pierceCount || 0);
-            if (totalPierce > 0) b.setData && b.setData("__pierce", totalPierce);
+            const totalPierce =
+              (curPierce || 0) + (agg.bullet.pierceCount || 0);
+            if (totalPierce > 0)
+              b.setData && b.setData("__pierce", totalPierce);
           } catch {}
         }
       });
@@ -378,7 +388,11 @@ export class ShootingManager {
   private aggregateAugments(
     aug?: Record<string, { id: string; startedAt: number }>
   ): {
-    weapon: { reloadTimeDeltaMs: number; magazineDelta: number; fireIntervalAddMs: number };
+    weapon: {
+      reloadTimeDeltaMs: number;
+      magazineDelta: number;
+      fireIntervalAddMs: number;
+    };
     bullet: {
       speedMul: number;
       damageMul: number;
@@ -393,7 +407,15 @@ export class ShootingManager {
       stunMs: number;
       knockbackMul: number;
     };
-    player: { jumpHeightMul: number; extraJumps: number; gravityMul: number; moveSpeedMul: number; maxHealthDelta: number; lifestealOnHit: number; blink: boolean };
+    player: {
+      jumpHeightMul: number;
+      extraJumps: number;
+      gravityMul: number;
+      moveSpeedMul: number;
+      maxHealthDelta: number;
+      lifestealOnHit: number;
+      blink: boolean;
+    };
   } {
     const result = {
       weapon: { reloadTimeDeltaMs: 0, magazineDelta: 0, fireIntervalAddMs: 0 },
@@ -411,7 +433,15 @@ export class ShootingManager {
         stunMs: 0,
         knockbackMul: 1,
       },
-      player: { jumpHeightMul: 1, extraJumps: 0, gravityMul: 1, moveSpeedMul: 1, maxHealthDelta: 0, lifestealOnHit: 0, blink: false },
+      player: {
+        jumpHeightMul: 1,
+        extraJumps: 0,
+        gravityMul: 1,
+        moveSpeedMul: 1,
+        maxHealthDelta: 0,
+        lifestealOnHit: 0,
+        blink: false,
+      },
     } as const;
 
     const mutable: any = JSON.parse(JSON.stringify(result));
@@ -429,34 +459,71 @@ export class ShootingManager {
 
       const e = def.effects;
       if (e.weapon) {
-        if (typeof e.weapon.reloadTimeDeltaMs === "number") mutable.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
-        if (typeof e.weapon.magazineDelta === "number") mutable.weapon.magazineDelta += e.weapon.magazineDelta;
-        if (typeof e.weapon.fireIntervalAddMs === "number") mutable.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
+        if (typeof e.weapon.reloadTimeDeltaMs === "number")
+          mutable.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
+        if (typeof e.weapon.magazineDelta === "number")
+          mutable.weapon.magazineDelta += e.weapon.magazineDelta;
+        if (typeof e.weapon.fireIntervalAddMs === "number")
+          mutable.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
       }
 
       if (e.bullet) {
-        if (typeof e.bullet.speedMul === "number") mutable.bullet.speedMul *= e.bullet.speedMul;
-        if (typeof e.bullet.damageMul === "number") mutable.bullet.damageMul *= e.bullet.damageMul;
-        if (typeof e.bullet.damageAdd === "number") mutable.bullet.damageAdd += e.bullet.damageAdd;
-        if (typeof e.bullet.sizeMul === "number") mutable.bullet.sizeMul *= e.bullet.sizeMul;
-        if (typeof e.bullet.homingStrength === "number") mutable.bullet.homingStrength = Math.max(mutable.bullet.homingStrength, e.bullet.homingStrength);
-        if (typeof e.bullet.bounceCount === "number") mutable.bullet.bounceCount += e.bullet.bounceCount;
-        if (typeof e.bullet.pierceCount === "number") mutable.bullet.pierceCount += e.bullet.pierceCount;
-        if (typeof e.bullet.explodeRadius === "number") mutable.bullet.explodeRadius = Math.max(mutable.bullet.explodeRadius, e.bullet.explodeRadius);
-        if (typeof e.bullet.slowOnHitMs === "number") mutable.bullet.slowOnHitMs = Math.max(mutable.bullet.slowOnHitMs, e.bullet.slowOnHitMs);
-        if (typeof e.bullet.slowMul === "number") mutable.bullet.slowMul = Math.min(mutable.bullet.slowMul, e.bullet.slowMul);
-        if (typeof e.bullet.stunMs === "number") mutable.bullet.stunMs = Math.max(mutable.bullet.stunMs, e.bullet.stunMs);
-        if (typeof e.bullet.knockbackMul === "number") mutable.bullet.knockbackMul *= e.bullet.knockbackMul;
+        if (typeof e.bullet.speedMul === "number")
+          mutable.bullet.speedMul *= e.bullet.speedMul;
+        if (typeof e.bullet.damageMul === "number")
+          mutable.bullet.damageMul *= e.bullet.damageMul;
+        if (typeof e.bullet.damageAdd === "number")
+          mutable.bullet.damageAdd += e.bullet.damageAdd;
+        if (typeof e.bullet.sizeMul === "number")
+          mutable.bullet.sizeMul *= e.bullet.sizeMul;
+        if (typeof e.bullet.homingStrength === "number")
+          mutable.bullet.homingStrength = Math.max(
+            mutable.bullet.homingStrength,
+            e.bullet.homingStrength
+          );
+        if (typeof e.bullet.bounceCount === "number")
+          mutable.bullet.bounceCount += e.bullet.bounceCount;
+        if (typeof e.bullet.pierceCount === "number")
+          mutable.bullet.pierceCount += e.bullet.pierceCount;
+        if (typeof e.bullet.explodeRadius === "number")
+          mutable.bullet.explodeRadius = Math.max(
+            mutable.bullet.explodeRadius,
+            e.bullet.explodeRadius
+          );
+        if (typeof e.bullet.slowOnHitMs === "number")
+          mutable.bullet.slowOnHitMs = Math.max(
+            mutable.bullet.slowOnHitMs,
+            e.bullet.slowOnHitMs
+          );
+        if (typeof e.bullet.slowMul === "number")
+          mutable.bullet.slowMul = Math.min(
+            mutable.bullet.slowMul,
+            e.bullet.slowMul
+          );
+        if (typeof e.bullet.stunMs === "number")
+          mutable.bullet.stunMs = Math.max(
+            mutable.bullet.stunMs,
+            e.bullet.stunMs
+          );
+        if (typeof e.bullet.knockbackMul === "number")
+          mutable.bullet.knockbackMul *= e.bullet.knockbackMul;
       }
 
       if (e.player) {
-        if (typeof e.player.jumpHeightMul === "number") mutable.player.jumpHeightMul *= e.player.jumpHeightMul;
-        if (typeof e.player.extraJumps === "number") mutable.player.extraJumps += e.player.extraJumps;
-        if (typeof e.player.gravityMul === "number") mutable.player.gravityMul *= e.player.gravityMul;
-        if (typeof e.player.moveSpeedMul === "number") mutable.player.moveSpeedMul *= e.player.moveSpeedMul;
-        if (typeof e.player.maxHealthDelta === "number") mutable.player.maxHealthDelta += e.player.maxHealthDelta;
-        if (typeof e.player.lifestealOnHit === "number") mutable.player.lifestealOnHit += e.player.lifestealOnHit;
-        if (typeof e.player.blink === "boolean") mutable.player.blink = mutable.player.blink || e.player.blink;
+        if (typeof e.player.jumpHeightMul === "number")
+          mutable.player.jumpHeightMul *= e.player.jumpHeightMul;
+        if (typeof e.player.extraJumps === "number")
+          mutable.player.extraJumps += e.player.extraJumps;
+        if (typeof e.player.gravityMul === "number")
+          mutable.player.gravityMul *= e.player.gravityMul;
+        if (typeof e.player.moveSpeedMul === "number")
+          mutable.player.moveSpeedMul *= e.player.moveSpeedMul;
+        if (typeof e.player.maxHealthDelta === "number")
+          mutable.player.maxHealthDelta += e.player.maxHealthDelta;
+        if (typeof e.player.lifestealOnHit === "number")
+          mutable.player.lifestealOnHit += e.player.lifestealOnHit;
+        if (typeof e.player.blink === "boolean")
+          mutable.player.blink = mutable.player.blink || e.player.blink;
       }
     }
 
@@ -464,9 +531,14 @@ export class ShootingManager {
   }
 
   // ===== 증강 적용/재적용 API =====
-  public applyWeaponAugments(weaponAgg: { reloadTimeDeltaMs: number; magazineDelta: number; fireIntervalAddMs: number }): void {
+  public applyWeaponAugments(weaponAgg: {
+    reloadTimeDeltaMs: number;
+    magazineDelta: number;
+    fireIntervalAddMs: number;
+  }): void {
     try {
-      const reload = this.config.reloadTime + (weaponAgg?.reloadTimeDeltaMs || 0);
+      const reload =
+        this.config.reloadTime + (weaponAgg?.reloadTimeDeltaMs || 0);
       const mag = this.config.magazineSize + (weaponAgg?.magazineDelta || 0);
       const addInterval = Math.max(0, weaponAgg?.fireIntervalAddMs || 0);
       this.shootingSystem.setReloadTime(reload);
@@ -476,7 +548,10 @@ export class ShootingManager {
   }
 
   public reapplyWeaponAugments(): void {
-    const aug = this.ownerId && this.augmentResolver ? this.augmentResolver(this.ownerId) : undefined;
+    const aug =
+      this.ownerId && this.augmentResolver
+        ? this.augmentResolver(this.ownerId)
+        : undefined;
     const agg = this.aggregateAugments(aug);
     this.applyWeaponAugments(agg.weapon);
   }
@@ -624,7 +699,9 @@ export class ShootingManager {
 
   // 증강 조회 콜백을 등록(씬에서 세팅)
   public setAugmentResolver(
-    fn: (playerId: string) => Record<string, { id: string; startedAt: number }> | undefined
+    fn: (
+      playerId: string
+    ) => Record<string, { id: string; startedAt: number }> | undefined
   ) {
     this.augmentResolver = fn;
   }
@@ -688,27 +765,31 @@ export class ShootingManager {
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
 
     // 원격 사수의 증강 반영
-    const remoteAug = this.augmentResolver ? this.augmentResolver(shootData.shooterId) : undefined;
+    const remoteAug = this.augmentResolver
+      ? this.augmentResolver(shootData.shooterId)
+      : undefined;
     const rAgg = this.aggregateAugments(remoteAug);
-  const shotFired = this.shootingSystem.createRemoteBullet(
-
+    const shotFired = this.shootingSystem.createRemoteBullet(
       shootData.gunX,
       shootData.gunY,
       targetX,
       targetY,
       {
-
         color: 0xffaa00, // 원래 총알과 동일한 색상
         tailColor: 0xffaa00, // 원래 총알과 동일한 색상
 
-        gravity: { x: 0, y: 1500 }, // 원래 중력
+        gravity: { x: 0, y: 3000 }, // 원래 중력
 
         radius: Math.max(2, Math.round(6 * rAgg.bullet.sizeMul)),
         speed: this.config.muzzleVelocity * rAgg.bullet.speedMul * 0.8,
-        damage: Math.max(0, Math.round(this.config.damage * rAgg.bullet.damageMul + rAgg.bullet.damageAdd)),
+        damage: Math.max(
+          0,
+          Math.round(
+            this.config.damage * rAgg.bullet.damageMul + rAgg.bullet.damageAdd
+          )
+        ),
         homingStrength: rAgg.bullet.homingStrength,
         explodeRadius: rAgg.bullet.explodeRadius,
-
 
         useWorldGravity: false,
         lifetime: 8000, // 원래 수명
