@@ -6,6 +6,7 @@ import { ShootingSystem } from "../bullet";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import AUGMENT_DEFS from "../../data/augments.json";
+import { aggregateAugments as centralAggregate } from "../../data/augments";
 import { Debug, debugManager } from "../debug/DebugManager";
 import { LogCategory } from "../debug/Logger";
 import Player from "../player/Player";
@@ -197,20 +198,24 @@ export class ShootingManager {
     // 증강 파라미터 계산
 
     const aug =
-      this.ownerId && this.getAugmentsFor
-        ? this.getAugmentsFor(this.ownerId)
+      this.ownerId && this.augmentResolver
+        ? this.augmentResolver(this.ownerId)
         : undefined;
     let speedMul = 1.0;
     if (aug?.["벌이야!"]) speedMul *= 1.2; // 카드: +20% 총알 속도 증가
 
-    const agg = this.aggregateAugments(aug);
+    const agg = centralAggregate(aug);
+    try { console.log("🛠️ 증강 적용(사격):", { weapon: agg.weapon, bullet: agg.bullet }); } catch {}
 
     // 총알 기본치 기반 파라미터 구성
     const baseSpeed = this.config.muzzleVelocity;
     const baseDamage = this.config.damage;
     const baseRadius = 6;
 
-    // 증강 효과 적용 (서버에서도 동일하게 계산됨)
+    // 총알 색상(증강 기반): 독걸려랑=녹색, 벌이야!=노란색
+    let bulletColor = 0xffaa00;
+    if (aug?.["독걸려랑"]) bulletColor = 0x00ff00;
+    else if (aug?.["벌이야!"]) bulletColor = 0xffff00;
     const bulletConfig = {
       speed: baseSpeed * agg.bullet.speedMul,
       damage: Math.max(
@@ -234,12 +239,13 @@ export class ShootingManager {
       targetY,
       {
         // 커스텀 총알 설정
-        color: 0xffffff,
-        tailColor: 0xffffff,
+        color: bulletColor,
+        tailColor: bulletColor,
         radius: bulletConfig.radius,
         speed: bulletConfig.speed,
         damage: bulletConfig.damage,
         homingStrength: bulletConfig.homingStrength,
+        explodeRadius: bulletConfig.explodeRadius,
         gravity: { x: 0, y: 3000 }, // 서버 기준으로 통일
         useWorldGravity: false,
         lifetime: 8000,
@@ -548,13 +554,25 @@ export class ShootingManager {
     fireIntervalAddMs: number;
   }): void {
     try {
-      const reload =
-        this.config.reloadTime + (weaponAgg?.reloadTimeDeltaMs || 0);
+      const prevReload = this.config.reloadTime;
+      const prevMag = this.config.magazineSize;
+      const reload = this.config.reloadTime + (weaponAgg?.reloadTimeDeltaMs || 0);
       const mag = this.config.magazineSize + (weaponAgg?.magazineDelta || 0);
       const addInterval = Math.max(0, weaponAgg?.fireIntervalAddMs || 0);
       this.shootingSystem.setReloadTime(reload);
       this.shootingSystem.setMagazineSize(mag);
       this.shootingSystem.setFireIntervalAddMs(addInterval);
+      try {
+        if ((weaponAgg?.magazineDelta || 0) !== 0) {
+          console.log(`🧩 증강(탄창): 총 탄창 수량 ${prevMag} -> ${mag} (Δ ${weaponAgg.magazineDelta})`);
+        }
+        if ((weaponAgg?.reloadTimeDeltaMs || 0) !== 0) {
+          console.log(`🧩 증강(재장전): 재장전 시간 ${prevReload}ms -> ${reload}ms (Δ ${weaponAgg.reloadTimeDeltaMs}ms)`);
+        }
+        if ((weaponAgg?.fireIntervalAddMs || 0) !== 0) {
+          console.log(`🧩 증강(발사간격): 추가 간격 +${weaponAgg.fireIntervalAddMs}ms`);
+        }
+      } catch {}
     } catch {}
   }
 
@@ -827,6 +845,8 @@ export class ShootingManager {
           b._hitProcessed = false;
           // 시각 효과 및 물리 플래그 반영
           try {
+            // 소유자 id를 스프라이트 데이터에도 저장(유도 대상 판정용)
+            b.setData && b.setData("__ownerId", shootData.shooterId);
             if (remoteAug?.["유령이다"]) {
               b.setData && b.setData("__ghost", true);
             }

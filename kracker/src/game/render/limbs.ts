@@ -462,19 +462,7 @@ export function drawLimbs(
     landTime = 0, // 기본값: 착지 시간 0
   } = params;
 
-  // 🔍 프레임 호출 빈도 체크
-  frameCount++;
-  const now = Date.now();
-  if (now - lastLogTime > 1000) {
-    // 1초마다
-    console.log(
-      `📊 FPS: ${frameCount} | isGrounded: ${isGrounded} | velocityX: ${velocityX.toFixed(
-        1
-      )}`
-    );
-    frameCount = 0;
-    lastLogTime = now;
-  }
+  // 프레임 로그 제거 (소음 감소)
 
   // 애니메이션 상태 결정
   const facing = determineFacingDirection(mouseX, x, velocityX, currentFacing);

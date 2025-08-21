@@ -20,6 +20,7 @@ export interface AugmentSelectModalProps {
   autoCloseWhenAll?: boolean; // 기본 true
   currentRound?: number; // 현재 라운드 번호
   myPlayerId?: string; // 현재 플레이어의 ID
+  roomId?: string; // 현재 방 ID (서버 전송 보조)
 }
 
 // 증강 데이터 (랜덤으로 3개 카드 선택)
@@ -33,6 +34,7 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
   autoCloseWhenAll = true,
   myPlayerId,
   currentRound,
+  roomId,
 }) => {
   const [chosenBy, setChosenBy] = useState<Record<string, string>>({});
   const [isAnimating, setIsAnimating] = useState(false);
@@ -210,18 +212,17 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
                   onSelect?.(myPlayerId, augment.id);
                   
                   // 서버로 증강 선택 데이터 전송
-                  if (currentRound) {
-                    socket.emit("augment:select", {
-                      augmentId: augment.id,
-                      round: currentRound,
-                    }, (response: any) => {
-                      if (response?.ok) {
-                        console.log(`✅ 증강 선택 전송 성공: ${augment.name}`);
-                      } else {
-                        console.error(`❌ 증강 선택 전송 실패:`, response?.error);
-                      }
-                    });
-                  }
+                  socket.emit("augment:select", {
+                    augmentId: augment.id,
+                    round: currentRound ?? 1,
+                    roomId: roomId,
+                  }, (response: any) => {
+                    if (response?.ok) {
+                      console.log(`✅ 증강 선택 전송 성공: ${augment.name}`);
+                    } else {
+                      console.error(`❌ 증강 선택 전송 실패:`, response?.error);
+                    }
+                  });
                 }
               }}
               onMouseEnter={(e) => {

@@ -2,7 +2,7 @@
   {
     "id": "독걸려랑",
     "name": "독걸려랑",
-    "description": "총알에 독 효과를 추가합니다. 보유 탄환 개수(탄창) -2 . 재장전 시간 +1초",
+    "description": "총알에 독 효과를 추가합니다. 총 탄창 수량 -2, 재장전 시간 +1초",
     "imageFile": "독걸려랑.svg",
     "effects": {
       "weapon": {
@@ -73,7 +73,7 @@
   {
     "id": "빨리뽑기",
     "name": "빨리뽑기",
-    "description": "재장전 시간 감소합니다. 보유 탄환 개수(탄창) +1. 재장전 시간 -500ms",
+    "description": "재장전 시간을 줄입니다. 총 탄창 수량 +1, 재장전 시간 -500ms",
     "imageFile": "빨리뽑기.svg",
     "effects": {
       "weapon": {
@@ -124,11 +124,11 @@
   {
     "id": "안아줘요",
     "name": "안아줘요",
-    "description": "유도탄 + 보유 탄환 개수(탄창) -3",
+    "description": "유도탄 + 총 탄창 수량 -3",
     "imageFile": "안아줘요.svg",
     "effects": {
       "bullet": {
-        "homingStrength": 0.5
+        "homingStrength": 1
       },
       "weapon": {
         "magazineDelta": -3

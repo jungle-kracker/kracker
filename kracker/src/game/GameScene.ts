@@ -41,6 +41,7 @@ import CollisionSystem from "./systems/CollisionSystem";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import AUGMENT_DEFS from "../data/augments.json";
+import { aggregateAugments as centralAggregate, findAugmentNamesWithEffect, getAugmentsForPlayer } from "../data/augments";
 
 // 멀티플레이어 타입 정의
 interface GamePlayer {
@@ -247,8 +248,26 @@ export default class GameScene extends Phaser.Scene {
             // 내 총알만 보고
             if (!myId || (e.ownerId && e.ownerId !== myId)) return;
 
-            // 원형 범위에 들어간 원격 플레이어를 찾음
+            // 원형 범위에 들어간 원격 플레이어와 나 자신을 찾음
             const r2 = e.radius * e.radius;
+            // 1) 내 플레이어 포함 여부
+            try {
+              const px = this.getPlayerX();
+              const py = this.getPlayerY();
+              const dx0 = px - e.x;
+              const dy0 = py - e.y;
+              if (dx0 * dx0 + dy0 * dy0 <= r2) {
+                this.networkManager.sendBulletHit({
+                  bulletId: `explosion_${Date.now()}_me`,
+                  targetPlayerId: myId,
+                  damage: e.damage,
+                  x: e.x,
+                  y: e.y,
+                });
+              }
+            } catch {}
+
+            // 2) 원격 플레이어들
             const ids = Array.from(this.remotePlayers.keys());
             for (let i = 0; i < ids.length; i++) {
               const pid = ids[i];
@@ -787,6 +806,8 @@ export default class GameScene extends Phaser.Scene {
                 this.myPlayerId!
               );
               if (eff && eff.bullet.slowOnHitMs > 0) {
+                const names = findAugmentNamesWithEffect(this.augmentByPlayer.get(this.myPlayerId!) || {}, (d) => !!d.effects?.bullet?.slowOnHitMs);
+                try { console.log(`🧩 증강 함수 발동: 슬로우(${names.join(", ") || "알수없음"}) → ${pid}`); } catch {}
                 this.networkManager?.sendGameEvent({
                   type: "status",
                   playerId: pid,
@@ -799,6 +820,8 @@ export default class GameScene extends Phaser.Scene {
               }
               // ⚡ 스턴 상태이상: stunMs가 있으면 서버에 상태 이벤트 전송 요청
               if (eff && eff.bullet.stunMs > 0) {
+                const names = findAugmentNamesWithEffect(this.augmentByPlayer.get(this.myPlayerId!) || {}, (d) => !!d.effects?.bullet?.stunMs);
+                try { console.log(`🧩 증강 함수 발동: 스턴(${names.join(", ") || "알수없음"}) → ${pid}`); } catch {}
                 this.networkManager?.sendGameEvent({
                   type: "status",
                   playerId: pid,
@@ -807,6 +830,8 @@ export default class GameScene extends Phaser.Scene {
               }
               // 💨 넉백: 증강 knockbackMul이 1보다 크면 방향 임펄스 전송
               if (eff && (eff.bullet.knockbackMul || 1) > 1) {
+                const names = findAugmentNamesWithEffect(this.augmentByPlayer.get(this.myPlayerId!) || {}, (d) => !!d.effects?.bullet?.knockbackMul);
+                try { console.log(`🧩 증강 함수 발동: 넉백(${names.join(", ") || "알수없음"}) → ${pid}`); } catch {}
                 const impulseBase = 400; // 기본 임펄스 크기
                 const impulse = impulseBase * (eff.bullet.knockbackMul || 1);
                 const rp = this.remotePlayers.get(pid);
@@ -834,6 +859,8 @@ export default class GameScene extends Phaser.Scene {
                 this.myPlayerId
               ) {
                 const healAmount = eff.player.lifestealOnHit;
+                const names = findAugmentNamesWithEffect(this.augmentByPlayer.get(this.myPlayerId!) || {}, (d) => !!d.effects?.player?.lifestealOnHit);
+                try { console.log(`🧩 증강 함수 발동: 라이프스틸(${names.join(", ") || "알수없음"}) +${healAmount}`); } catch {}
                 this.networkManager?.sendGameEvent({
                   type: "heal",
                   playerId: this.myPlayerId,
@@ -893,112 +920,9 @@ export default class GameScene extends Phaser.Scene {
 
   // 증강 집계 효과를 조회 (ShootingManager와 동일 규칙)
   private getAugmentAggregatedEffectsForPlayer(playerId: string): any {
-    const aug = this.augmentByPlayer.get(playerId);
-    if (!aug) return null;
-    const defs: any[] = (AUGMENT_DEFS as any) || [];
-    const defById = new Map<string, any>();
-    for (let i = 0; i < defs.length; i++) defById.set(defs[i].id, defs[i]);
-
-    const result: any = {
-      weapon: { reloadTimeDeltaMs: 0, magazineDelta: 0, fireIntervalAddMs: 0 },
-      bullet: {
-        speedMul: 1,
-        damageMul: 1,
-        damageAdd: 0,
-        sizeMul: 1,
-        homingStrength: 0,
-        bounceCount: 0,
-        pierceCount: 0,
-        explodeRadius: 0,
-        slowOnHitMs: 0,
-        slowMul: 1,
-        stunMs: 0,
-        knockbackMul: 1,
-      },
-      player: {
-        jumpHeightMul: 1,
-        extraJumps: 0,
-        gravityMul: 1,
-        moveSpeedMul: 1,
-        maxHealthDelta: 0,
-        lifestealOnHit: 0,
-        blink: false,
-      },
-    };
-
-    const keys = Object.keys(aug);
-    for (let i = 0; i < keys.length; i++) {
-      const id = keys[i];
-      const def = defById.get(id);
-      if (!def || !def.effects) continue;
-      const e = def.effects;
-      if (e.weapon) {
-        if (typeof e.weapon.reloadTimeDeltaMs === "number")
-          result.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
-        if (typeof e.weapon.magazineDelta === "number")
-          result.weapon.magazineDelta += e.weapon.magazineDelta;
-        if (typeof e.weapon.fireIntervalAddMs === "number")
-          result.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
-      }
-      if (e.bullet) {
-        if (typeof e.bullet.speedMul === "number")
-          result.bullet.speedMul *= e.bullet.speedMul;
-        if (typeof e.bullet.damageMul === "number")
-          result.bullet.damageMul *= e.bullet.damageMul;
-        if (typeof e.bullet.damageAdd === "number")
-          result.bullet.damageAdd += e.bullet.damageAdd;
-        if (typeof e.bullet.sizeMul === "number")
-          result.bullet.sizeMul *= e.bullet.sizeMul;
-        if (typeof e.bullet.homingStrength === "number")
-          result.bullet.homingStrength = Math.max(
-            result.bullet.homingStrength,
-            e.bullet.homingStrength
-          );
-        if (typeof e.bullet.bounceCount === "number")
-          result.bullet.bounceCount += e.bullet.bounceCount;
-        if (typeof e.bullet.pierceCount === "number")
-          result.bullet.pierceCount += e.bullet.pierceCount;
-        if (typeof e.bullet.explodeRadius === "number")
-          result.bullet.explodeRadius = Math.max(
-            result.bullet.explodeRadius,
-            e.bullet.explodeRadius
-          );
-        if (typeof e.bullet.slowOnHitMs === "number")
-          result.bullet.slowOnHitMs = Math.max(
-            result.bullet.slowOnHitMs,
-            e.bullet.slowOnHitMs
-          );
-        if (typeof e.bullet.slowMul === "number")
-          result.bullet.slowMul = Math.min(
-            result.bullet.slowMul,
-            e.bullet.slowMul
-          );
-        if (typeof e.bullet.stunMs === "number")
-          result.bullet.stunMs = Math.max(
-            result.bullet.stunMs,
-            e.bullet.stunMs
-          );
-        if (typeof e.bullet.knockbackMul === "number")
-          result.bullet.knockbackMul *= e.bullet.knockbackMul;
-      }
-      if (e.player) {
-        if (typeof e.player.jumpHeightMul === "number")
-          result.player.jumpHeightMul *= e.player.jumpHeightMul;
-        if (typeof e.player.extraJumps === "number")
-          result.player.extraJumps += e.player.extraJumps;
-        if (typeof e.player.gravityMul === "number")
-          result.player.gravityMul *= e.player.gravityMul;
-        if (typeof e.player.moveSpeedMul === "number")
-          result.player.moveSpeedMul *= e.player.moveSpeedMul;
-        if (typeof e.player.maxHealthDelta === "number")
-          result.player.maxHealthDelta += e.player.maxHealthDelta;
-        if (typeof e.player.lifestealOnHit === "number")
-          result.player.lifestealOnHit += e.player.lifestealOnHit;
-        if (typeof e.player.blink === "boolean")
-          result.player.blink = result.player.blink || e.player.blink;
-      }
-    }
-    return result;
+    const res = getAugmentsForPlayer(this.augmentByPlayer, playerId);
+    try { console.log("🛠️ 증강 적용(플레이어):", { playerId, res }); } catch {}
+    return res as any;
   }
 
   // 원격 총알 정리 (수명이 다한 총알 제거)
@@ -1161,6 +1085,8 @@ export default class GameScene extends Phaser.Scene {
           const pos = event.data || {};
           if (pid === this.myPlayerId) {
             this.playerHide();
+            try { this.uiManager.destroyNameTag(pid); } catch {}
+            try { (this.shootingManager as any)?.ammoGraphics?.setVisible?.(false); } catch {}
             // 내 사망 이펙트
             this.createParticleEffect(
               pos.x ?? this.getPlayerX(),
@@ -1182,9 +1108,7 @@ export default class GameScene extends Phaser.Scene {
               refs?.leftLeg?.setVisible?.(false);
               refs?.rightLeg?.setVisible?.(false);
               refs?.gun?.setVisible?.(false);
-              try {
-                this.uiManager.destroyNameTag(pid);
-              } catch {}
+              try { this.uiManager.destroyNameTag(pid); } catch {}
               // 사망 시에도 체력바는 계속 표시
 
               // 원격 사망 이펙트: 해당 좌표에서만 생성
@@ -1204,6 +1128,11 @@ export default class GameScene extends Phaser.Scene {
           if (pid === this.myPlayerId) {
             this.playerShow();
             this.setInputEnabled(true);
+            try {
+              const myData = this.gameData?.players.find((p) => p.id === pid);
+              if (myData) this.tryCreateNameTag(pid, myData.name);
+              (this.shootingManager as any)?.ammoGraphics?.setVisible?.(true);
+            } catch {}
           } else {
             const rp = this.remotePlayers.get(pid);
             if (rp) {
@@ -1217,6 +1146,10 @@ export default class GameScene extends Phaser.Scene {
               refs?.leftLeg?.setVisible?.(true);
               refs?.rightLeg?.setVisible?.(true);
               refs?.gun?.setVisible?.(true);
+              try {
+                const rpData = this.gameData?.players.find((p) => p.id === pid);
+                if (rpData) this.tryCreateNameTag(pid, rpData.name);
+              } catch {}
             }
           }
         } catch (e) {}
@@ -2696,58 +2629,8 @@ export default class GameScene extends Phaser.Scene {
       return; // 아래 '속도 0' 로직 건너뜀
     }
 
-    if (p.body) {
-      // Phaser Physics Body
-      if (px <= PLAYER_CONSTANTS.SIZE.HALF_WIDTH && p.body.velocity.x < 0) {
-        p.body.setVelocityX(0);
-      }
-      if (
-        px >= mapSize.width - PLAYER_CONSTANTS.SIZE.HALF_WIDTH &&
-        p.body.velocity.x > 0
-      ) {
-        p.body.setVelocityX(0);
-      }
-      if (py <= PLAYER_CONSTANTS.SIZE.HALF_HEIGHT && p.body.velocity.y < 0) {
-        p.body.setVelocityY(0);
-      }
-      if (
-        py >= mapSize.height - PLAYER_CONSTANTS.SIZE.HALF_HEIGHT &&
-        p.body.velocity.y > 0
-      ) {
-        p.body.setVelocityY(0);
-      }
-    } else {
-      // 커스텀 속도 시스템
-      if (p.vx !== undefined) {
-        if (px <= PLAYER_CONSTANTS.SIZE.HALF_WIDTH && p.vx < 0) p.vx = 0;
-        if (px >= mapSize.width - PLAYER_CONSTANTS.SIZE.HALF_WIDTH && p.vx > 0)
-          p.vx = 0;
-      }
-      if (p.vy !== undefined) {
-        if (py <= PLAYER_CONSTANTS.SIZE.HALF_HEIGHT && p.vy < 0) p.vy = 0;
-        if (
-          py >= mapSize.height - PLAYER_CONSTANTS.SIZE.HALF_HEIGHT &&
-          p.vy > 0
-        )
-          p.vy = 0;
-      }
-      if (p.velocity) {
-        if (px <= PLAYER_CONSTANTS.SIZE.HALF_WIDTH && p.velocity.x < 0)
-          p.velocity.x = 0;
-        if (
-          px >= mapSize.width - PLAYER_CONSTANTS.SIZE.HALF_WIDTH &&
-          p.velocity.x > 0
-        )
-          p.velocity.x = 0;
-        if (py <= PLAYER_CONSTANTS.SIZE.HALF_HEIGHT && p.velocity.y < 0)
-          p.velocity.y = 0;
-        if (
-          py >= mapSize.height - PLAYER_CONSTANTS.SIZE.HALF_HEIGHT &&
-          p.velocity.y > 0
-        )
-          p.velocity.y = 0;
-      }
-    }
+    // 플레이어 경계 검사 (통합된 헬퍼 함수 사용)
+    this.checkPlayerBoundaries(p, px, py, mapSize);
   }
 
   // 플레이어 위치 접근 헬퍼
@@ -3196,5 +3079,45 @@ export default class GameScene extends Phaser.Scene {
     try {
       (this.player as any)?.setVisible?.(true);
     } catch {}
+  }
+
+  // 플레이어 경계 검사 헬퍼
+  private checkPlayerBoundaries(p: any, px: number, py: number, mapSize: { width: number; height: number }): void {
+    const leftBound = PLAYER_CONSTANTS.SIZE.HALF_WIDTH;
+    const rightBound = mapSize.width - PLAYER_CONSTANTS.SIZE.HALF_WIDTH;
+    const topBound = PLAYER_CONSTANTS.SIZE.HALF_HEIGHT;
+    const bottomBound = mapSize.height - PLAYER_CONSTANTS.SIZE.HALF_HEIGHT;
+
+    // Phaser 물리 시스템 사용 시
+    if (p.body && p.body.velocity) {
+      if (px <= leftBound && p.body.velocity.x < 0) {
+        p.body.setVelocityX(0);
+      }
+      if (px >= rightBound && p.body.velocity.x > 0) {
+        p.body.setVelocityX(0);
+      }
+      if (py <= topBound && p.body.velocity.y < 0) {
+        p.body.setVelocityY(0);
+      }
+      if (py >= bottomBound && p.body.velocity.y > 0) {
+        p.body.setVelocityY(0);
+      }
+    } else {
+      // 커스텀 속도 시스템 사용 시
+      if (p.vx !== undefined) {
+        if (px <= leftBound && p.vx < 0) p.vx = 0;
+        if (px >= rightBound && p.vx > 0) p.vx = 0;
+      }
+      if (p.vy !== undefined) {
+        if (py <= topBound && p.vy < 0) p.vy = 0;
+        if (py >= bottomBound && p.vy > 0) p.vy = 0;
+      }
+      if (p.velocity) {
+        if (px <= leftBound && p.velocity.x < 0) p.velocity.x = 0;
+        if (px >= rightBound && p.velocity.x > 0) p.velocity.x = 0;
+        if (py <= topBound && p.velocity.y < 0) p.velocity.y = 0;
+        if (py >= bottomBound && p.velocity.y > 0) p.velocity.y = 0;
+      }
+    }
   }
 }

@@ -520,10 +520,7 @@ io.on("connection", (socket) => {
         // 서버 권위 대미지 계산 (증강 반영)
         const shooter = room.players[payload.playerId];
         let damage = hit.damage ?? 25;
-        // 빨리뽑기: 고정 추가 대미지
-        if (shooter?.augments && shooter.augments["빨리뽑기"]) {
-          damage += 5;
-        }
+        // 빨리뽑기: 고정 추가 대미지 제거 (탄창/재장전 효과만 유지)
         const newHealth = Math.max(0, currentHealth - damage);
 
         // 서버에 체력 업데이트
@@ -864,13 +861,9 @@ io.on("connection", (socket) => {
         });
 
         // 선택 상태 초기화(서버)
+        // 진행 상황을 즉시 0으로 재방송하면 클라이언트에 혼란(0/1 {})을 주므로,
+        // 내부 상태만 초기화하고 진행 이벤트는 다음 라운드 전환에서만 보내도록 함.
         roundSelection.selections = {};
-        io.to(rid).emit("augment:progress", {
-          round: payload.round,
-          selections: roundSelection.selections,
-          selectedCount: 0,
-          totalPlayers: Object.keys(room.players).length,
-        });
 
         // 2초 후 완료 예약 상태 해제
         setTimeout(() => {
