@@ -32,7 +32,7 @@ interface BulletHit {
 }
 
 interface GameEvent {
-  type: "damage" | "heal" | "respawn" | "powerup" | "showHealthBar";
+  type: "damage" | "heal" | "respawn" | "powerup" | "showHealthBar" | "status";
   playerId: string;
   data: any;
 }
@@ -289,15 +289,12 @@ export class NetworkManager {
   }
 
   // 게임 이벤트 전송
-  public sendGameEvent(event: Omit<GameEvent, "playerId">): void {
+  public sendGameEvent(event: GameEvent): void {
     if (!this.isConnected || !this.roomId || !this.myPlayerId) return;
 
     socket.emit("game:event", {
       roomId: this.roomId,
-      event: {
-        ...event,
-        timestamp: Date.now(),
-      },
+      event: { ...event, timestamp: Date.now() },
     });
 
     console.log(`🎯 게임 이벤트 전송: ${event.type}`);

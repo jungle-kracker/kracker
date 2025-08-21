@@ -537,7 +537,7 @@ io.on("connection", (socket) => {
           timestamp: Date.now(),
         });
 
-        // 독걸려랑: DoT 스케줄
+        // 독걸려랑: DoT 스케줄 (초당 5뎀, 3틱)
         if (shooter?.augments && shooter.augments["독걸려랑"] && newHealth > 0) {
           const victimId = hit.targetPlayerId;
           let ticks = 3;
@@ -560,6 +560,31 @@ io.on("connection", (socket) => {
             ticks -= 1;
             if (nh <= 0 || ticks <= 0) clearInterval(timer);
           }, 1000);
+        }
+
+        // 벌이야!: DoT 스케줄 (2초당 5뎀, 3틱)
+        if (shooter?.augments && shooter.augments["벌이야!"] && newHealth > 0) {
+          const victimId = hit.targetPlayerId;
+          let ticks = 3;
+          const dot = 5;
+          const timer2 = setInterval(() => {
+            const r = rooms.get(roomId);
+            if (!r) return clearInterval(timer2);
+            const v = r.players[victimId];
+            if (!v) return clearInterval(timer2);
+            const h = v.health ?? 100;
+            if (h <= 0) return clearInterval(timer2);
+            const nh = Math.max(0, h - dot);
+            v.health = nh;
+            io.to(roomId).emit("game:healthUpdate", {
+              playerId: victimId,
+              health: nh,
+              damage: dot,
+              timestamp: Date.now(),
+            });
+            ticks -= 1;
+            if (nh <= 0 || ticks <= 0) clearInterval(timer2);
+          }, 2000);
         }
 
         // 끈적여요: 둔화 상태 방송 (클라에서 이동속도 적용)
