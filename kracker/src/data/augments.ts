@@ -8,28 +8,24 @@ export interface AugmentInfo {
   image: string; // 카드 이미지 경로
 }
 
-// 이미지 파일은 정적 import가 필요하여 맵으로 관리
-// JSON의 imageFile 값을 key로 사용
-const imageMap: Record<string, string> = {
-  "그날인류는떠올렸다.svg": require("../assets/cards/그날인류는떠올렸다.svg"),
-  "기생충.svg": require("../assets/cards/기생충.svg"),
-  "끈적여요.svg": require("../assets/cards/끈적여요.svg"),
-  "끼얏호우.svg": require("../assets/cards/끼얏호우.svg"),
-  "도망간다냥.svg": require("../assets/cards/도망간다냥.svg"),
-  "독걸려랑.svg": require("../assets/cards/독걸려랑.svg"),
-  "먼저가요.svg": require("../assets/cards/먼저가요.svg"),
-  "목표를포착했다.svg": require("../assets/cards/목표를포착했다.svg"),
-  "벌이야.svg": require("../assets/cards/벌이야.svg"),
-  "빨리뽑기.svg": require("../assets/cards/빨리뽑기.svg"),
-  "안아줘요.svg": require("../assets/cards/안아줘요.svg"),
-  "앗따거.svg": require("../assets/cards/앗따거.svg"),
-  "유령이다.svg": require("../assets/cards/유령이다.svg"),
-  "이건폭탄이여.svg": require("../assets/cards/이건폭탄이여.svg"),
-  "잠깐만.svg": require("../assets/cards/잠깐만.svg"),
-  "준비끝.svg": require("../assets/cards/준비끝.svg"),
-  "팅팅탕탕.svg": require("../assets/cards/팅팅탕탕.svg"),
-  "풍선처럼.svg": require("../assets/cards/풍선처럼.svg"),
-} as any;
+// 이미지 로더: 폴더 내 svg를 동적으로 로드하여 파일명 -> URL 매핑 생성
+// CRA(Webpack) 환경에서 require.context 사용
+const imageMap: Record<string, string> = (() => {
+  try {
+    const req = (require as any).context("../assets/cards", false, /\.svg$/);
+    const map: Record<string, string> = {};
+    req.keys().forEach((key: string) => {
+      const fileName = key.replace(/^\.\//, "");
+      const mod = req(key);
+      const url: string = (mod && (mod.default || mod)) as string;
+      map[fileName] = url;
+    });
+    return map;
+  } catch (e) {
+    // Fallback: 빈 맵
+    return {} as Record<string, string>;
+  }
+})();
 
 const jsonData: Array<{ id: string; name: string; description: string; imageFile: string }> = (raw as any);
 

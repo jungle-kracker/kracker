@@ -10,6 +10,7 @@ interface AugmentCardProps {
   isSelected?: boolean;
 }
 
+// 증강이름과 설명 없이 이미지만 출력해야 함
 const AugmentCard: React.FC<AugmentCardProps> = ({
   name,
   description,
@@ -19,10 +20,9 @@ const AugmentCard: React.FC<AugmentCardProps> = ({
 }) => {
   return (
     <CardContainer onClick={onClick} $isSelected={isSelected}>
-      {/* 증강 이미지 영역 */}
       <ImageArea>
         {imageUrl ? (
-          <AugmentImage src={imageUrl} alt={name} />
+          <AugmentImage src={imageUrl} alt={name} onError={(e) => ((e.currentTarget.style.display = "none"))} />
         ) : (
           <PlaceholderImage>
             <span>이미지</span>
@@ -86,16 +86,30 @@ const PlaceholderImage = styled.div`
   font-size: 14px;
 `;
 
-const AugmentName = styled.span`
+const Overlay = styled.div`
   position: absolute;
-  left: 23px;
-  top: 220px;
-  color: white;
-  font-size: 40px;
-  font-family: "Apple SD Gothic Neo", sans-serif;
-  font-weight: 600;
-  text-shadow: 0px 0px 2px rgba(106, 64, 169, 0.28);
-  z-index: 3;
+  inset: auto 0 0 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.6));
+  padding: 16px 20px 18px;
+  color: #fff;
+  display: grid;
+  gap: 8px;
+`;
+
+const Title = styled.div`
+  font-size: 24px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+`;
+
+const Desc = styled.div`
+  font-size: 14px;
+  line-height: 1.3;
+  opacity: 0.9;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
 
 const BottomSection = styled.div`

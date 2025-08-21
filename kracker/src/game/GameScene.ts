@@ -1,5 +1,5 @@
 // src/game/GameScene.ts - NetworkManager 통합된 멀티플레이어 GameScene
-import { Platform, Bullet, CHARACTER_PRESETS } from "./Config";
+import { Platform, Bullet, CHARACTER_PRESETS } from "./config";
 import Player from "./player/Player";
 import MapRenderer from "./MapRenderer";
 import { MapLoader } from "./maps/MapLoader";
@@ -2854,6 +2854,12 @@ export default class GameScene extends Phaser.Scene {
   private playerHide(): void {
     try {
       (this.player as any)?.setVisible?.(false);
+    } catch {}
+  }
+
+  private playerShow(): void {
+    try {
+      (this.player as any)?.setVisible?.(true);
     } catch {}
   }
 }

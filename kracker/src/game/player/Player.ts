@@ -39,7 +39,7 @@ import {
 } from "../mechanics/wallgrab";
 
 // 기존 config / Bullet 의존성은 유지
-import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../Config";
+import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../config";
 import { Bullet } from "../bullet";
 
 export default class Player {
@@ -888,6 +888,19 @@ export default class Player {
 
   public getBody(): any {
     return this.gfx.body;
+  }
+
+  // 🆕 가시성 토글 (GameScene에서 사망/부활 처리용)
+  public setVisible(visible: boolean): void {
+    try {
+      this.gfx.body?.setVisible?.(visible);
+      this.gfx.face?.setVisible?.(visible);
+      this.gfx.leftArm?.setVisible?.(visible);
+      this.gfx.rightArm?.setVisible?.(visible);
+      this.gfx.leftLeg?.setVisible?.(visible);
+      this.gfx.rightLeg?.setVisible?.(visible);
+      this.gfx.gun?.setVisible?.(visible);
+    } catch {}
   }
 
   public setColorPreset(preset: CharacterPreset): void {

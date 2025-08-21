@@ -170,6 +170,11 @@ export class ShootingManager {
 
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
     // ShootingSystem으로 사격 시도
+    // 증강 파라미터 계산
+    const aug = this.ownerId && this.getAugmentsFor ? this.getAugmentsFor(this.ownerId) : undefined;
+    let speedMul = 1.0;
+    if (aug?.["벌이야!"]) speedMul *= 1.2; // 카드: +20% 총알 속도 증가
+
     const shotFired = this.shootingSystem.tryShoot(
       gunX,
       gunY,
@@ -180,7 +185,7 @@ export class ShootingManager {
         color: 0xffffff,
         tailColor: 0xffffff,
         radius: 10,
-        speed: this.config.muzzleVelocity,
+        speed: this.config.muzzleVelocity * speedMul,
         gravity: { x: 0, y: 500 },
         useWorldGravity: false,
         lifetime: 8000,
@@ -199,12 +204,21 @@ export class ShootingManager {
           b.ownerId = this.ownerId || "local";
           b._remote = false;
           b._hitProcessed = false;
-          // 🆕 간단한 증강 이펙트: 빨리뽑기이면 탄속 살짝 증가 (시각효과)
+          // 특수 탄 플래그 설정
           try {
-            if (this.ownerId && this.getAugmentsFor) {
-              const aug = this.getAugmentsFor(this.ownerId);
-              if (aug && aug["빨리뽑기"]) {
-                b.speed = (b.speed || this.config.muzzleVelocity) * 1.05;
+            if (aug?.["유령이다"]) {
+              b.setData && b.setData("__ghost", true);
+            }
+            if (aug?.["팅팅탕탕"]) {
+              const cur = (b.getData && b.getData("__bounce")) || 0;
+              b.setData && b.setData("__bounce", cur + 1);
+            }
+            if (aug?.["안아줘요"]) {
+              // 간이 유도
+              const ref = b.getData ? b.getData("__bulletRef") : null;
+              if (ref && typeof ref.getConfig === "function") {
+                // homingStrength은 BulletConfig에 있음
+                (ref as any).getConfig().homingStrength = 0.05;
               }
             }
           } catch {}

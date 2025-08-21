@@ -1,4 +1,4 @@
-import { Platform } from "./Config";
+import { Platform } from "./config";
 
 export interface MapImage {
   key: string; // Phaser texture key (미리 preload)
