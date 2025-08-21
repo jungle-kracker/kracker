@@ -15,7 +15,7 @@ import { CharacterColors, GfxRefs, PlayerState } from "./types/player.types";
 import { LimbKeyframe } from "./animations/types/animation.types";
 import { drawLimbs } from "./render/limbs";
 import { drawGun } from "./render/gun";
-import { updatePose } from "./render/character.pose";
+import { updatePose, drawHealthBar } from "./render/character.pose";
 
 // 상수 및 설정
 import {
@@ -99,6 +99,8 @@ interface RemotePlayer {
     lastShotTime: number;
     isShooting: boolean;
   };
+  // 체력바 관련 속성
+  hpBarGraphics?: any;
 }
 
 export default class GameScene extends Phaser.Scene {
@@ -207,6 +209,7 @@ export default class GameScene extends Phaser.Scene {
       );
       this.collisionSystem.setPlayer(this.player);
       this.collisionSystem.setNetworkManager(this.networkManager);
+      this.collisionSystem.setRemotePlayers(this.remotePlayers);
 
       // 추가 데이터 처리
       this.processAdditionalData(data);
@@ -779,9 +782,8 @@ export default class GameScene extends Phaser.Scene {
         const playerId = event.data?.playerId || event.playerId;
         const remotePlayer = this.remotePlayers.get(playerId);
         if (remotePlayer) {
-          // 체력바 타이머 설정
-          (remotePlayer as any).hpBarShowTimerMs = event.data?.duration || 5000;
-          // 체력도 업데이트
+          // 체력바 상시 표시로 변경
+          // 체력 업데이트
           if (event.data?.health !== undefined) {
             remotePlayer.networkState.health = event.data.health;
           }
@@ -816,7 +818,6 @@ export default class GameScene extends Phaser.Scene {
           const spawns = this.mapRenderer?.getSpawns?.() || [];
           // 내 플레이어
           if (this.player && this.myPlayerId) {
-
             const myData = this.gameData?.players.find(
               (p) => p.id === this.myPlayerId
             );
@@ -842,7 +843,6 @@ export default class GameScene extends Phaser.Scene {
             const rpData = this.gameData?.players.find((p) => p.id === pid);
             let spawn = spawns[0];
             if (this.gameData?.room.gameMode === "팀전") {
-
               if (rpData?.team === 1)
                 spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
               else if (rpData?.team === 2)
@@ -873,7 +873,10 @@ export default class GameScene extends Phaser.Scene {
           } else {
             const rp = this.remotePlayers.get(pid);
             if (rp) {
-              rp.isVisible = false;
+              // 체력바는 계속 표시되도록 isVisible은 true로 유지
+              // 대신 체력을 0으로 설정하여 렌더링에서 처리
+              rp.networkState.health = 0;
+              rp.isVisible = false; // 가시성 상태도 false로 설정
               const refs = rp.gfxRefs;
               refs?.body?.setVisible?.(false);
               refs?.face?.setVisible?.(false);
@@ -885,6 +888,8 @@ export default class GameScene extends Phaser.Scene {
               try {
                 this.uiManager.destroyNameTag(pid);
               } catch {}
+              // 사망 시에도 체력바는 계속 표시
+
               // 원격 사망 이펙트: 해당 좌표에서만 생성
               this.createParticleEffect(
                 pos.x ?? rp.lastPosition.x,
@@ -906,6 +911,7 @@ export default class GameScene extends Phaser.Scene {
             const rp = this.remotePlayers.get(pid);
             if (rp) {
               rp.isVisible = true;
+              rp.networkState.health = 100; // 부활 시 체력 복구
               const refs = rp.gfxRefs;
               refs?.body?.setVisible?.(true);
               refs?.face?.setVisible?.(true);
@@ -935,26 +941,28 @@ export default class GameScene extends Phaser.Scene {
       const currentHealth = this.player.getHealth();
       const expectedHealth = health;
 
-      // 서버 체력과 로컬 체력이 다르면 동기화
-      if (currentHealth !== expectedHealth) {
-        console.log(`💚 체력 동기화: ${currentHealth} -> ${expectedHealth}`);
-        // 체력을 직접 설정 (서버 값으로)
-        this.player.setHealth(expectedHealth);
+      // 서버 권위 체력 동기화 (서버 판정이 최우선)
+      console.log(`💚 체력 동기화: ${currentHealth} -> ${expectedHealth}`);
+      
+      // 체력을 직접 설정 (서버 값으로)
+      this.player.setHealth(expectedHealth);
 
-        // 사망 시: 입력 비활성화 + 캐릭터 숨김 (관전)
-        if (expectedHealth <= 0) {
-          this.setInputEnabled(false);
-          this.playerHide();
-        } else {
-          // 회복(리스폰) 시: 입력 활성화 + 캐릭터 표시
-          this.playerShow();
-          this.setInputEnabled(true);
-        }
+      // 서버에서 0 이하로 판정되면 강제 사망 처리
+      if (expectedHealth <= 0) {
+        console.log(`💀 서버 판정: 내 플레이어 사망 (체력 ${expectedHealth})`);
+        this.setInputEnabled(false);
+        this.playerHide();
+      } else if (currentHealth <= 0 && expectedHealth > 0) {
+        // 회복(리스폰) 시: 입력 활성화 + 캐릭터 표시
+        console.log(`🔄 서버 판정: 내 플레이어 부활 (체력 ${expectedHealth})`);
+        this.playerShow();
+        this.setInputEnabled(true);
+      }
 
-        if (damage > 0 && expectedHealth > 0) {
-          this.player.addWobble();
-          this.player.setInvulnerable(1000);
-        }
+      // 데미지 효과 (살아있을 때만)
+      if (damage > 0 && expectedHealth > 0) {
+        this.player.addWobble();
+        this.player.setInvulnerable(1000);
       }
 
       console.log(`💚 내 체력 업데이트: ${expectedHealth}`);
@@ -980,10 +988,30 @@ export default class GameScene extends Phaser.Scene {
             refs.gun?.setVisible?.(v);
           };
           vis(shouldBeVisible);
+
+          // 사망/부활 로그
+          if (health <= 0 && oldHealth > 0) {
+            console.log(
+              `💀 원격 플레이어 ${remotePlayer.name} 사망: 체력 ${health}`
+            );
+          } else if (health > 0 && oldHealth <= 0) {
+            console.log(
+              `🔄 원격 플레이어 ${remotePlayer.name} 부활: 체력 ${health}`
+            );
+          }
         }
 
         if (oldHealth !== health || damage > 0) {
-          console.log(`💚 ${remotePlayer.name} 체력 업데이트: ${oldHealth} -> ${health}`);
+          console.log(
+            `💚 ${remotePlayer.name} 체력 업데이트: ${oldHealth} -> ${health}`
+          );
+
+          // 체력이 감소했으면 로그만 출력 (체력바는 상시 표시)
+          if (health < oldHealth) {
+            console.log(
+              `💚 ${remotePlayer.name} 체력 감소: ${oldHealth} -> ${health}`
+            );
+          }
         }
 
         // 디버깅: 원격 플레이어 체력 업데이트 확인
@@ -1014,6 +1042,11 @@ export default class GameScene extends Phaser.Scene {
       // ☆ 그래픽 오브젝트들 제거
       if (remotePlayer.gfxRefs) {
         destroyCharacter(remotePlayer.gfxRefs);
+      }
+
+      // 체력바 그래픽 객체 제거
+      if (remotePlayer.hpBarGraphics) {
+        remotePlayer.hpBarGraphics.destroy();
       }
 
       //퇴장 시 태그 제거
@@ -1184,6 +1217,8 @@ export default class GameScene extends Phaser.Scene {
         lastShotTime: 0,
         isShooting: false,
       },
+      // 체력바 관련 속성 초기화
+      hpBarGraphics: undefined,
     };
 
     // 그래픽 요소들의 가시성 확실히 설정 (로컬 플레이어와 동일한 depth)
@@ -1215,6 +1250,10 @@ export default class GameScene extends Phaser.Scene {
       gfxRefs.gun.setVisible(true);
       gfxRefs.gun.setDepth(-5); // 로컬과 동일
     }
+
+    // 체력바 그래픽 객체 생성
+    remotePlayer.hpBarGraphics = this.add.graphics();
+    remotePlayer.hpBarGraphics.setDepth(10); // UI 레이어
 
     // Map에 저장
     this.remotePlayers.set(playerData.id, remotePlayer);
@@ -1345,7 +1384,7 @@ export default class GameScene extends Phaser.Scene {
     // 사격 상태 업데이트
     anim.isShooting = now - anim.lastShotTime < 200;
 
-    // 체력바는 새로운 시스템에서 자동으로 처리됨
+    // 체력바는 상시 표시이므로 타이머 업데이트 제거
 
     // 마우스 위치가 없거나 오래된 경우 방향 기반으로 추정 업데이트
     const { x, y } = remotePlayer.lastPosition;
@@ -1362,6 +1401,32 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  // 원격 플레이어 체력바 렌더링
+  private renderRemotePlayerHealthBar(remotePlayer: RemotePlayer): void {
+    if (!remotePlayer.hpBarGraphics) {
+      console.warn(`⚠️ ${remotePlayer.name}의 체력바 그래픽이 없습니다`);
+      return;
+    }
+
+    // HP바 그래픽 초기화
+    remotePlayer.hpBarGraphics.clear();
+
+    // 타이머에 따라 체력바 표시
+    console.log(
+      `💚 ${remotePlayer.name} 체력바 렌더링: 체력=${remotePlayer.networkState.health}`
+    );
+
+    // HP바 그리기 (상시 표시)
+    drawHealthBar(
+      remotePlayer.hpBarGraphics,
+      remotePlayer.lastPosition.x,
+      remotePlayer.lastPosition.y,
+      remotePlayer.networkState.health,
+      100,
+      0 // 타이머는 사용하지 않음
+    );
+  }
+
   // ☆ 원격 플레이어 애니메이션 렌더링
   private renderRemotePlayerAnimation(remotePlayer: RemotePlayer): void {
     const refs = remotePlayer.gfxRefs;
@@ -1370,12 +1435,8 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 가시성/사망 상태 체크
-    if (
-      !remotePlayer.isVisible ||
-      (remotePlayer.networkState.health || 0) <= 0
-    ) {
-
+    // 가시성 체크 (사망 상태는 체력바 표시를 위해 제거)
+    if (!remotePlayer.isVisible) {
       return;
     }
 
@@ -1383,10 +1444,13 @@ export default class GameScene extends Phaser.Scene {
     const facing = remotePlayer.networkState.facing;
     const networkState = remotePlayer.networkState;
 
+    // 사망 상태 체크
+    const isDead = (remotePlayer.networkState.health || 0) <= 0;
+
     // ⭐ 몸통 위치 업데이트
     if (refs.body) {
       refs.body.setPosition(x, y);
-      refs.body.setVisible(true);
+      refs.body.setVisible(!isDead); // 사망 시 숨김
       refs.body.setDepth(-3); // 로컬과 동일
     }
 
@@ -1397,54 +1461,64 @@ export default class GameScene extends Phaser.Scene {
       gun: 0x333333,
     };
 
-    // 모든 그래픽 요소 가시성 설정
-    if (refs.leftArm) refs.leftArm.setVisible(true);
-    if (refs.rightArm) refs.rightArm.setVisible(true);
-    if (refs.leftLeg) refs.leftLeg.setVisible(true);
-    if (refs.rightLeg) refs.rightLeg.setVisible(true);
-    if (refs.gun) refs.gun.setVisible(true);
+    // 모든 그래픽 요소 가시성 설정 (사망 시 숨김)
+    if (refs.leftArm) refs.leftArm.setVisible(!isDead);
+    if (refs.rightArm) refs.rightArm.setVisible(!isDead);
+    if (refs.leftLeg) refs.leftLeg.setVisible(!isDead);
+    if (refs.rightLeg) refs.rightLeg.setVisible(!isDead);
+    if (refs.gun) refs.gun.setVisible(!isDead);
 
     console.log(`💚 ${remotePlayer.name} 체력: ${networkState.health}/100`);
 
-    // 로컬 플레이어와 동일한 렌더링 시스템 사용
-    // 1. 포즈 업데이트 (몸통, 표정) - 로컬과 동일한 시스템 사용
-    updatePose(refs, {
-      x: x,
-      y: y,
-      wobble: remotePlayer.animationState.wobble,
-      crouchHeight: networkState.isCrouching ? 0.5 : 0,
-      baseCrouchOffset: 3,
-      wallLean: networkState.isWallGrabbing ? (facing === "right" ? 5 : -5) : 0,
-      colors: characterColors,
-      health: networkState.health,
-      maxHealth: 100,
-      isWallGrabbing: networkState.isWallGrabbing,
-    });
+    // 사망하지 않은 경우에만 포즈와 팔다리 렌더링
+    if (!isDead) {
+      // 로컬 플레이어와 동일한 렌더링 시스템 사용
+      // 1. 포즈 업데이트 (몸통, 표정) - 로컬과 동일한 시스템 사용
+      updatePose(refs, {
+        x: x,
+        y: y,
+        wobble: remotePlayer.animationState.wobble,
+        crouchHeight: networkState.isCrouching ? 0.5 : 0,
+        baseCrouchOffset: 3,
+        wallLean: networkState.isWallGrabbing
+          ? facing === "right"
+            ? 5
+            : -5
+          : 0,
+        colors: characterColors,
+        health: networkState.health,
+        maxHealth: 100,
+        isWallGrabbing: networkState.isWallGrabbing,
+      });
 
-    // 2. 로컬과 동일한 팔다리 렌더링 시스템 사용
-    const pose = (remotePlayer as any).pose;
-    const mouseX = pose?.mouseX || x + (facing === "right" ? 50 : -50);
-    const mouseY = pose?.mouseY || y;
+      // 2. 로컬과 동일한 팔다리 렌더링 시스템 사용
+      const pose = (remotePlayer as any).pose;
+      const mouseX = pose?.mouseX || x + (facing === "right" ? 50 : -50);
+      const mouseY = pose?.mouseY || y;
 
-    drawLimbs(refs, {
-      x: x,
-      y: y,
-      mouseX: mouseX,
-      mouseY: mouseY,
-      armSwing: 0, // 원격은 애니메이션만 사용
-      legSwing: 0,
-      crouchHeight: networkState.isCrouching ? 1 : 0,
-      baseCrouchOffset: 3,
-      isWallGrabbing: networkState.isWallGrabbing,
-      wallGrabDirection: networkState.isWallGrabbing ? facing : null,
-      isGrounded: networkState.isGrounded,
-      velocityX: remotePlayer.interpolation.targetVX, // 실제 속도 사용
-      colors: characterColors,
-      shootRecoil: 0,
-      currentTime: Date.now() / 1000,
-      currentFacing: facing,
-      isJumping: !networkState.isGrounded, // 점프 상태 추정 (지상에 없으면 점프 중으로 간주)
-    });
+      drawLimbs(refs, {
+        x: x,
+        y: y,
+        mouseX: mouseX,
+        mouseY: mouseY,
+        armSwing: 0, // 원격은 애니메이션만 사용
+        legSwing: 0,
+        crouchHeight: networkState.isCrouching ? 1 : 0,
+        baseCrouchOffset: 3,
+        isWallGrabbing: networkState.isWallGrabbing,
+        wallGrabDirection: networkState.isWallGrabbing ? facing : null,
+        isGrounded: networkState.isGrounded,
+        velocityX: remotePlayer.interpolation.targetVX, // 실제 속도 사용
+        colors: characterColors,
+        shootRecoil: 0,
+        currentTime: Date.now() / 1000,
+        currentFacing: facing,
+        isJumping: !networkState.isGrounded, // 점프 상태 추정 (지상에 없으면 점프 중으로 간주)
+      });
+    }
+
+    // 체력바 렌더링 (사망한 플레이어도 체력바는 표시)
+    this.renderRemotePlayerHealthBar(remotePlayer);
 
     // 디버그: 주기적으로 위치 로그
     if (Date.now() % 5000 < 16) {
@@ -2108,9 +2182,9 @@ export default class GameScene extends Phaser.Scene {
   private updateGameLogic(): void {
     this.cullBulletsOutsideViewport();
     this.clampPlayerInsideWorld();
-    this.detectBulletHitsAgainstPlayers();
+    // 충돌 처리는 CollisionSystem에서 담당하므로 비활성화
+    // this.detectBulletHitsAgainstPlayers();
     this.cleanupRemoteBullets();
-
   }
 
   private updatePerformanceMonitoring(time: number, deltaTime: number): void {
@@ -2687,65 +2761,6 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  // 플레이어 체력 정보 수집 (UI용)
-  public getPlayerHealthInfo(): Array<{
-    id: string;
-    name: string;
-    health: number;
-    maxHealth: number;
-    isLocalPlayer: boolean;
-  }> {
-    // 디버깅: 현재 체력 정보 로그 (주석 처리)
-    // console.log("🔍 현재 플레이어 체력 정보 수집:");
-    // if (this.player && this.myPlayerId) {
-    //   console.log(
-    //     `  - 로컬 플레이어 (${this.myPlayerId}): ${this.player.getHealth()}/100`
-    //   );
-    // }
-    // this.remotePlayers.forEach((remotePlayer, playerId) => {
-    //   console.log(
-    //     `  - 원격 플레이어 (${playerId}): ${remotePlayer.networkState.health}/100`
-    //   );
-    // });
-    const players: Array<{
-      id: string;
-      name: string;
-      health: number;
-      maxHealth: number;
-      isLocalPlayer: boolean;
-    }> = [];
-
-    // 로컬 플레이어 정보 추가
-    if (this.player && this.myPlayerId) {
-      players.push({
-        id: this.myPlayerId,
-        name:
-          this.gameData?.players.find((p) => p.id === this.myPlayerId)?.name ||
-          "나",
-        health: this.player.getHealth(),
-        maxHealth: 100,
-        isLocalPlayer: true,
-      });
-    }
-
-    // 원격 플레이어들 정보 추가
-    this.remotePlayers.forEach((remotePlayer, playerId) => {
-      const health = remotePlayer.networkState.health;
-      console.log(
-        `🔍 UI용 체력 정보: ${remotePlayer.name} (${playerId}) = ${health}/100`
-      );
-      players.push({
-        id: playerId,
-        name: remotePlayer.name,
-        health: health,
-        maxHealth: 100,
-        isLocalPlayer: false,
-      });
-    });
-
-    return players;
-  }
-
   // Phaser Scene 생명주기 - shutdown
   shutdown(): void {
     // 상태 변경
@@ -2854,6 +2869,12 @@ export default class GameScene extends Phaser.Scene {
   private playerHide(): void {
     try {
       (this.player as any)?.setVisible?.(false);
+    } catch {}
+  }
+
+  private playerShow(): void {
+    try {
+      (this.player as any)?.setVisible?.(true);
     } catch {}
   }
 }

@@ -23,6 +23,7 @@ export class CollisionSystem {
 
   private player?: any;
   private networkManager?: any; // 네트워크 매니저 참조
+  private remotePlayers?: Map<string, any>; // 원격 플레이어들 참조
 
   constructor(
     scene: Phaser.Scene,
@@ -62,6 +63,10 @@ export class CollisionSystem {
 
   public setNetworkManager(networkManager: any): void {
     this.networkManager = networkManager;
+  }
+
+  public setRemotePlayers(remotePlayers: Map<string, any>): void {
+    this.remotePlayers = remotePlayers;
   }
 
   destroy() {
@@ -124,6 +129,10 @@ export class CollisionSystem {
     for (const b of bullets) {
       if (!b.active) continue;
 
+      // 원격 총알은 충돌 감지에서 제외 (시각적 효과만)
+      const bulletRef = b.getData && b.getData("__bulletRef");
+      if (bulletRef && bulletRef._remote) continue;
+
       const curX = b.x;
       const curY = b.y;
 
@@ -166,15 +175,16 @@ export class CollisionSystem {
         continue;
       }
 
-      // 🔥 총알 ↔ 플레이어 충돌 체크 (원-원)
+      // 🔥 총알 ↔ 플레이어 충돌 체크 (모든 플레이어)
+      let playerHit = false;
+
+      // 로컬 플레이어 충돌 체크
       if (this.player && typeof this.player.getPosition === "function") {
         const getHealth = (this.player as any)?.getHealth?.();
-        if (typeof getHealth === "number" && getHealth <= 0) {
-          // 사망 상태면 피격 판정 제외
-        } else {
+        if (typeof getHealth === "number" && getHealth > 0) {
           const pos = this.player.getPosition();
           const pb = this.player.getBounds?.();
-          const playerRadius = pb?.radius ?? 25; // 플레이어 반경(기본값 25)
+          const playerRadius = pb?.radius ?? 25;
 
           const dx = b.x - pos.x;
           const dy = b.y - pos.y;
@@ -182,35 +192,20 @@ export class CollisionSystem {
           const rSum = playerRadius + bulletR;
 
           if (dx * dx + dy * dy <= rSum * rSum) {
-            // 한 프레임 중복 처리 방지
+            playerHit = true;
             b.setData("__hitThisFrame", true);
 
-            // 데미지 가져오기
             const bulletRef = b.getData("__bulletRef");
             const dmg = bulletRef?.getConfig
               ? bulletRef.getConfig().damage
               : 10;
 
-
-            // 서버에만 체력 업데이트 전송 (로컬 데미지 처리 제거)
-            if (this.networkManager && this.player) {
-              const playerId = this.player.getId?.() || this.player.id;
-              const hitData = {
-                bulletId: `collision_${Date.now()}`,
-                targetPlayerId: playerId,
-                damage: dmg,
-                x: b.x,
-                y: b.y,
-              };
-
+            // 로컬 플레이어가 맞았을 때는 로컬에서 직접 데미지 처리
+            if (this.player && typeof this.player.takeDamage === "function") {
               console.log(
-                `💥 CollisionSystem: 서버에 체력 업데이트 전송 - 플레이어: ${playerId}, 데미지: ${dmg}`
+                `💥 CollisionSystem: 로컬 플레이어 맞음 - 데미지: ${dmg}`
               );
-              this.networkManager.sendBulletHit(hitData);
-            } else {
-              console.warn(
-                `⚠️ CollisionSystem: 네트워크 매니저 또는 플레이어가 없음`
-              );
+              this.player.takeDamage(dmg);
             }
 
             // 총알 폭발/제거
@@ -220,11 +215,68 @@ export class CollisionSystem {
             } catch (e) {
               b.destroy(true);
             }
-
-            // 이 총알은 처리 완료 → 다음 총알로
-            continue;
           }
         }
+      }
+
+      // 원격 플레이어들 충돌 체크
+      if (!playerHit && this.remotePlayers) {
+        const playerIds = Array.from(this.remotePlayers.keys());
+        for (let i = 0; i < playerIds.length; i++) {
+          const playerId = playerIds[i];
+          const remotePlayer = this.remotePlayers.get(playerId);
+
+          if (!remotePlayer || (remotePlayer.networkState?.health || 0) <= 0)
+            continue;
+
+          const pos = remotePlayer.lastPosition;
+          if (!pos) continue;
+
+          const playerRadius = 25; // 원격 플레이어 반지름
+          const dx = b.x - pos.x;
+          const dy = b.y - pos.y;
+          const bulletR = this.getBulletRadius(b);
+          const rSum = playerRadius + bulletR;
+
+          if (dx * dx + dy * dy <= rSum * rSum) {
+            playerHit = true;
+            b.setData("__hitThisFrame", true);
+
+            const bulletRef = b.getData("__bulletRef");
+            const dmg = bulletRef?.getConfig
+              ? bulletRef.getConfig().damage
+              : 10;
+
+            if (this.networkManager) {
+              const hitData = {
+                bulletId: `collision_${Date.now()}`,
+                targetPlayerId: playerId,
+                damage: dmg,
+                x: b.x,
+                y: b.y,
+              };
+
+              console.log(
+                `💥 CollisionSystem: 원격 플레이어 맞음 - 플레이어: ${playerId}, 데미지: ${dmg}`
+              );
+              this.networkManager.sendBulletHit(hitData);
+            }
+
+            // 총알 폭발/제거
+            try {
+              if (bulletRef?.hit) bulletRef.hit(b.x, b.y);
+              else b.destroy(true);
+            } catch (e) {
+              b.destroy(true);
+            }
+            break; // 한 명만 맞추면 충분
+          }
+        }
+      }
+
+      // 플레이어를 맞췄으면 다음 총알로
+      if (playerHit) {
+        continue;
       }
 
       // 🔥 더 정밀한 스윕 검사
