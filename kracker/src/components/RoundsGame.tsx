@@ -7,8 +7,6 @@ import FinalResultModal from "./modals/FinalResultModal";
 import type { PlayerRoundResult } from "./panels/RoundResultPanel";
 import AugmentSelectModal from "./modals/AugmentSelectModal";
 import { socket } from "../lib/socket";
-import PlayerHealthUI from "./PlayerHealthUI";
-
 
 // ★ 게임 상태 타입 정의
 interface GamePlayer {
@@ -336,24 +334,20 @@ const RoundsGame: React.FC = () => {
 
   // ★ 임시 라운드 결과 모달 상태
   const [showRoundModal, setShowRoundModal] = React.useState(false);
-  const [roundPlayers, setRoundPlayers] = React.useState<PlayerRoundResult[]>([]);
+  const [roundPlayers, setRoundPlayers] = React.useState<PlayerRoundResult[]>(
+    []
+  );
   const [showFinalModal, setShowFinalModal] = React.useState(false);
   // ★ 현재 라운드 번호 상태
-  const [currentRound, setCurrentRound] = React.useState<number | undefined>(undefined);
+  const [currentRound, setCurrentRound] = React.useState<number | undefined>(
+    undefined
+  );
 
   // ★ 증강 선택 모달 상태
-  const [isAugmentSelectModalOpen, setIsAugmentSelectModalOpen] = React.useState(false);
-  const [isFinalResultModalOpen, setIsFinalResultModalOpen] = React.useState(false);
-
-  const [playerHealthInfo, setPlayerHealthInfo] = useState<
-    Array<{
-      id: string;
-      name: string;
-      health: number;
-      maxHealth: number;
-      isLocalPlayer: boolean;
-    }>
-  >([]);
+  const [isAugmentSelectModalOpen, setIsAugmentSelectModalOpen] =
+    React.useState(false);
+  const [isFinalResultModalOpen, setIsFinalResultModalOpen] =
+    React.useState(false);
 
   // ★ 게임 상태 로드
   useEffect(() => {
@@ -555,7 +549,10 @@ const RoundsGame: React.FC = () => {
 
   // 서버 지시에 따른 라운드 결과/증강 선택 동기화 수신
   useEffect(() => {
-    const onRoundResult = (data: { players: PlayerRoundResult[]; round: number }) => {
+    const onRoundResult = (data: {
+      players: PlayerRoundResult[];
+      round: number;
+    }) => {
       setRoundPlayers(data.players);
       setShowRoundModal(true);
       // 현재 라운드 번호 저장
@@ -579,11 +576,22 @@ const RoundsGame: React.FC = () => {
       setIsFinalResultModalOpen(true);
     };
 
-    const onAugmentProgress = (data: { round: number; selections: Record<string, string>; selectedCount: number; totalPlayers: number }) => {
-      console.log(`📡 증강 진행 상황: ${data.selectedCount}/${data.totalPlayers}`, data.selections);
+    const onAugmentProgress = (data: {
+      round: number;
+      selections: Record<string, string>;
+      selectedCount: number;
+      totalPlayers: number;
+    }) => {
+      console.log(
+        `📡 증강 진행 상황: ${data.selectedCount}/${data.totalPlayers}`,
+        data.selections
+      );
     };
 
-    const onAugmentComplete = (data: { round: number; selections: Record<string, string> }) => {
+    const onAugmentComplete = (data: {
+      round: number;
+      selections: Record<string, string>;
+    }) => {
       console.log(`🎯 라운드 ${data.round} 증강 선택 완료:`, data.selections);
       setIsAugmentSelectModalOpen(false);
     };
@@ -608,25 +616,6 @@ const RoundsGame: React.FC = () => {
   };
 
   // 플레이어 체력 정보 업데이트
-  useEffect(() => {
-    if (!isGameReady || !gameManagerRef.current) return;
-
-    const updateHealthInfo = () => {
-      const scene = gameManagerRef.current?.getScene();
-      if (scene && typeof (scene as any).getPlayerHealthInfo === "function") {
-        const healthInfo = (scene as any).getPlayerHealthInfo();
-        setPlayerHealthInfo(healthInfo);
-      }
-    };
-
-    // 초기 업데이트
-    updateHealthInfo();
-
-    // 주기적 업데이트 (100ms마다)
-    const interval = setInterval(updateHealthInfo, 100);
-
-    return () => clearInterval(interval);
-  }, [isGameReady]);
 
   return (
     <Container>
@@ -635,10 +624,7 @@ const RoundsGame: React.FC = () => {
       {/* ⭐ 커스텀 크로스헤어 커서 */}
       <CrosshairCursor />
 
-      {/* 플레이어 체력 UI */}
-      {isGameReady && playerHealthInfo.length > 0 && (
-        <PlayerHealthUI players={playerHealthInfo} />
-      )}
+      {/* 플레이어 체력 UI - 머리 위 체력바로 대체됨 */}
 
       {/* ★ 플레이어 리스트 UI */}
       {/* {gameState && isGameReady && (
@@ -727,7 +713,11 @@ const RoundsGame: React.FC = () => {
       {/* ★ 증강 선택 모달 */}
       <AugmentSelectModal
         isOpen={isAugmentSelectModalOpen}
-        players={roundPlayers.map(p => ({ id: p.id, nickname: p.nickname, color: p.color }))}
+        players={roundPlayers.map((p) => ({
+          id: p.id,
+          nickname: p.nickname,
+          color: p.color,
+        }))}
         currentRound={currentRound}
         myPlayerId={gameState?.myPlayerId}
         onClose={() => setIsAugmentSelectModalOpen(false)}
@@ -740,7 +730,7 @@ const RoundsGame: React.FC = () => {
         myWins={(() => {
           const myId = gameState?.myPlayerId;
           if (!myId) return undefined;
-          const me = roundPlayers.find(p => p.id === myId);
+          const me = roundPlayers.find((p) => p.id === myId);
           return me?.wins;
         })()}
         onClose={() => setIsFinalResultModalOpen(false)}

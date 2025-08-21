@@ -17,7 +17,7 @@ import {
   setBodyColor,
 } from "../render/character.core";
 
-import { updatePose } from "../render/character.pose";
+import { updatePose, drawHealthBar } from "../render/character.pose";
 import { drawLimbs } from "../render/limbs";
 import { getGunPosition as computeGunPos } from "../render/gun";
 
@@ -56,6 +56,9 @@ export default class Player {
 
   // 그래픽 참조
   private gfx!: GfxRefs;
+
+  // HP바 그래픽 객체
+  private hpBarGraphics!: any;
 
   // 위치/속도/상태
   private x: number;
@@ -152,7 +155,6 @@ export default class Player {
   private lastFalloutAt = 0;
 
   // 체력바 표시 타이머 (새로운 시스템에서는 사용하지 않음)
-  private hpBarShowTimerMs = 0;
 
   constructor(
     scene: any,
@@ -190,6 +192,10 @@ export default class Player {
 
     // 그래픽 생성
     this.gfx = createCharacter(this.scene, this.x, this.y, this.colors);
+
+    // HP바 그래픽 객체 생성
+    this.hpBarGraphics = this.scene.add.graphics();
+    this.hpBarGraphics.setDepth(1000); // 다른 UI보다 위에 표시
 
     // 입력 초기화
     this.keysHandle = setupKeyboard(this.scene);
@@ -408,10 +414,10 @@ export default class Player {
       }
     }
 
-    //Hp바 표시 타이머 감소
-    if (this.hpBarShowTimerMs > 0) {
-      this.hpBarShowTimerMs = Math.max(0, this.hpBarShowTimerMs - deltaMs);
-    }
+    // 체력바는 상시 표시이므로 타이머 업데이트 제거
+
+    // HP바 렌더링
+    this.renderHealthBar();
 
     // 4) 웅크리기
     this.updateCrouch(key);
@@ -829,11 +835,22 @@ export default class Player {
   public takeDamage(damage: number): void {
     if (this.invulnerable || damage <= 0) return;
 
-    // 시각적 효과만 적용 (체력은 서버에서 관리)
+    // 로컬 플레이어 체력 감소
+    const oldHealth = this.health;
+    this.health = Math.max(0, this.health - damage);
+
+    // 시각적 효과 적용
     this.wobble += 1;
     this.setInvulnerable(1000);
 
-    console.log(`💚 데미지 효과 적용: ${damage} (체력은 서버에서 관리)`);
+    console.log(
+      `💚 로컬 플레이어 데미지: ${oldHealth} -> ${this.health} (데미지: ${damage})`
+    );
+
+    // 체력이 0이 되었을 때 사망 처리
+    if (this.health <= 0 && oldHealth > 0) {
+      console.log(`💀 로컬 플레이어 사망`);
+    }
   }
   public getHealth(): number {
     return this.health;
@@ -878,6 +895,24 @@ export default class Player {
 
   public setMultiplayerMode(isMultiplayer: boolean): void {
     this.isMultiplayer = isMultiplayer;
+  }
+
+  // HP바 렌더링
+  private renderHealthBar(): void {
+    if (!this.hpBarGraphics) return;
+
+    // HP바 그래픽 초기화
+    this.hpBarGraphics.clear();
+
+    // 상시 체력바 표시
+    drawHealthBar(
+      this.hpBarGraphics,
+      this.x,
+      this.y,
+      this.health,
+      this.maxHealth,
+      0 // 타이머는 사용하지 않음
+    );
   }
 
   public setMapBounds(width: number, height: number): void {
@@ -1070,6 +1105,11 @@ export default class Player {
     // 총알 정리
     this.bullets.forEach((b) => b.destroy());
     this.bullets = [];
+
+    // HP바 그래픽 제거
+    if (this.hpBarGraphics) {
+      this.hpBarGraphics.destroy();
+    }
 
     // 그래픽 제거
     destroyCharacter(this.gfx);
