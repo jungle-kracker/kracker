@@ -187,7 +187,10 @@ export class CollisionSystem {
 
             // 데미지 가져오기
             const bulletRef = b.getData("__bulletRef");
-            const dmg = bulletRef?.getConfig ? bulletRef.getConfig().damage : 10;
+            const dmg = bulletRef?.getConfig
+              ? bulletRef.getConfig().damage
+              : 10;
+
 
             // 서버에만 체력 업데이트 전송 (로컬 데미지 처리 제거)
             if (this.networkManager && this.player) {
