@@ -830,22 +830,16 @@ export default class Player {
   public takeDamage(damage: number): void {
     if (this.invulnerable || damage <= 0) return;
 
-    // 로컬 플레이어 체력 감소
-    const oldHealth = this.health;
-    this.health = Math.max(0, this.health - damage);
+    // 서버에서 체력을 관리하므로 로컬에서는 시각적 효과만 적용
+    // 실제 체력 감소는 서버의 healthUpdate 이벤트에서 처리됨
 
     // 시각적 효과 적용
     this.wobble += 1;
     this.setInvulnerable(1000);
 
     console.log(
-      `💚 로컬 플레이어 데미지: ${oldHealth} -> ${this.health} (데미지: ${damage})`
+      `💚 로컬 플레이어 데미지 효과 적용 (서버에서 체력 관리) - 데미지: ${damage}`
     );
-
-    // 체력이 0이 되었을 때 사망 처리
-    if (this.health <= 0 && oldHealth > 0) {
-      console.log(`💀 로컬 플레이어 사망`);
-    }
   }
   public getHealth(): number {
     return this.health;
@@ -902,20 +896,30 @@ export default class Player {
 
   public setJumpHeightMultiplier(mult: number): void {
     this.jumpHeightMul = Math.max(0.2, mult || 1);
-    try { console.log(`🧩 증강 함수 발동: 점프 높이 배율 = x${this.jumpHeightMul}`); } catch {}
+    try {
+      console.log(`🧩 증강 함수 발동: 점프 높이 배율 = x${this.jumpHeightMul}`);
+    } catch {}
   }
   public setExtraJumps(n: number): void {
     this.extraJumpsAllowed = Math.max(0, Math.floor(n || 0));
-    this.remainingExtraJumps = this.isGrounded ? this.extraJumpsAllowed : Math.min(this.remainingExtraJumps, this.extraJumpsAllowed);
-    try { console.log(`🧩 증강 함수 발동: 추가 점프 = ${this.extraJumpsAllowed}`); } catch {}
+    this.remainingExtraJumps = this.isGrounded
+      ? this.extraJumpsAllowed
+      : Math.min(this.remainingExtraJumps, this.extraJumpsAllowed);
+    try {
+      console.log(`🧩 증강 함수 발동: 추가 점프 = ${this.extraJumpsAllowed}`);
+    } catch {}
   }
   public setGravityMultiplier(mult: number): void {
     this.gravityMul = Math.max(0.1, mult || 1);
-    try { console.log(`🧩 증강 함수 발동: 중력 배율 = x${this.gravityMul}`); } catch {}
+    try {
+      console.log(`🧩 증강 함수 발동: 중력 배율 = x${this.gravityMul}`);
+    } catch {}
   }
   public setMoveSpeedMultiplier(mult: number): void {
     this.moveSpeedMul = Math.max(0.3, mult || 1);
-    try { console.log(`🧩 증강 함수 발동: 이동 속도 배율 = x${this.moveSpeedMul}`); } catch {}
+    try {
+      console.log(`🧩 증강 함수 발동: 이동 속도 배율 = x${this.moveSpeedMul}`);
+    } catch {}
   }
 
   private performJump(): void {
@@ -955,7 +959,11 @@ export default class Player {
 
   public setBlinkEnabled(enabled: boolean): void {
     this.blinkEnabled = !!enabled;
-    try { console.log(`🧩 증강 함수 발동: 블링크 ${this.blinkEnabled ? "ON" : "OFF"}`); } catch {}
+    try {
+      console.log(
+        `🧩 증강 함수 발동: 블링크 ${this.blinkEnabled ? "ON" : "OFF"}`
+      );
+    } catch {}
   }
 
   // HP바 렌더링

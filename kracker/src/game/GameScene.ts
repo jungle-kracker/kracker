@@ -41,7 +41,11 @@ import CollisionSystem from "./systems/CollisionSystem";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import AUGMENT_DEFS from "../data/augments.json";
-import { aggregateAugments as centralAggregate, findAugmentNamesWithEffect, getAugmentsForPlayer } from "../data/augments";
+import {
+  aggregateAugments as centralAggregate,
+  findAugmentNamesWithEffect,
+  getAugmentsForPlayer,
+} from "../data/augments";
 
 // 멀티플레이어 타입 정의
 interface GamePlayer {
@@ -286,6 +290,43 @@ export default class GameScene extends Phaser.Scene {
               }
             }
           } catch {}
+        }
+      );
+
+      // 💥 총알 타격 이벤트 수신 → 서버에 타격 보고
+      this.events.on(
+        "bullet:hitPlayer",
+        (e: {
+          bulletId: string;
+          targetPlayerId: string;
+          damage: number;
+          x: number;
+          y: number;
+          ownerId: string;
+        }) => {
+          try {
+            if (!this.networkManager) return;
+
+            // 내가 맞은 경우에만 서버에 보고
+            if (e.targetPlayerId === this.myPlayerId) {
+              console.log(
+                `💥 총알 타격 이벤트: 내가 맞음 - 데미지 ${e.damage}`
+              );
+
+              this.networkManager.sendBulletHit({
+                bulletId: e.bulletId,
+                targetPlayerId: e.targetPlayerId,
+                damage: e.damage,
+                x: e.x,
+                y: e.y,
+              });
+
+              // 카메라 흔들기만 적용 (체력은 서버에서 처리)
+              this.shakeCamera(150, 0.008);
+            }
+          } catch (error) {
+            console.warn("총알 타격 이벤트 처리 실패:", error);
+          }
         }
       );
     } catch (error) {
@@ -704,31 +745,31 @@ export default class GameScene extends Phaser.Scene {
 
       let hitDetected = false;
 
-      // 원격 총알이 나를 맞춘 경우
-      if (b.ownerId && b.ownerId !== myId) {
-        console.log(`🎯 원격 총알 체크: ${b.ownerId} -> ${myId}`);
-        if (pointInCircle(bx, by, myCircleBounds)) {
-          hitDetected = true;
-          b._hitProcessed = true;
+      // 원격 총알이 나를 맞춘 경우 (CollisionSystem에서 처리하므로 여기서는 제거)
+      // if (b.ownerId && b.ownerId !== myId) {
+      //   console.log(`🎯 원격 총알 체크: ${b.ownerId} -> ${myId}`);
+      //   if (pointInCircle(bx, by, myCircleBounds)) {
+      //     hitDetected = true;
+      //     b._hitProcessed = true;
 
-          const damage = this.shootingManager?.getDamage() ?? 25;
-          console.log(
-            `🎯 내가 맞음! 데미지: ${damage}, 총알 소유자: ${b.ownerId}`
-          );
+      //     const damage = this.shootingManager?.getDamage() ?? 25;
+      //     console.log(
+      //       `🎯 내가 맞음! 데미지: ${damage}, 총알 소유자: ${b.ownerId}`
+      //     );
 
-          // 서버에 타격 전송 (로컬 데미지 처리 제거)
-          this.networkManager?.sendBulletHit({
-            bulletId: b.id || `bullet_${Date.now()}`,
-            targetPlayerId: myId,
-            damage: damage,
-            x: bx,
-            y: by,
-          });
+      //     // 서버에 타격 전송 (로컬 데미지 처리 제거)
+      //     this.networkManager?.sendBulletHit({
+      //       bulletId: b.id || `bullet_${Date.now()}`,
+      //       targetPlayerId: myId,
+      //       damage: damage,
+      //       x: bx,
+      //       y: by,
+      //     });
 
-          // 카메라 흔들기만 적용 (체력은 서버에서 처리)
-          this.shakeCamera(150, 0.008);
-        }
-      }
+      //     // 카메라 흔들기만 적용 (체력은 서버에서 처리)
+      //     this.shakeCamera(150, 0.008);
+      //   }
+      // }
 
       // 내 총알이 원격 플레이어를 맞춘 경우
       if (!hitDetected && b.ownerId === myId) {
@@ -806,8 +847,17 @@ export default class GameScene extends Phaser.Scene {
                 this.myPlayerId!
               );
               if (eff && eff.bullet.slowOnHitMs > 0) {
-                const names = findAugmentNamesWithEffect(this.augmentByPlayer.get(this.myPlayerId!) || {}, (d) => !!d.effects?.bullet?.slowOnHitMs);
-                try { console.log(`🧩 증강 함수 발동: 슬로우(${names.join(", ") || "알수없음"}) → ${pid}`); } catch {}
+                const names = findAugmentNamesWithEffect(
+                  this.augmentByPlayer.get(this.myPlayerId!) || {},
+                  (d) => !!d.effects?.bullet?.slowOnHitMs
+                );
+                try {
+                  console.log(
+                    `🧩 증강 함수 발동: 슬로우(${
+                      names.join(", ") || "알수없음"
+                    }) → ${pid}`
+                  );
+                } catch {}
                 this.networkManager?.sendGameEvent({
                   type: "status",
                   playerId: pid,
@@ -820,8 +870,17 @@ export default class GameScene extends Phaser.Scene {
               }
               // ⚡ 스턴 상태이상: stunMs가 있으면 서버에 상태 이벤트 전송 요청
               if (eff && eff.bullet.stunMs > 0) {
-                const names = findAugmentNamesWithEffect(this.augmentByPlayer.get(this.myPlayerId!) || {}, (d) => !!d.effects?.bullet?.stunMs);
-                try { console.log(`🧩 증강 함수 발동: 스턴(${names.join(", ") || "알수없음"}) → ${pid}`); } catch {}
+                const names = findAugmentNamesWithEffect(
+                  this.augmentByPlayer.get(this.myPlayerId!) || {},
+                  (d) => !!d.effects?.bullet?.stunMs
+                );
+                try {
+                  console.log(
+                    `🧩 증강 함수 발동: 스턴(${
+                      names.join(", ") || "알수없음"
+                    }) → ${pid}`
+                  );
+                } catch {}
                 this.networkManager?.sendGameEvent({
                   type: "status",
                   playerId: pid,
@@ -830,8 +889,17 @@ export default class GameScene extends Phaser.Scene {
               }
               // 💨 넉백: 증강 knockbackMul이 1보다 크면 방향 임펄스 전송
               if (eff && (eff.bullet.knockbackMul || 1) > 1) {
-                const names = findAugmentNamesWithEffect(this.augmentByPlayer.get(this.myPlayerId!) || {}, (d) => !!d.effects?.bullet?.knockbackMul);
-                try { console.log(`🧩 증강 함수 발동: 넉백(${names.join(", ") || "알수없음"}) → ${pid}`); } catch {}
+                const names = findAugmentNamesWithEffect(
+                  this.augmentByPlayer.get(this.myPlayerId!) || {},
+                  (d) => !!d.effects?.bullet?.knockbackMul
+                );
+                try {
+                  console.log(
+                    `🧩 증강 함수 발동: 넉백(${
+                      names.join(", ") || "알수없음"
+                    }) → ${pid}`
+                  );
+                } catch {}
                 const impulseBase = 400; // 기본 임펄스 크기
                 const impulse = impulseBase * (eff.bullet.knockbackMul || 1);
                 const rp = this.remotePlayers.get(pid);
@@ -859,8 +927,17 @@ export default class GameScene extends Phaser.Scene {
                 this.myPlayerId
               ) {
                 const healAmount = eff.player.lifestealOnHit;
-                const names = findAugmentNamesWithEffect(this.augmentByPlayer.get(this.myPlayerId!) || {}, (d) => !!d.effects?.player?.lifestealOnHit);
-                try { console.log(`🧩 증강 함수 발동: 라이프스틸(${names.join(", ") || "알수없음"}) +${healAmount}`); } catch {}
+                const names = findAugmentNamesWithEffect(
+                  this.augmentByPlayer.get(this.myPlayerId!) || {},
+                  (d) => !!d.effects?.player?.lifestealOnHit
+                );
+                try {
+                  console.log(
+                    `🧩 증강 함수 발동: 라이프스틸(${
+                      names.join(", ") || "알수없음"
+                    }) +${healAmount}`
+                  );
+                } catch {}
                 this.networkManager?.sendGameEvent({
                   type: "heal",
                   playerId: this.myPlayerId,
@@ -921,7 +998,9 @@ export default class GameScene extends Phaser.Scene {
   // 증강 집계 효과를 조회 (ShootingManager와 동일 규칙)
   private getAugmentAggregatedEffectsForPlayer(playerId: string): any {
     const res = getAugmentsForPlayer(this.augmentByPlayer, playerId);
-    try { console.log("🛠️ 증강 적용(플레이어):", { playerId, res }); } catch {}
+    try {
+      console.log("🛠️ 증강 적용(플레이어):", { playerId, res });
+    } catch {}
     return res as any;
   }
 
@@ -1085,8 +1164,12 @@ export default class GameScene extends Phaser.Scene {
           const pos = event.data || {};
           if (pid === this.myPlayerId) {
             this.playerHide();
-            try { this.uiManager.destroyNameTag(pid); } catch {}
-            try { (this.shootingManager as any)?.ammoGraphics?.setVisible?.(false); } catch {}
+            try {
+              this.uiManager.destroyNameTag(pid);
+            } catch {}
+            try {
+              (this.shootingManager as any)?.ammoGraphics?.setVisible?.(false);
+            } catch {}
             // 내 사망 이펙트
             this.createParticleEffect(
               pos.x ?? this.getPlayerX(),
@@ -1108,7 +1191,9 @@ export default class GameScene extends Phaser.Scene {
               refs?.leftLeg?.setVisible?.(false);
               refs?.rightLeg?.setVisible?.(false);
               refs?.gun?.setVisible?.(false);
-              try { this.uiManager.destroyNameTag(pid); } catch {}
+              try {
+                this.uiManager.destroyNameTag(pid);
+              } catch {}
               // 사망 시에도 체력바는 계속 표시
 
               // 원격 사망 이펙트: 해당 좌표에서만 생성
@@ -1164,12 +1249,20 @@ export default class GameScene extends Phaser.Scene {
   private handleHealthUpdate(data: any): void {
     const { playerId, health, damage } = data;
 
+    console.log(`💚 서버에서 체력 업데이트 수신:`, {
+      playerId,
+      health,
+      damage,
+    });
+
     if (playerId === this.myPlayerId) {
       const currentHealth = this.player.getHealth();
       const expectedHealth = health;
 
       // 서버 권위 체력 동기화 (서버 판정이 최우선)
-      console.log(`💚 체력 동기화: ${currentHealth} -> ${expectedHealth}`);
+      console.log(
+        `💚 내 체력 동기화: ${currentHealth} -> ${expectedHealth} (서버 권위)`
+      );
 
       // 체력을 직접 설정 (서버 값으로)
       this.player.setHealth(expectedHealth);
@@ -1192,7 +1285,10 @@ export default class GameScene extends Phaser.Scene {
         this.player.setInvulnerable(1000);
       }
 
-      console.log(`💚 내 체력 업데이트: ${expectedHealth}`);
+      console.log(`💚 내 체력 업데이트 완료: ${expectedHealth}/100`);
+
+      // 디버그: 현재 모든 플레이어 체력 상태 출력
+      this.logAllPlayerHealth();
     } else {
       // 원격 플레이어 체력 업데이트
       const remotePlayer = this.remotePlayers.get(playerId);
@@ -3082,7 +3178,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // 플레이어 경계 검사 헬퍼
-  private checkPlayerBoundaries(p: any, px: number, py: number, mapSize: { width: number; height: number }): void {
+  private checkPlayerBoundaries(
+    p: any,
+    px: number,
+    py: number,
+    mapSize: { width: number; height: number }
+  ): void {
     const leftBound = PLAYER_CONSTANTS.SIZE.HALF_WIDTH;
     const rightBound = mapSize.width - PLAYER_CONSTANTS.SIZE.HALF_WIDTH;
     const topBound = PLAYER_CONSTANTS.SIZE.HALF_HEIGHT;
@@ -3119,5 +3220,25 @@ export default class GameScene extends Phaser.Scene {
         if (py >= bottomBound && p.velocity.y > 0) p.velocity.y = 0;
       }
     }
+  }
+
+  // 🆕 모든 플레이어 체력 상태 로깅 (디버그용)
+  private logAllPlayerHealth(): void {
+    console.log("=== 모든 플레이어 체력 상태 ===");
+
+    // 내 체력
+    if (this.player) {
+      const myHealth = this.player.getHealth();
+      console.log(`💚 내 체력: ${myHealth}/100`);
+    }
+
+    // 원격 플레이어들 체력
+    this.remotePlayers.forEach((remotePlayer, playerId) => {
+      const health = remotePlayer.networkState.health;
+      const name = remotePlayer.name || playerId;
+      console.log(`💚 ${name}: ${health}/100`);
+    });
+
+    console.log("=============================");
   }
 }

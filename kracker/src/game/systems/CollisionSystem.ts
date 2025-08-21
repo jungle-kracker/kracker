@@ -200,12 +200,28 @@ export class CollisionSystem {
               ? bulletRef.getConfig().damage
               : 10;
 
-            // 로컬 플레이어가 맞았을 때는 로컬에서 직접 데미지 처리
-            if (this.player && typeof this.player.takeDamage === "function") {
-              console.log(
-                `💥 CollisionSystem: 로컬 플레이어 맞음 - 데미지: ${dmg}`
-              );
-              this.player.takeDamage(dmg);
+            // 로컬 플레이어가 맞았을 때는 서버에 타격 전송만 하고 로컬 데미지 처리는 하지 않음
+            // (서버에서 healthUpdate 이벤트로 체력 동기화)
+            console.log(
+              `💥 CollisionSystem: 로컬 플레이어 맞음 - 서버에 타격 전송 (데미지: ${dmg})`
+            );
+            
+            // 서버에 타격 전송 (GameScene에서 처리하도록 이벤트 발생)
+            try {
+              const bulletRef = b.getData("__bulletRef");
+              const ownerId = bulletRef?.ownerId || b.getData("__ownerId") || "unknown";
+              
+              // GameScene에 타격 이벤트 전달
+              (this.scene as any).events?.emit?.("bullet:hitPlayer", {
+                bulletId: (b as any).id || `bullet_${Date.now()}`,
+                targetPlayerId: (this.player as any)?.getId?.() || "local",
+                damage: dmg,
+                x: b.x,
+                y: b.y,
+                ownerId: ownerId
+              });
+            } catch (e) {
+              console.warn("타격 이벤트 전송 실패:", e);
             }
 
             // 관통 처리: __pierce > 0 이면 제거하지 않고 관통 횟수 감소

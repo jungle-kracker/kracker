@@ -290,12 +290,13 @@ export class NetworkManager {
       },
     };
 
-    console.log(`💥 충돌 데이터 전송:`, {
+    console.log(`💥 총알 타격 서버 전송:`, {
       roomId: this.roomId,
+      myPlayerId: this.myPlayerId,
       targetPlayerId: hitData.targetPlayerId,
       damage: hitData.damage,
       bulletId: hitData.bulletId,
-      position: `(${hitData.x}, ${hitData.y})`,
+      position: `(${hitData.x.toFixed(1)}, ${hitData.y.toFixed(1)})`,
     });
 
     socket.emit("game:bulletHit", payload);
