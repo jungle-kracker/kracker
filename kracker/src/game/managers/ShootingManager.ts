@@ -44,7 +44,9 @@ export class ShootingManager {
   private augmentResolver?: (
     playerId: string
   ) => Record<string, { id: string; startedAt: number }> | undefined;
-
+  private getAugmentsFor?: (
+    playerId: string
+  ) => Record<string, { id: string; startedAt: number }> | undefined;
 
   // 총 위 총알 표시를 위한 그래픽 객체
   private ammoGraphics?: Phaser.GameObjects.Graphics;
@@ -589,8 +591,6 @@ export class ShootingManager {
     this.ownerId = id;
   }
 
-  // 중복된 선언 제거됨 (아래 단일 구현 사용)
-
   public getAllBullets(): any[] {
     return this.shootingSystem?.getAllBullets() || [];
   }
@@ -615,7 +615,7 @@ export class ShootingManager {
     return this.shootingSystem.getBulletGroup();
   }
 
-  // 🆕 증강 조회 콜백을 등록(씬에서 세팅)
+  // 증강 조회 콜백을 등록(씬에서 세팅)
   public setAugmentResolver(
     fn: (playerId: string) => Record<string, { id: string; startedAt: number }> | undefined
   ) {

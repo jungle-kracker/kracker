@@ -14,7 +14,7 @@ type Player = {
   color?: string;
   ready: boolean;
   health?: number; // 체력 추가
-  wins?: number;   // 🆕 라운드 승리 스택
+  wins?: number; // 🆕 라운드 승리 스택
   // 🆕 활성 증강: augmentId -> { id, startedAt }
   augments?: Record<string, { id: string; startedAt: number }>;
 };
@@ -159,7 +159,7 @@ io.on("connection", (socket) => {
       team: "A",
       ready: false,
       health: 100, // 초기 체력 설정
-      wins: 0,     // 🆕 승리 스택 초기화
+      wins: 0, // 🆕 승리 스택 초기화
     };
 
     rooms.set(roomId, room);
@@ -279,7 +279,7 @@ io.on("connection", (socket) => {
         team: "A",
         ready: false,
         health: 100, // 초기 체력 설정
-        wins: 0,     // 🆕 승리 스택 초기화
+        wins: 0, // 🆕 승리 스택 초기화
       };
     }
 
@@ -536,9 +536,21 @@ io.on("connection", (socket) => {
           damage: damage,
           timestamp: Date.now(),
         });
-
+        
+        // 데미지를 입은 플레이어에게 HP바 표시 이벤트 전송
+        io.to(roomId).emit("game:event", {
+          type: "showHealthBar",
+          playerId: hit.targetPlayerId,
+          data: {
+            playerId: hit.targetPlayerId,
+            health: newHealth,
+            duration: 3000, // 3초간 표시
+          },
+        });
+        
         // 독걸려랑: DoT 스케줄 (초당 5뎀, 3틱)
         if (shooter?.augments && shooter.augments["독걸려랑"] && newHealth > 0) {
+
           const victimId = hit.targetPlayerId;
           let ticks = 3;
           const dot = 5;
@@ -556,6 +568,17 @@ io.on("connection", (socket) => {
               health: nh,
               damage: dot,
               timestamp: Date.now(),
+            });
+
+            // 독 데미지로 인한 HP바 표시
+            io.to(roomId).emit("game:event", {
+              type: "showHealthBar",
+              playerId: victimId,
+              data: {
+                playerId: victimId,
+                health: nh,
+                duration: 3000, // 3초간 표시
+              },
             });
             ticks -= 1;
             if (nh <= 0 || ticks <= 0) clearInterval(timer);
@@ -913,7 +936,10 @@ function leaveAllRooms(socket: any) {
 // ──────────────────────────────────────────────────────────────
 // 라운드 종료 판정 및 처리 헬퍼
 // ──────────────────────────────────────────────────────────────
-function evaluateRoundEnd(room: Room): { shouldEnd: boolean; winners: string[] } {
+function evaluateRoundEnd(room: Room): {
+  shouldEnd: boolean;
+  winners: string[];
+} {
   const players = Object.values(room.players);
   const alive = players.filter((p) => (p.health ?? 100) > 0);
 
@@ -932,7 +958,9 @@ function evaluateRoundEnd(room: Room): { shouldEnd: boolean; winners: string[] }
   return { shouldEnd: false, winners: [] };
 }
 
-function buildRoundResultPayload(room: Room): Array<{ id: string; nickname: string; color: string; wins: number }>{
+function buildRoundResultPayload(
+  room: Room
+): Array<{ id: string; nickname: string; color: string; wins: number }> {
   return Object.values(room.players).map((p) => ({
     id: p.id,
     nickname: p.nickname,
