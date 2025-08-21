@@ -421,7 +421,13 @@ const RoundsGame: React.FC = () => {
 
   // 게임 초기화 함수
   const initializeGame = useCallback(async () => {
-    if (!gameRef.current || gameManagerRef.current || !gameState) return;
+    if (!gameRef.current || !gameState) return;
+    
+    // 이미 게임 매니저가 존재하고 초기화된 경우 중복 실행 방지
+    if (gameManagerRef.current) {
+      console.log("⚠️ 게임 매니저가 이미 존재함. 중복 초기화 방지.");
+      return;
+    }
 
     try {
       console.log("게임 초기화 시작 - 플레이어 수:", gameState.players.length);
@@ -433,12 +439,32 @@ const RoundsGame: React.FC = () => {
 
       // ⭐ 중요: 씬이 완전히 로드될 때까지 기다리기
       const scene = gameManagerRef.current.getScene();
-      if (!scene) {
+      const isSceneReady = gameManagerRef.current.isSceneReady();
+      
+      console.log("🔍 씬 상태 확인:", {
+        hasScene: !!scene,
+        isSceneReady,
+        hasGameManager: !!gameManagerRef.current,
+        gameStateExists: !!gameState
+      });
+      
+      if (!scene || !isSceneReady) {
         console.log("⏳ 씬 로딩 대기 중...");
-        setTimeout(() => {
+        
+        // 씬 로딩 완료를 기다리는 함수
+        const waitForScene = (retryCount = 0) => {
           const retryScene = gameManagerRef.current?.getScene();
-          if (retryScene && gameState) {
-            console.log("🔄 씬 준비됨, 멀티플레이어 초기화 재시도");
+          const retryIsReady = gameManagerRef.current?.isSceneReady();
+          
+          console.log("🔄 씬 대기 재시도:", {
+            retryCount,
+            hasScene: !!retryScene,
+            isReady: retryIsReady,
+            hasGameState: !!gameState
+          });
+          
+          if (retryScene && retryIsReady && gameState) {
+            console.log("🔄 씬 준비됨, 멀티플레이어 초기화 실행");
 
             const gameData = {
               players: gameState.players,
@@ -456,12 +482,24 @@ const RoundsGame: React.FC = () => {
             } else {
               console.error("❌ initializeMultiplayer 함수를 찾을 수 없음");
             }
+            
+            // 씬이 준비된 후에만 로딩 완료
+            setIsGameReady(true);
+            setIsLoading(false);
+            console.log("✅ 게임 초기화 완료 (씬 대기 후)");
+          } else if (retryCount < 50) { // 최대 5초 대기 (50 * 100ms)
+            // 아직 씬이 준비되지 않았으면 다시 시도
+            setTimeout(() => waitForScene(retryCount + 1), 100);
+          } else {
+            console.error("❌ 씬 로딩 시간 초과 (5초)");
+            setError("게임 씬 로딩 시간이 초과되었습니다.");
+            setIsLoading(false);
           }
-        }, 500); // 500ms 후 재시도
-
-        setIsGameReady(true);
-        setIsLoading(false);
-        return;
+        };
+        
+        // 첫 번째 시도는 500ms 후에
+        setTimeout(waitForScene, 500);
+        return; // 여기서는 로딩 상태를 유지
       }
 
       // 씬이 준비되었다면 바로 초기화
@@ -489,7 +527,7 @@ const RoundsGame: React.FC = () => {
 
       setIsGameReady(true);
       setIsLoading(false);
-      console.log("게임 초기화 성공");
+      console.log("✅ 게임 초기화 성공 (즉시)");
     } catch (error) {
       console.error("게임 초기화 실패:", error);
       setError(
@@ -514,14 +552,26 @@ const RoundsGame: React.FC = () => {
 
   // 게임 상태가 로드되면 초기화
   useEffect(() => {
-    if (gameState) {
+    if (gameState && !gameManagerRef.current) {
+      console.log("🎮 게임 상태 로드됨, 게임 초기화 시작");
       const timer = setTimeout(initializeGame, 100);
       return () => {
         clearTimeout(timer);
-        cleanupGame();
+        // cleanupGame은 여기서 호출하지 않음
+        // 컴포넌트가 언마운트될 때만 정리
       };
     }
-  }, [gameState, initializeGame, cleanupGame]);
+  }, [gameState, initializeGame]);
+
+  // 컴포넌트 언마운트 시에만 정리
+  useEffect(() => {
+    return () => {
+      if (gameManagerRef.current) {
+        console.log("🧹 컴포넌트 언마운트, 게임 정리");
+        cleanupGame();
+      }
+    };
+  }, [cleanupGame]);
 
   // 윈도우 포커스 이벤트 처리
   useEffect(() => {

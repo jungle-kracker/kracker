@@ -165,6 +165,11 @@ export default class GameScene extends Phaser.Scene {
     super({ key: "GameScene" });
   }
 
+  // 🆕 씬 초기화 상태 확인을 위한 public getter
+  public getIsInitialized(): boolean {
+    return this.isInitialized;
+  }
+
   //멀티관련
   private pendingMultiplayerData: GameData | null = null;
 
@@ -173,12 +178,20 @@ export default class GameScene extends Phaser.Scene {
     // 추가 에셋들...
   }
 
-  async create(data?: {
-    mapKey?: MapKey;
-    platforms?: Platform[];
-    bullets?: Bullet[];
-    spawn?: { x: number; y: number };
-  }): Promise<void> {
+  async create(data: any) {
+    // 중복 호출 방지
+    if (this.isInitialized) {
+      console.log("⚠️ create 메서드가 이미 초기화된 씬에서 중복 호출됨. 무시합니다.");
+      return;
+    }
+
+    console.log("🎮 GameScene.create() 호출됨", {
+      hasData: !!data,
+      dataKeys: data ? Object.keys(data) : [],
+      isInitialized: this.isInitialized,
+      isMultiplayer: this.isMultiplayer
+    });
+
     this.sceneState = GAME_STATE.SCENE_STATES.LOADING;
 
     try {
@@ -234,8 +247,16 @@ export default class GameScene extends Phaser.Scene {
       this.sceneState = GAME_STATE.SCENE_STATES.RUNNING;
       this.isInitialized = true;
 
+      console.log("✅ GameScene 초기화 완료", {
+        sceneState: this.sceneState,
+        isInitialized: this.isInitialized,
+        hasPendingData: !!this.pendingMultiplayerData,
+        isMultiplayer: this.isMultiplayer
+      });
+
       // 대기열에 멀티플레이 초기화 데이터가 있으면 지금 처리
-      if (this.pendingMultiplayerData) {
+      if (this.pendingMultiplayerData && !this.isMultiplayer) {
+        console.log("🔄 대기 중인 멀티플레이어 데이터 처리");
         const queued = this.pendingMultiplayerData;
         this.pendingMultiplayerData = null;
         this.initializeMultiplayer(queued);
@@ -1409,6 +1430,16 @@ export default class GameScene extends Phaser.Scene {
 
   // ☆ 멀티플레이어 초기화 메서드 (네트워크 연결 추가)
   public initializeMultiplayer(gameData: GameData): void {
+    // 이미 초기화 중이거나 완료된 경우 중복 실행 방지
+    if (this.isMultiplayer || this.gameData) {
+      console.log("⚠️ 멀티플레이어가 이미 초기화됨. 중복 실행 방지.", {
+        isMultiplayer: this.isMultiplayer,
+        hasGameData: !!this.gameData,
+        isInitialized: this.isInitialized
+      });
+      return;
+    }
+
     if (!this.isInitialized || !this.networkManager) {
       this.pendingMultiplayerData = gameData;
       console.log("⏳ Scene not ready. Queued multiplayer init.");

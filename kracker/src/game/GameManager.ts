@@ -199,6 +199,14 @@ export default class GameManager {
   }
 
   /**
+   * 씬이 완전히 준비되었는지 확인합니다
+   */
+  public isSceneReady(): boolean {
+    const scene = this.getGameScene();
+    return scene !== null && scene.getIsInitialized();
+  }
+
+  /**
    * 맵을 변경합니다
    */
   public async changeMap(mapKey: string): Promise<void> {
@@ -292,11 +300,6 @@ export default class GameManager {
   // 🆕 게임 상태 확인
   public isInitialized(): boolean {
     return !!this.game;
-  }
-
-  public isSceneReady(): boolean {
-    const scene = this.getGameScene();
-    return !!scene;
   }
 
   // 🆕 퍼포먼스 모니터링
