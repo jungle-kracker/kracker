@@ -3,19 +3,19 @@
 
 백엔드 서버 실행 방법 - localhost:3001
 <br/>
-cd ./server
 <br/>
 
 ```
-npm run dev
+cd ./server/src
+npx ts-node server.ts
 ```
 <br/>
 <br/>
 프론트 서버 실행 방법 - localhost:3000
 <br/>
-cd ./kracker
 <br/>
 
 ```
+cd ./kracker
 npm start
 ```
