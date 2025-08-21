@@ -104,6 +104,11 @@ export class CollisionSystem {
 
         if (!bulletSprite) return;
 
+        // 유령 탄: 플랫폼 충돌 무시
+        if (bulletSprite.getData("__ghost")) {
+          return;
+        }
+
         if (bulletSprite.getData("__hitThisFrame")) {
           bulletSprite.setData("__hitThisFrame", false);
           return;
@@ -205,12 +210,13 @@ export class CollisionSystem {
             console.log(
               `💥 CollisionSystem: 로컬 플레이어 맞음 - 서버에 타격 전송 (데미지: ${dmg})`
             );
-            
+
             // 서버에 타격 전송 (GameScene에서 처리하도록 이벤트 발생)
             try {
               const bulletRef = b.getData("__bulletRef");
-              const ownerId = bulletRef?.ownerId || b.getData("__ownerId") || "unknown";
-              
+              const ownerId =
+                bulletRef?.ownerId || b.getData("__ownerId") || "unknown";
+
               // GameScene에 타격 이벤트 전달
               (this.scene as any).events?.emit?.("bullet:hitPlayer", {
                 bulletId: (b as any).id || `bullet_${Date.now()}`,
@@ -218,14 +224,16 @@ export class CollisionSystem {
                 damage: dmg,
                 x: b.x,
                 y: b.y,
-                ownerId: ownerId
+                ownerId: ownerId,
               });
             } catch (e) {
               console.warn("타격 이벤트 전송 실패:", e);
             }
 
             // 관통 처리: __pierce > 0 이면 제거하지 않고 관통 횟수 감소
-            const pierceLeft = (b.getData && b.getData("__pierce")) as number | undefined;
+            const pierceLeft = (b.getData && b.getData("__pierce")) as
+              | number
+              | undefined;
             if (pierceLeft && pierceLeft > 0) {
               b.setData && b.setData("__pierce", pierceLeft - 1);
             } else {
@@ -298,6 +306,13 @@ export class CollisionSystem {
 
       // 플레이어를 맞췄으면 다음 총알로
       if (playerHit) {
+        continue;
+      }
+
+      // 유령 탄: 플랫폼 충돌 무시
+      if (b.getData("__ghost")) {
+        b.setData("__prevX", curX);
+        b.setData("__prevY", curY);
         continue;
       }
 

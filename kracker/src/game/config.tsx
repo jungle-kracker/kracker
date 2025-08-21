@@ -9,7 +9,7 @@ export const GAME_CONFIG = {
   },
   // GAME_CONFIG 안에 예시
   bullet: {
-    speed: 2000, // 기본 총알 속도
+    speed: 600, // 기본 총알 속도 (800 -> 600으로 감소)
     gravityY: 1000, // 총알 개별 중력 (Y)
     gravityX: 100, // 필요하면 X도
     useWorldGravity: false, // true면 world.gravity 사용

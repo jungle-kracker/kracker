@@ -231,10 +231,18 @@ export class ShootingManager {
     const baseDamage = this.config.damage;
     const baseRadius = 6;
 
-    // 총알 색상(증강 기반): 독걸려랑=녹색, 벌이야!=노란색
+    // 총알 색상(증강 기반)
     let bulletColor = 0xffaa00;
-    if (aug?.["독걸려랑"]) bulletColor = 0x00ff00;
-    else if (aug?.["벌이야!"]) bulletColor = 0xffff00;
+    if (agg.bullet.color) {
+      // 16진수 문자열을 숫자로 변환
+      bulletColor = parseInt(agg.bullet.color, 16);
+    } else {
+      // 기존 하드코딩된 색상 (호환성 유지)
+      if (aug?.["독걸려랑"]) bulletColor = 0x00ff00;
+      else if (aug?.["벌이야!"]) bulletColor = 0xffff00;
+      else if (aug?.["기생충"]) bulletColor = 0x800080; // 보라색
+      else if (aug?.["끈적여요"]) bulletColor = 0x90ee90; // 연한 연두색
+    }
     // 중력 저항 계산 (그날 인류는 떠올렸다 카드용)
     const gravityResistance = agg.bullet.gravityResistance || 0;
     const gravityMultiplier = 1 - gravityResistance;
@@ -270,13 +278,18 @@ export class ShootingManager {
         damage: bulletConfig.damage,
         homingStrength: bulletConfig.homingStrength,
         explodeRadius: bulletConfig.explodeRadius,
-        gravity: { x: 0, y: 3000 * gravityMultiplier }, // 중력 저항 적용
+        gravity: { x: 0, y: 1800 * gravityMultiplier }, // 중력 1800으로 통일, 중력 저항 적용
         useWorldGravity: false,
         lifetime: 8000,
       }
     );
 
     if (shotFired) {
+      // 쏴용 소리 재생 이벤트 발생 (GameScene에서 처리)
+      this.scene.events.emit("shoot:sound", {
+        playerId: this.ownerId || "local",
+      });
+
       const after = this.shootingSystem?.getAllBullets() || [];
       const remaining = this.shootingSystem.getCurrentAmmo();
       Debug.log.debug(
@@ -292,6 +305,9 @@ export class ShootingManager {
           try {
             if (aug?.["유령이다"]) {
               b.setData && b.setData("__ghost", true);
+            }
+            if (aug?.["이건폭탄이여"]) {
+              b.setData && b.setData("__explosiveBullet", true);
             }
             // 총알 소유자 정보 주입 (폭발 등 이벤트용)
             if (b && typeof b.setData === "function") {

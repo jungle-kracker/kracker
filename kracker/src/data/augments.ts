@@ -74,6 +74,9 @@ export interface AggregatedAugments {
     stunMs: number;
     knockbackMul: number;
     gravityResistance: number;
+    color?: string;
+    parasiteDps: number;
+    parasiteTicks: number;
   };
   player: {
     jumpHeightMul: number;
@@ -123,6 +126,9 @@ export function aggregateAugments(
       stunMs: 0,
       knockbackMul: 1,
       gravityResistance: 0,
+      color: undefined,
+      parasiteDps: 0,
+      parasiteTicks: 0,
     },
     player: {
       jumpHeightMul: 1,
@@ -207,6 +213,18 @@ export function aggregateAugments(
         base.bullet.gravityResistance = Math.max(
           base.bullet.gravityResistance,
           e.bullet.gravityResistance
+        );
+      if (typeof e.bullet.color === "string")
+        base.bullet.color = e.bullet.color;
+      if (typeof e.bullet.parasiteDps === "number")
+        base.bullet.parasiteDps = Math.max(
+          base.bullet.parasiteDps,
+          e.bullet.parasiteDps
+        );
+      if (typeof e.bullet.parasiteTicks === "number")
+        base.bullet.parasiteTicks = Math.max(
+          base.bullet.parasiteTicks,
+          e.bullet.parasiteTicks
         );
     }
     if (e.player) {
