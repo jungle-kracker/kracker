@@ -1,17 +1,38 @@
 // src/providers/BgmProvider.tsx
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useLocation } from "react-router-dom";
 // NOTE: 프로젝트 구조에 맞춰 경로 확인하세요. (예: "../audio/tracks")
-import { PAGE_TO_PLAYLIST, PageKey } from "../assets/audios/tracks";
+import {
+  PAGE_TO_PLAYLIST,
+  PageKey,
+  SHOOT_SOUND,
+  HIT_SOUND,
+} from "../assets/audios/tracks";
 
 type AudioCtx = {
   // 공개 API (변경 없음)
-  master: number; bgm: number; sfx: number;
-  setMaster: (v: number) => void; setBgm: (v: number) => void; setSfx: (v: number) => void;
-  next: () => void; prev: () => void;
+  master: number;
+  bgm: number;
+  sfx: number;
+  setMaster: (v: number) => void;
+  setBgm: (v: number) => void;
+  setSfx: (v: number) => void;
+  next: () => void;
+  prev: () => void;
   isPlaying: boolean;
-  play: () => void; pause: () => void;
+  play: () => void;
+  pause: () => void;
   playSfx: (src: string) => void;
+  // 새로운 게임 사운드 함수들
+  playShootSound: () => void;
+  playHitSound: () => void;
 };
 
 const AudioContext = createContext<AudioCtx | null>(null);
@@ -24,10 +45,13 @@ export const useAudio = () => {
 // ───────────────────────────────────────────────────────────────────────────────
 // Utils
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
-const mixToLinear = (master100: number, lane100: number) => (master100 / 100) * (lane100 / 100);
+const mixToLinear = (master100: number, lane100: number) =>
+  (master100 / 100) * (lane100 / 100);
 // ───────────────────────────────────────────────────────────────────────────────
 
-export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   // Volumes (0~100)
   const [masterVolume, setMasterVolume] = useState(50);
   const [bgmVolume, setBgmVolume] = useState(50);
@@ -37,8 +61,8 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isBgmPlaying, setIsBgmPlaying] = useState(false);
 
   // Elements/refs
-  const bgmAudioRef = useRef<HTMLAudioElement | null>(null);      // BGM 전용 <audio>
-  const sfxChannelPoolRef = useRef<HTMLAudioElement[]>([]);       // SFX 채널 풀
+  const bgmAudioRef = useRef<HTMLAudioElement | null>(null); // BGM 전용 <audio>
+  const sfxChannelPoolRef = useRef<HTMLAudioElement[]>([]); // SFX 채널 풀
 
   // Playlist state
   const currentPlaylistRef = useRef<string[]>([]);
@@ -52,13 +76,19 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Current page → playlist
   const { pathname } = useLocation();
   const currentPage: PageKey = useMemo(
-    () => (pathname.startsWith("/lobby") ? "lobby" : pathname.startsWith("/game") ? "game" : "home"),
+    () =>
+      pathname.startsWith("/lobby")
+        ? "lobby"
+        : pathname.startsWith("/game")
+        ? "game"
+        : "home",
     [pathname]
   );
 
   // rAF-based fade (current → target)
   const fadeTo = (targetLinearVolume: number, durationMs = 200) => {
-    const audio = bgmAudioRef.current; if (!audio) return;
+    const audio = bgmAudioRef.current;
+    if (!audio) return;
 
     if (fadeAnimationIdRef.current) {
       cancelAnimationFrame(fadeAnimationIdRef.current);
@@ -88,7 +118,8 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!audio || !list.length) return;
 
     // Clamp index and resolve URL
-    trackIndexRef.current = ((trackIndexRef.current % list.length) + list.length) % list.length;
+    trackIndexRef.current =
+      ((trackIndexRef.current % list.length) + list.length) % list.length;
     const trackUrl = list[trackIndexRef.current];
 
     // Swap source only when changed
@@ -122,26 +153,32 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Ensure playback continues without reinitialization (fallback on user gesture)
   const ensurePlayback = () => {
-    const audio = bgmAudioRef.current; if (!audio) return;
+    const audio = bgmAudioRef.current;
+    if (!audio) return;
     if (!currentPlaylistRef.current.length) return;
     if (!audio.src) return; // initial setup runs first
 
     if (audio.paused) {
       audio.muted = false; // just in case
-      audio.play().then(() => setIsBgmPlaying(true)).catch(() => { });
+      audio
+        .play()
+        .then(() => setIsBgmPlaying(true))
+        .catch(() => {});
     }
     // if already playing → no-op
   };
 
   // Public controls
   const nextTrack = () => {
-    const L = currentPlaylistRef.current.length; if (!L) return;
+    const L = currentPlaylistRef.current.length;
+    if (!L) return;
     trackIndexRef.current = (trackIndexRef.current + 1) % L;
     void playCurrentTrack();
   };
 
   const previousTrack = () => {
-    const L = currentPlaylistRef.current.length; if (!L) return;
+    const L = currentPlaylistRef.current.length;
+    if (!L) return;
     trackIndexRef.current = (trackIndexRef.current - 1 + L) % L;
     void playCurrentTrack();
   };
@@ -149,7 +186,8 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const playBgm = () => void ensurePlayback();
 
   const pauseBgm = () => {
-    const audio = bgmAudioRef.current; if (!audio) return;
+    const audio = bgmAudioRef.current;
+    if (!audio) return;
     audio.pause();
     setIsBgmPlaying(false);
     if (fadeAnimationIdRef.current) {
@@ -164,7 +202,9 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const linear = mixToLinear(masterVolume, sfxVolume);
     const pool = sfxChannelPoolRef.current;
     for (const ch of pool) {
-      try { ch.volume = clamp01(linear); } catch { }
+      try {
+        ch.volume = clamp01(linear);
+      } catch {}
     }
   }, [masterVolume, sfxVolume]);
 
@@ -213,14 +253,16 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = mixToLinear(masterVolume, bgmVolume);
     targetBgmLinearVolumeRef.current = target;
 
-    const audio = bgmAudioRef.current; if (!audio) return;
+    const audio = bgmAudioRef.current;
+    if (!audio) return;
     if (!audio.paused) fadeTo(target, 140);
     else audio.volume = target;
   }, [masterVolume, bgmVolume]);
 
   // When actual playback starts (autoplay muted), immediately unmute + fade in
   useEffect(() => {
-    const audio = bgmAudioRef.current; if (!audio) return;
+    const audio = bgmAudioRef.current;
+    if (!audio) return;
     const handlePlaying = () => {
       audio.muted = false;
       fadeTo(targetBgmLinearVolumeRef.current, 220);
@@ -233,9 +275,13 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Cleanup
   useEffect(() => {
     return () => {
-      if (fadeAnimationIdRef.current) cancelAnimationFrame(fadeAnimationIdRef.current);
+      if (fadeAnimationIdRef.current)
+        cancelAnimationFrame(fadeAnimationIdRef.current);
       const audio = bgmAudioRef.current;
-      if (audio) { audio.pause(); audio.onended = null; }
+      if (audio) {
+        audio.pause();
+        audio.onended = null;
+      }
     };
   }, []);
 
@@ -245,7 +291,7 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const linearVol = mixToLinear(masterVolume, sfxVolume);
 
     // Find idle channel
-    let channel = pool.find(el => el.paused);
+    let channel = pool.find((el) => el.paused);
 
     // Create if needed (max 6)
     if (!channel) {
@@ -263,7 +309,16 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     channel.currentTime = 0;
     channel.muted = false;
     channel.volume = clamp01(linearVol);
-    channel.play().catch(() => { });
+    channel.play().catch(() => {});
+  };
+
+  // 새로운 게임 사운드 함수들
+  const playShootSound = () => {
+    playSfx(SHOOT_SOUND);
+  };
+
+  const playHitSound = () => {
+    playSfx(HIT_SOUND);
   };
 
   // Public value (API 유지)
@@ -280,6 +335,9 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     play: playBgm,
     pause: pauseBgm,
     playSfx,
+    // 새로운 게임 사운드 함수들
+    playShootSound,
+    playHitSound,
   };
 
   return (
@@ -288,9 +346,9 @@ export const BgmProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       <audio
         ref={bgmAudioRef}
         preload="auto"
-        autoPlay       // 입장 즉시(무음) 자동재생
-        muted          // 정책 우회: 무음 자동재생 허용
-        playsInline    // iOS 인라인 재생
+        autoPlay // 입장 즉시(무음) 자동재생
+        muted // 정책 우회: 무음 자동재생 허용
+        playsInline // iOS 인라인 재생
         style={{ display: "none" }}
       />
     </AudioContext.Provider>

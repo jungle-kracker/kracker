@@ -39,7 +39,7 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
   const [chosenBy, setChosenBy] = useState<Record<string, string>>({});
   const [isAnimating, setIsAnimating] = useState(false);
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
-  
+
   // 모달이 열릴 때마다 랜덤으로 카드 3개 선택
   const augmentData = useMemo(() => getRandomAugmentData(), [isOpen]);
 
@@ -52,17 +52,23 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
 
   useEffect(() => {
     if (!isOpen || !autoCloseWhenAll) return;
-    const allChosen = players.length > 0 && players.every((p) => chosenBy[p.id]);
+    const allChosen =
+      players.length > 0 && players.every((p) => chosenBy[p.id]);
     if (allChosen) {
-      setTimeout(() => {
-        setIsAnimating(false);
-        setTimeout(onClose, 300);
-      }, 400);
+      // 모든 플레이어가 선택했을 때도 즉시 닫지 않고 서버 완료 신호를 기다림
+      console.log(
+        "🎯 모든 플레이어가 증강을 선택했습니다. 서버 완료 신호를 기다리는 중..."
+      );
     }
   }, [chosenBy, players, isOpen, autoCloseWhenAll, onClose]);
 
   useEffect(() => {
-    const onProgress = (data: { round: number; selections: Record<string, string>; selectedCount: number; totalPlayers: number }) => {
+    const onProgress = (data: {
+      round: number;
+      selections: Record<string, string>;
+      selectedCount: number;
+      totalPlayers: number;
+    }) => {
       // 서버 진행 상황을 로컬 상태에 반영 (다른 플레이어들의 선택 표시)
       setChosenBy(data.selections || {});
     };
@@ -105,7 +111,14 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
       />
 
       {/* 상단 타이틀 */}
-      <div style={{ position: "relative", display: "grid", placeItems: "center", paddingTop: 24 }}>
+      <div
+        style={{
+          position: "relative",
+          display: "grid",
+          placeItems: "center",
+          paddingTop: 24,
+        }}
+      >
         <h2
           id="augment-title"
           style={{
@@ -134,51 +147,53 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
           }}
         >
           <div style={{ display: "flex", gap: 16 }}>
-            {players
-              .slice(0, Math.ceil(players.length / 2))
-              .map((p) => (
-                <div
-                  key={p.id}
-                  title={p.nickname}
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 999,
-                    background: chosenBy[p.id] ? p.color : "rgba(128, 128, 128, 0.8)",
-                    opacity: 0.9,
-                  }}
-                />
-              ))}
+            {players.slice(0, Math.ceil(players.length / 2)).map((p) => (
+              <div
+                key={p.id}
+                title={p.nickname}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 999,
+                  background: chosenBy[p.id]
+                    ? p.color
+                    : "rgba(128, 128, 128, 0.8)",
+                  opacity: 0.9,
+                }}
+              />
+            ))}
           </div>
           <div style={{ display: "flex", gap: 16 }}>
-            {players
-              .slice(Math.ceil(players.length / 2))
-              .map((p) => (
-                <div
-                  key={p.id}
-                  title={p.nickname}
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 999,
-                    background: chosenBy[p.id] ? p.color : "rgba(128, 128, 128, 0.8)",
-                    opacity: 0.9,
-                  }}
-                />
-              ))}
+            {players.slice(Math.ceil(players.length / 2)).map((p) => (
+              <div
+                key={p.id}
+                title={p.nickname}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 999,
+                  background: chosenBy[p.id]
+                    ? p.color
+                    : "rgba(128, 128, 128, 0.8)",
+                  opacity: 0.9,
+                }}
+              />
+            ))}
           </div>
         </div>
       </div>
 
       {/* 원형 카드 배치 영역 */}
-      <div style={{ 
-        display: "flex", 
-        alignItems: "flex-end", 
-        justifyContent: "center",
-        position: "relative",
-        height: "100%",
-        paddingBottom: "50px", // 하단 여백 추가
-      }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "center",
+          position: "relative",
+          height: "100%",
+          paddingBottom: "50px", // 하단 여백 추가
+        }}
+      >
         {/* 카드들을 세미서큘러 형태로 배치 */}
         {augmentData.map((augment, index) => {
           // 3개 카드를 세미서큘러 형태로 배치
@@ -186,14 +201,14 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
           const radius = 1100; // 원의 반지름
           const centerX = 0;
           const centerY = -1000; // 화면 하단 중앙
-          
+
           // 카드의 중앙이 원의 둘레에 맞도록 위치 계산
-          const x = centerX + radius * Math.sin(angle * Math.PI / 180);
-          const y = centerY + radius * Math.cos(angle * Math.PI / 180);
-          
+          const x = centerX + radius * Math.sin((angle * Math.PI) / 180);
+          const y = centerY + radius * Math.cos((angle * Math.PI) / 180);
+
           // 가운데 카드에만 추가 Y축 transform 적용
           const additionalY = index === 1 ? -220 : 0;
-          
+
           return (
             <div
               key={augment.id}
@@ -208,21 +223,31 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
               }}
               onClick={() => {
                 if (myPlayerId && !chosenBy[myPlayerId]) {
-                  setChosenBy((prev) => ({ ...prev, [myPlayerId]: augment.id }));
+                  setChosenBy((prev) => ({
+                    ...prev,
+                    [myPlayerId]: augment.id,
+                  }));
                   onSelect?.(myPlayerId, augment.id);
-                  
+
                   // 서버로 증강 선택 데이터 전송
-                  socket.emit("augment:select", {
-                    augmentId: augment.id,
-                    round: currentRound ?? 1,
-                    roomId: roomId,
-                  }, (response: any) => {
-                    if (response?.ok) {
-                      console.log(`✅ 증강 선택 전송 성공: ${augment.name}`);
-                    } else {
-                      console.error(`❌ 증강 선택 전송 실패:`, response?.error);
+                  socket.emit(
+                    "augment:select",
+                    {
+                      augmentId: augment.id,
+                      round: currentRound ?? 1,
+                      roomId: roomId,
+                    },
+                    (response: any) => {
+                      if (response?.ok) {
+                        console.log(`✅ 증강 선택 전송 성공: ${augment.name}`);
+                      } else {
+                        console.error(
+                          `❌ 증강 선택 전송 실패:`,
+                          response?.error
+                        );
+                      }
                     }
-                  });
+                  );
                 }
               }}
               onMouseEnter={(e) => {
@@ -253,13 +278,17 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
                   transform: `rotate(${angle}deg)`,
                   transformOrigin: "center center",
                   // hover된 카드가 아닌 다른 카드들에 블러 효과 적용
-                  filter: hoveredCardId && hoveredCardId !== augment.id ? "blur(1px)" : "none",
+                  filter:
+                    hoveredCardId && hoveredCardId !== augment.id
+                      ? "blur(1px)"
+                      : "none",
                   position: "relative", // 오버레이를 위한 relative 포지션
                 }}
                 onMouseEnter={(e) => {
                   // 호버 시 카드가 뽑혀 올라오는 효과 (회전 유지하면서)
                   e.currentTarget.style.transform = `rotate(${angle}deg) translateY(-80px) scale(1.05)`;
-                  e.currentTarget.style.boxShadow = "0 20px 40px rgba(0,0,0,0.6)";
+                  e.currentTarget.style.boxShadow =
+                    "0 20px 40px rgba(0,0,0,0.6)";
                 }}
                 onMouseLeave={(e) => {
                   // 원래 위치로 복귀
@@ -296,5 +325,3 @@ const AugmentSelectModal: React.FC<AugmentSelectModalProps> = ({
 };
 
 export default AugmentSelectModal;
-
-

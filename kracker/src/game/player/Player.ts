@@ -879,6 +879,7 @@ export default class Player {
   public addWobble(): void {
     this.wobble += 1;
   }
+
   // 새로운 체력바 시스템에서는 타이머가 필요 없음
 
   public getId(): string | undefined {

@@ -46,6 +46,7 @@ import {
   findAugmentNamesWithEffect,
   getAugmentsForPlayer,
 } from "../data/augments";
+import { HIT_SOUND, SHOOT_SOUND } from "../assets/audios/tracks";
 
 // 멀티플레이어 타입 정의
 interface GamePlayer {
@@ -116,9 +117,52 @@ interface RemotePlayer {
   hpBarGraphics?: any;
 }
 
+// 간단한 소리 재생 함수
+let isPlayingShootSound = false;
+let isPlayingHitSound = false;
+
+function playShootSound(volume: number = 0.3) {
+  if (!isPlayingShootSound) {
+    isPlayingShootSound = true;
+    try {
+      const audio = new Audio(SHOOT_SOUND);
+      audio.volume = volume;
+      audio.play().catch(() => {
+        isPlayingShootSound = false;
+      });
+      audio.onended = () => {
+        isPlayingShootSound = false;
+      };
+    } catch (e) {
+      console.warn("쏴용 소리 재생 실패:", e);
+      isPlayingShootSound = false;
+    }
+  }
+}
+
+function playHitSound() {
+  if (!isPlayingHitSound) {
+    isPlayingHitSound = true;
+    try {
+      const audio = new Audio(HIT_SOUND);
+      audio.volume = 0.4;
+      audio.play().catch(() => {
+        isPlayingHitSound = false;
+      });
+      audio.onended = () => {
+        isPlayingHitSound = false;
+      };
+    } catch (error) {
+      console.warn("아파용 소리 재생 실패:", error);
+      isPlayingHitSound = false;
+    }
+  }
+}
+
 export default class GameScene extends Phaser.Scene {
   // 기본 게임 요소들
   private player!: Player;
+
   private platforms: Platform[] = [];
   private bullets: Bullet[] = [];
   private mapRenderer!: MapRenderer;
@@ -323,6 +367,11 @@ export default class GameScene extends Phaser.Scene {
         }
       );
 
+      // 🔫 로컬 쏴용 소리 이벤트 처리
+      this.events.on("shoot:sound", (e: { playerId: string }) => {
+        playShootSound(0.3); // 로컬 플레이어 볼륨
+      });
+
       // 💥 총알 타격 이벤트 수신 → 서버에 타격 보고
       this.events.on(
         "bullet:hitPlayer",
@@ -342,6 +391,9 @@ export default class GameScene extends Phaser.Scene {
               console.log(
                 `💥 총알 타격 이벤트: 내가 맞음 - 데미지 ${e.damage}`
               );
+
+              // 아파용 소리 재생 - 중복 방지 강화
+              playHitSound();
 
               this.networkManager.sendBulletHit({
                 bulletId: e.bulletId,
@@ -390,6 +442,13 @@ export default class GameScene extends Phaser.Scene {
     // 파티클 수신
     this.networkManager.onParticle((particleData) => {
       this.createRemoteParticle(particleData);
+    });
+
+    // 파티클 이벤트 전송 (bullet.ts에서 발생하는 이벤트)
+    this.events.on("particle:create", (particleData: any) => {
+      if (this.isMultiplayer && this.networkManager) {
+        this.networkManager.sendParticle(particleData);
+      }
     });
 
     // 게임 이벤트 수신
@@ -537,6 +596,8 @@ export default class GameScene extends Phaser.Scene {
     };
   }
 
+
+
   // 원격 파티클 생성 메서드
   private createRemoteParticle(particleData: any): void {
     if (!this.particleSystem) return;
@@ -654,6 +715,9 @@ export default class GameScene extends Phaser.Scene {
     if (!remotePlayer) return;
 
     console.log(`사격 데이터 수신:`, shootData);
+
+    // 원격 플레이어 쏴용 소리 재생 (랜덤) - 중복 방지 강화
+    playShootSound(0.2); // 원격 플레이어 볼륨
 
     // 1. 씬 상태 확인
     if (!this.scene || !this.scene.add) {
@@ -1383,7 +1447,7 @@ export default class GameScene extends Phaser.Scene {
             `💚 ${remotePlayer.name} 체력 업데이트: ${oldHealth} -> ${health}`
           );
 
-          // 체력이 감소했으면 로그만 출력 (체력바는 상시 표시)
+          // 체력이 감소했으면 로그만 출력
           if (health < oldHealth) {
             console.log(
               `💚 ${remotePlayer.name} 체력 감소: ${oldHealth} -> ${health}`
@@ -2203,7 +2267,7 @@ export default class GameScene extends Phaser.Scene {
       damage: 25,
       accuracy: 0.95,
       recoil: 2.0,
-      muzzleVelocity: 1000, // 서버 기준으로 통일
+      muzzleVelocity: 600, // 기본 속도 800 -> 600으로 감소
       magazineSize: 6,
       reloadTime: 1000,
     });

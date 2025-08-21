@@ -110,13 +110,13 @@ export class Bullet {
 
     // 기본 설정 병합
     this.config = {
-      speed: 800,
+      speed: 600, // 기본 속도 800 -> 600으로 감소
       damage: 25,
       radius: 6,
       color: 0xffaa40, // 연한 주황색으로 변경
       tailColor: 0xffaa40, // 연한 주황색으로 변경
       tailLength: 200,
-      gravity: { x: 0, y: 3000 },
+      gravity: { x: 0, y: 1800 }, // 중력 1200 -> 1800으로 증가
       useWorldGravity: false,
       lifetime: 8000,
       homingStrength: 0,
@@ -179,7 +179,9 @@ export class Bullet {
     // 글로우 효과를 위한 블렌드 모드 설정
     this.sprite.setBlendMode(Phaser.BlendModes.ADD);
     // 색상 틴트 적용(증강 색상 반영)
-    try { this.sprite.setTint(this.config.color); } catch {}
+    try {
+      this.sprite.setTint(this.config.color);
+    } catch {}
 
     // 2) 충돌 시스템 인식용 세팅
     bulletGroup.add(this.sprite);
@@ -407,19 +409,28 @@ export class Bullet {
     }
 
     // 간이 유도탄(유도): 주변 플레이어를 향해 부드럽게 곡선 유도
-    if (typeof this.config.homingStrength === "number" && this.config.homingStrength! > 0) {
-      // 타겟 선정: 
+    if (
+      typeof this.config.homingStrength === "number" &&
+      this.config.homingStrength! > 0
+    ) {
+      // 타겟 선정:
       // - 발사자가 로컬 나이면(=ownerId==myPlayerId) -> 가장 가까운 원격 플레이어
       // - 발사자가 원격이면 -> 로컬 플레이어
       const sc: any = this.scene as any;
-      const ownerId: string | undefined = (this as any).__ownerId || this.sprite.getData("__ownerId");
+      const ownerId: string | undefined =
+        (this as any).__ownerId || this.sprite.getData("__ownerId");
       const myId: string | null | undefined = sc?.myPlayerId;
 
       let targetX = x;
       let targetY = y;
       let found = false;
 
-      if (myId && ownerId === myId && sc?.remotePlayers && typeof sc.remotePlayers.forEach === "function") {
+      if (
+        myId &&
+        ownerId === myId &&
+        sc?.remotePlayers &&
+        typeof sc.remotePlayers.forEach === "function"
+      ) {
         // 내 총알 → 가장 가까운 살아있는 원격 플레이어
         let bestD2 = Number.POSITIVE_INFINITY;
         sc.remotePlayers.forEach((rp: any) => {
@@ -456,7 +467,8 @@ export class Bullet {
         const current = Math.atan2(body.velocity.y, body.velocity.x);
         const diff = Phaser.Math.Angle.Wrap(desired - current);
         // homingStrength를 회전 비율(가속도 계수)로 사용 → 강할수록 더 급하게 회전
-        const turn = diff * Math.min(2, Math.max(0, this.config.homingStrength));
+        const turn =
+          diff * Math.min(2, Math.max(0, this.config.homingStrength));
         const speed = body.velocity.length();
         const nx = Math.cos(current + turn) * speed;
         const ny = Math.sin(current + turn) * speed;
@@ -682,8 +694,14 @@ export class Bullet {
       // 충돌 각도 계산
       const collisionAngle = this.calculateCollisionAngle();
 
-      // V자 모양 불꽃 파티클들 생성 (충돌 각도 기반)
-      this.createVShapeFireParticles(x, y, bulletColor, collisionAngle);
+      // 이건폭탄이여 증강 체크 - 흰색 원형 폭발 효과
+      const isExplosiveBullet = this.sprite?.getData("__explosiveBullet");
+      if (isExplosiveBullet) {
+        this.createWhiteCircleExplosion(x, y);
+      } else {
+        // V자 모양 불꽃 파티클들 생성 (충돌 각도 기반)
+        this.createVShapeFireParticles(x, y, bulletColor, collisionAngle);
+      }
     } catch (error) {
       console.warn("폭발 효과 생성 실패:", error);
     }
@@ -720,8 +738,10 @@ export class Bullet {
     return -90;
   }
 
+
+
   /**
-   * V자 모양 불꽃 파티클 생성 (더 극적하고 길게)
+   * V자 모양 불꽃 파티클 생성 (더 극적이고 길게)
    */
   private createVShapeFireParticles(
     x: number,
@@ -938,13 +958,13 @@ export class Bullet {
 
   public static getDefaultConfig(): Required<BulletConfig> {
     return {
-      speed: 800,
+      speed: 600, // 기본 속도 800 -> 600으로 감소
       damage: 25,
       radius: 6,
       color: 0xffaa00,
       tailColor: 0xffaa00, // 🔥 총알과 같은 색상으로 기본값 변경
       tailLength: 2000,
-      gravity: { x: 0, y: 900 },
+      gravity: { x: 0, y: 1800 }, // 중력 1200 -> 1800으로 증가
       useWorldGravity: false,
       lifetime: 8000,
       homingStrength: 0,
@@ -1034,8 +1054,8 @@ export function doShoot(opts: {
   console.log(`   각도: ${((angle * 180) / Math.PI).toFixed(1)}도`);
   console.log(`   각도 계산: atan2(${targetY - gunY}, ${targetX - gunX})`);
 
-  // 2. 이알 스폰 위치 - 이구에서 약간 앞으로
-  const spawnDistance = 70;
+  // 2. 이알 스폰 위치 - 총구에서 바로 생성
+  const spawnDistance = 5; // 총구에서 바로 생성하도록 수정
   const spawnX = gunX + Math.cos(angle) * spawnDistance;
   const spawnY = gunY + Math.sin(angle) * spawnDistance;
 
@@ -1088,7 +1108,7 @@ export function doShoot(opts: {
     {
       ...(opts.bulletConfig || {}), // 먼저 전달받은 설정 적용
       speed: opts.bulletConfig?.speed || speed, // speed는 기본값 유지
-      gravity: opts.bulletConfig?.gravity || { x: 0, y: 3000 }, // 서버 기준으로 통일
+      gravity: opts.bulletConfig?.gravity || { x: 0, y: 1800 }, // 중력 1800으로 통일
       useWorldGravity:
         opts.bulletConfig?.useWorldGravity !== undefined
           ? opts.bulletConfig.useWorldGravity

@@ -395,6 +395,15 @@ const RoundsGame: React.FC = () => {
     Array<{ type: string; payload: any; t: number }>
   >([]);
 
+  // 모달 상태 변화 추적 (디버깅용)
+  useEffect(() => {
+    console.log("🔍 증강 모달 상태 변화:", {
+      isAugmentSelectModalOpen,
+      isAugmentPhaseActive,
+      timestamp: new Date().toISOString(),
+    });
+  }, [isAugmentSelectModalOpen, isAugmentPhaseActive]);
+
   // ★ 게임 상태 로드
   useEffect(() => {
     // 1. location.state에서 게임 상태 가져오기
@@ -671,6 +680,13 @@ const RoundsGame: React.FC = () => {
       round: number;
     }) => {
       console.log(`🎯 라운드 증강 이벤트 수신: 라운드 ${data.round}`);
+      console.log("🔍 증강 모달 상태 변경:", {
+        before: { isAugmentSelectModalOpen, isAugmentPhaseActive },
+        action: "OPEN_AUGMENT_MODAL",
+        round: data.round,
+        timestamp: new Date().toISOString(),
+      });
+
       // 결과 모달 닫고 증강 선택 모달 열기
       setShowRoundModal(false);
       setIsAugmentSelectModalOpen(true);
@@ -729,7 +745,11 @@ const RoundsGame: React.FC = () => {
         playerCount: Object.keys(data.selections).length,
         timestamp: new Date().toISOString(),
       });
-      setIsAugmentSelectModalOpen(false);
+
+      // 모달을 안전하게 닫기
+      if (isAugmentSelectModalOpen) {
+        setIsAugmentSelectModalOpen(false);
+      }
       setIsAugmentPhaseActive(false);
       hasCompletedRef.current = true;
       setAugmentEvents((prev) =>
@@ -940,6 +960,59 @@ const RoundsGame: React.FC = () => {
             >
               먼저가요 테스트
             </button>
+            <button
+              onClick={() => {
+                if (!gameState?.room?.roomId) {
+                  console.warn("❌ 방 ID가 없어서 증강 지우기 실패");
+                  return;
+                }
+                console.log("🗑️ 모든 증강 지우기 요청");
+                socket.emit(
+                  "augment:clear",
+                  {
+                    roomId: gameState.room.roomId,
+                  },
+                  (res: any) => {
+                    if (res?.ok) {
+                      console.log("✅ 모든 증강 지우기 성공");
+                      setAugmentEvents((prev) =>
+                        [
+                          {
+                            type: "clear",
+                            payload: { success: true },
+                            t: Date.now(),
+                          },
+                          ...prev,
+                        ].slice(0, 12)
+                      );
+                    } else {
+                      console.warn("❌ 모든 증강 지우기 실패", res?.error);
+                      setAugmentEvents((prev) =>
+                        [
+                          {
+                            type: "clear",
+                            payload: { error: res?.error },
+                            t: Date.now(),
+                          },
+                          ...prev,
+                        ].slice(0, 12)
+                      );
+                    }
+                  }
+                );
+              }}
+              style={{
+                backgroundColor: "#ff4444",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                padding: "4px 8px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              🗑️ 증강 다 지우기
+            </button>
           </div>
           <div
             style={{
@@ -1031,7 +1104,7 @@ const RoundsGame: React.FC = () => {
 
       {/* ★ 증강 선택 모달 */}
       <AugmentSelectModal
-        isOpen={isAugmentSelectModalOpen}
+        isOpen={isAugmentSelectModalOpen && isAugmentPhaseActive}
         players={roundPlayers.map((p) => ({
           id: p.id,
           nickname: p.nickname,
@@ -1040,9 +1113,11 @@ const RoundsGame: React.FC = () => {
         currentRound={currentRound}
         myPlayerId={gameState?.myPlayerId}
         roomId={gameState?.room?.roomId}
+        autoCloseWhenAll={false} // 자동 닫기 비활성화
         onClose={() => {
+          console.log("🎯 증강 선택 모달 수동 닫힘");
           setIsAugmentSelectModalOpen(false);
-          console.log("🎯 증강 선택 테스트 모달 닫힘");
+          setIsAugmentPhaseActive(false);
         }}
       />
 

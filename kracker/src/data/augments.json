@@ -18,14 +18,14 @@
   {
     "id": "기생충",
     "name": "기생충",
-    "description": "상대방의 체력을 빼앗습니다. 데미지 감소 -10. 피격 시 체력회복 +15",
+    "description": "상대방의 체력을 지속적으로 빼앗습니다. 데미지 감소 -10. 틱당 체력 흡수 +3",
     "imageFile": "기생충.svg",
     "effects": {
       "bullet": {
-        "damageAdd": -10
-      },
-      "player": {
-        "lifestealOnHit": 15
+        "damageAdd": -10,
+        "color": "0x800080",
+        "parasiteDps": 3,
+        "parasiteTicks": 4
       }
     }
   },
@@ -63,7 +63,8 @@
       "bullet": {
         "speedMul": 0.8,
         "slowOnHitMs": 1500,
-        "slowMul": 0.5
+        "slowMul": 0.5,
+        "color": "0x90EE90"
       },
       "player": {
         "maxHealthDelta": 10
@@ -156,7 +157,7 @@
     "imageFile": "팅팅탕탕.svg",
     "effects": {
       "bullet": {
-        "bounceCount": 1
+        "bounceCount": 5
       },
       "weapon": {
         "reloadTimeDeltaMs": -2000
