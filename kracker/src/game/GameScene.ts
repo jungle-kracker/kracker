@@ -943,7 +943,7 @@ export default class GameScene extends Phaser.Scene {
 
       // 서버 권위 체력 동기화 (서버 판정이 최우선)
       console.log(`💚 체력 동기화: ${currentHealth} -> ${expectedHealth}`);
-      
+
       // 체력을 직접 설정 (서버 값으로)
       this.player.setHealth(expectedHealth);
 
