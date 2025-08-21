@@ -191,6 +191,7 @@ export class CollisionSystem {
               ? bulletRef.getConfig().damage
               : 10;
 
+
             // 서버에만 체력 업데이트 전송 (로컬 데미지 처리 제거)
             if (this.networkManager && this.player) {
               const playerId = this.player.getId?.() || this.player.id;

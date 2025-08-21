@@ -45,7 +45,7 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                 inset: 0,
                 width: "100dvw",
                 height: "100dvh",
-                backgroundColor: "rgba(28,27,27,0.82)", // #1C1B1B + 82%
+                backgroundColor: "rgba(0,0,0,0.85)",
                 backdropFilter: "blur(6px)",
                 WebkitBackdropFilter: "blur(6px)",
                 display: "grid",
@@ -53,8 +53,9 @@ const BasicModal: React.FC<BasicModalProps> = ({ isOpen, title, onClose, childre
                 zIndex: 1000,
                 color: "#fff",
                 touchAction: "none",
-                transform: isAnimating ? "translateX(0)" : "translateX(100%)",
-                transition: "transform 300ms cubic-bezier(0.4, 0, 0.2, 1)",
+                opacity: isAnimating ? 1 : 0,
+                transition: "opacity 300ms ease",
+                pointerEvents: isAnimating ? "auto" : "none",
             }}
         >
             {/* ===== Title 섹션 ===== */}

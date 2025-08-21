@@ -1,5 +1,5 @@
 // src/game/GameScene.ts - NetworkManager 통합된 멀티플레이어 GameScene
-import { Platform, Bullet, CHARACTER_PRESETS } from "./config";
+import { Platform, Bullet, CHARACTER_PRESETS } from "./Config";
 import Player from "./player/Player";
 import MapRenderer from "./MapRenderer";
 import { MapLoader } from "./maps/MapLoader";
@@ -816,6 +816,7 @@ export default class GameScene extends Phaser.Scene {
           const spawns = this.mapRenderer?.getSpawns?.() || [];
           // 내 플레이어
           if (this.player && this.myPlayerId) {
+
             const myData = this.gameData?.players.find(
               (p) => p.id === this.myPlayerId
             );
@@ -841,6 +842,7 @@ export default class GameScene extends Phaser.Scene {
             const rpData = this.gameData?.players.find((p) => p.id === pid);
             let spawn = spawns[0];
             if (this.gameData?.room.gameMode === "팀전") {
+
               if (rpData?.team === 1)
                 spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
               else if (rpData?.team === 2)
@@ -981,9 +983,7 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (oldHealth !== health || damage > 0) {
-          console.log(
-            `💚 ${remotePlayer.name} 체력 업데이트: ${oldHealth} -> ${health}`
-          );
+          console.log(`💚 ${remotePlayer.name} 체력 업데이트: ${oldHealth} -> ${health}`);
         }
 
         // 디버깅: 원격 플레이어 체력 업데이트 확인
@@ -1375,6 +1375,7 @@ export default class GameScene extends Phaser.Scene {
       !remotePlayer.isVisible ||
       (remotePlayer.networkState.health || 0) <= 0
     ) {
+
       return;
     }
 
@@ -2109,6 +2110,7 @@ export default class GameScene extends Phaser.Scene {
     this.clampPlayerInsideWorld();
     this.detectBulletHitsAgainstPlayers();
     this.cleanupRemoteBullets();
+
   }
 
   private updatePerformanceMonitoring(time: number, deltaTime: number): void {
@@ -2849,17 +2851,9 @@ export default class GameScene extends Phaser.Scene {
       }, 50);
     }
   }
-
-  // 🆕 로컬 플레이어 가시성 토글
   private playerHide(): void {
     try {
       (this.player as any)?.setVisible?.(false);
-    } catch {}
-  }
-
-  private playerShow(): void {
-    try {
-      (this.player as any)?.setVisible?.(true);
     } catch {}
   }
 }

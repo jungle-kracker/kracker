@@ -43,7 +43,10 @@ export function computePlayerBounds(
 /**
  * 플랫폼과의 겹침 체크
  */
-function checkOverlap(playerBounds: Bounds, platform: Platform): boolean {
+export function checkOverlap(
+  playerBounds: Bounds,
+  platform: Platform
+): boolean {
   const platBounds = {
     left: platform.x,
     right: platform.x + platform.width,
