@@ -128,6 +128,9 @@ export default class GameScene extends Phaser.Scene {
   private gameData: GameData | null = null;
   private isMultiplayer: boolean = false;
   private networkManager!: NetworkManager; // ☆ 네트워크 매니저 추가
+  
+  // 스폰 위치 추적
+  private usedSpawnPoints: Set<string> = new Set();
 
   // 로딩 모달 관련
   private isLoadingModalOpen: boolean = false;
@@ -1144,6 +1147,9 @@ export default class GameScene extends Phaser.Scene {
             return; // 다른 플레이어용 이벤트는 무시
           }
           
+          // 스폰 위치 초기화 (새로운 라운드 시작)
+          this.resetSpawnPoints();
+          
           const spawns = this.mapRenderer?.getSpawns?.() || [];
           
           // 내 플레이어
@@ -1458,6 +1464,9 @@ export default class GameScene extends Phaser.Scene {
 
   // 새로운 메서드
   private setupMyPlayer(playerData: GamePlayer): void {
+    // 게임 시작 시 스폰 위치 초기화
+    this.resetSpawnPoints();
+    
     const spawns = this.mapRenderer.getSpawns();
 
     // 스폰 포인트 선택
@@ -1491,6 +1500,11 @@ export default class GameScene extends Phaser.Scene {
 
   // ☆ 원격 플레이어 생성 (완전히 새로운 구현)
   private createRemotePlayer(playerData: GamePlayer): void {
+    // 게임 시작 시 스폰 위치 초기화 (첫 번째 원격 플레이어 생성 시)
+    if (this.remotePlayers.size === 0) {
+      this.resetSpawnPoints();
+    }
+    
     const spawns = this.mapRenderer.getSpawns();
 
     // 팀별 스폰 포인트 선택
@@ -2313,6 +2327,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private createPlayer(spawnData?: { x: number; y: number }): void {
+    // 게임 시작 시 스폰 위치 초기화
+    this.resetSpawnPoints();
+    
     const spawns = this.mapRenderer.getSpawns();
     let defaultSpawn = PLAYER_CONSTANTS.DEFAULT_SPAWN;
     
@@ -3279,6 +3296,11 @@ export default class GameScene extends Phaser.Scene {
     this.isBetweenRounds = value;
   }
 
+  // 스폰 위치 초기화 (게임 시작 시 또는 라운드 재시작 시 호출)
+  public resetSpawnPoints(): void {
+    this.usedSpawnPoints.clear();
+  }
+
   // 스폰 위치 최적화를 위한 새로운 메서드
   private getOptimalSpawnPoint(
     spawns: any[],
@@ -3293,24 +3315,47 @@ export default class GameScene extends Phaser.Scene {
       const teamSpawns = spawns.filter((s) => s.name === (team === 1 ? "A" : "B"));
       if (teamSpawns.length === 0) return spawns[0];
 
-      const teamOrder = (this.gameData?.players || []).filter(p => p.team === team).map(p => p.id);
-      const teamIdx = Math.max(0, teamOrder.indexOf(playerId));
-      const clampedTeamIdx = Math.min(teamIdx, Math.max(0, teamSpawns.length - 1));
-      
-      // 팀 내에서 입장 순서에 따라 스폰 위치 선택
-      const selectedSpawn = teamSpawns[clampedTeamIdx] || teamSpawns[0];
-      
-      // 이미 사용 중인 스폰 위치와의 거리를 고려하여 최적화
-      return this.getFarthestSpawnFromOthers(teamSpawns, selectedSpawn);
+      // 사용되지 않은 팀 스폰 위치 우선 선택
+      const availableTeamSpawns = teamSpawns.filter((spawn, index) => {
+        const spawnKey = `${spawn.name}_${spawns.indexOf(spawn)}`;
+        return !this.usedSpawnPoints.has(spawnKey);
+      });
+
+      if (availableTeamSpawns.length > 0) {
+        // 사용 가능한 스폰 중에서 가장 멀리 떨어진 것 선택
+        const selectedSpawn = this.getFarthestSpawnFromOthers(availableTeamSpawns, availableTeamSpawns[0]);
+        // 선택된 스폰 위치를 사용된 것으로 표시
+        const spawnKey = `${selectedSpawn.name}_${spawns.indexOf(selectedSpawn)}`;
+        this.usedSpawnPoints.add(spawnKey);
+        return selectedSpawn;
+      }
+
+      // 모든 팀 스폰이 사용 중이면 거리 기반으로 최적화
+      const fallbackSpawn = this.getFarthestSpawnFromOthers(teamSpawns, teamSpawns[0]);
+      const spawnKey = `${fallbackSpawn.name}_${spawns.indexOf(fallbackSpawn)}`;
+      this.usedSpawnPoints.add(spawnKey);
+      return fallbackSpawn;
     } else {
-      // 개인전: 전체 입장 순서에 따라 스폰 포인트 분산
-      const order = (this.gameData?.players || []).map((p) => p.id);
-      const idx = Math.max(0, order.indexOf(playerId));
-      const clamped = Math.min(idx, Math.max(0, spawns.length - 1));
-      const selectedSpawn = spawns[clamped] || spawns[0];
-      
-      // 이미 사용 중인 스폰 위치와의 거리를 고려하여 최적화
-      return this.getFarthestSpawnFromOthers(spawns, selectedSpawn);
+      // 개인전: 사용되지 않은 스폰 위치 우선 선택
+      const availableSpawns = spawns.filter((spawn, index) => {
+        const spawnKey = `${spawn.name}_${index}`;
+        return !this.usedSpawnPoints.has(spawnKey);
+      });
+
+      if (availableSpawns.length > 0) {
+        // 사용 가능한 스폰 중에서 가장 멀리 떨어진 것 선택
+        const selectedSpawn = this.getFarthestSpawnFromOthers(availableSpawns, availableSpawns[0]);
+        // 선택된 스폰 위치를 사용된 것으로 표시
+        const spawnKey = `${selectedSpawn.name}_${spawns.indexOf(selectedSpawn)}`;
+        this.usedSpawnPoints.add(spawnKey);
+        return selectedSpawn;
+      }
+
+      // 모든 스폰이 사용 중이면 거리 기반으로 최적화
+      const fallbackSpawn = this.getFarthestSpawnFromOthers(spawns, spawns[0]);
+      const spawnKey = `${fallbackSpawn.name}_${spawns.indexOf(fallbackSpawn)}`;
+      this.usedSpawnPoints.add(spawnKey);
+      return fallbackSpawn;
     }
   }
 
