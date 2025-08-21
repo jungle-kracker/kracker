@@ -354,6 +354,8 @@ export default class Player {
 
     // 2) 입력 스냅샷
     const key = this.readInputs();
+    const justPressedJump = !!key.jump && !this.prevJumpPressed;
+    this.prevJumpPressed = !!key.jump;
 
     // 3) 벽 상태 판단/갱신 (다른 처리보다 먼저)
     const bounds = computePlayerBounds(this.x, this.y, this.crouchHeight);
@@ -426,45 +428,30 @@ export default class Player {
     if (!this.wall.isWallGrabbing) {
       const moveMul = this.isCrouching ? 0.5 : 1;
 
+      // 블링크 (Shift 키): 증강으로 허용된 경우
+      if (this.blinkEnabled && key.blink) {
+        this.performBlink(this.facingDirection === "right" ? 1 : -1);
+      }
+
       if (key.left && !key.right) {
         const speedMul = (this as any).__speedMul ?? 1.0;
-        this.velocityX = -GAME_CONFIG.playerSpeed * moveMul * speedMul;
+        this.velocityX = -GAME_CONFIG.playerSpeed * moveMul * speedMul * this.moveSpeedMul;
         this.legSwing += 0.3;
       } else if (key.right && !key.left) {
         const speedMul = (this as any).__speedMul ?? 1.0;
-        this.velocityX = GAME_CONFIG.playerSpeed * moveMul * speedMul;
+        this.velocityX = GAME_CONFIG.playerSpeed * moveMul * speedMul * this.moveSpeedMul;
         this.legSwing += 0.3;
       } else {
         this.velocityX = dampen(this.velocityX, 0.8, 10);
       }
 
-      // 점프 (지상에서만, 앉기 상태에서도 가능)
-      if (key.jump && this.isGrounded && !this.isJumping) {
-        this.velocityY = -GAME_CONFIG.jumpSpeed;
-        this.isJumping = true;
-        this.isGrounded = false;
-        this.jumpStartTime = Date.now() / 1000; // 점프 시작 시간 기록
-        this.jumpStartY = this.y; // 점프 시작 Y 위치 저장
-
-        // 착지 앉기 상태 취소 및 앉기 상태 해제
-        this.isLandingCrouch = false;
-        this.landingCrouchStartTime = 0;
-        this.isCrouching = false; // 점프 시 앉기 상태 해제
-
-        // console.log(
-        //   "🎯 점프 시작! jumpStartTime:",
-        //   this.jumpStartTime.toFixed(2)
-        // );
-        this.wobble += 1;
-        this.particleSystem.createJumpParticle(
-          this.x,
-          this.y + 25,
-          this.colors.head
-        );
-
-        // 멀티플레이어 파티클 전송
-        if (this.onParticleCreated) {
-          this.onParticleCreated("jump", this.x, this.y + 25, this.colors.head);
+      // 점프 처리: 지상/공중(추가 점프) 모두 지원
+      if (justPressedJump) {
+        if (this.isGrounded) {
+          this.performJump();
+        } else if (this.remainingExtraJumps > 0) {
+          this.performJump();
+          this.remainingExtraJumps -= 1;
         }
       }
     } else {
@@ -549,7 +536,7 @@ export default class Player {
     this.velocityY = applyGravity(
       this.velocityY,
       dt,
-      GAME_CONFIG.gravity,
+      GAME_CONFIG.gravity * this.gravityMul,
       600,
       gravityActive
     );
@@ -578,6 +565,8 @@ export default class Player {
     if (!wasGrounded && this.isGrounded) {
       // 착지
       this.isJumping = false;
+      // 추가 점프 회복
+      this.remainingExtraJumps = this.extraJumpsAllowed;
       // 벽잡기 해제
       if (this.wall.isWallGrabbing) {
         this.wall.isWallGrabbing = false;
@@ -896,6 +885,60 @@ export default class Player {
   public setMultiplayerMode(isMultiplayer: boolean): void {
     this.isMultiplayer = isMultiplayer;
   }
+
+  // ===== 증강 기반 이동 파라미터 =====
+  private jumpHeightMul: number = 1;
+  private extraJumpsAllowed: number = 0;
+  private remainingExtraJumps: number = 0;
+  private gravityMul: number = 1;
+  private prevJumpPressed: boolean = false;
+  private moveSpeedMul: number = 1;
+
+  public setJumpHeightMultiplier(mult: number): void {
+    this.jumpHeightMul = Math.max(0.2, mult || 1);
+  }
+  public setExtraJumps(n: number): void {
+    this.extraJumpsAllowed = Math.max(0, Math.floor(n || 0));
+    this.remainingExtraJumps = this.isGrounded ? this.extraJumpsAllowed : Math.min(this.remainingExtraJumps, this.extraJumpsAllowed);
+  }
+  public setGravityMultiplier(mult: number): void {
+    this.gravityMul = Math.max(0.1, mult || 1);
+  }
+  public setMoveSpeedMultiplier(mult: number): void {
+    this.moveSpeedMul = Math.max(0.3, mult || 1);
+  }
+
+  private performJump(): void {
+    this.velocityY = -GAME_CONFIG.jumpSpeed * this.jumpHeightMul;
+    this.isJumping = true;
+    this.isGrounded = false;
+    this.jumpStartTime = Date.now() / 1000;
+    this.jumpStartY = this.y;
+
+    // 착지 앉기 상태 취소 및 앉기 상태 해제
+    this.isLandingCrouch = false;
+    this.landingCrouchStartTime = 0;
+    this.isCrouching = false;
+
+    this.wobble += 1;
+    this.particleSystem.createJumpParticle(this.x, this.y + 25, this.colors.head);
+    if (this.onParticleCreated) {
+      this.onParticleCreated("jump", this.x, this.y + 25, this.colors.head);
+    }
+  }
+
+  private blinkEnabled: boolean = false;
+  private performBlink(direction: -1 | 1): void {
+    // 간단한 텔레포트: 150px + 충돌 보정은 생략
+    const distance = 150;
+    this.x += distance * direction;
+    try {
+      this.particleSystem.createFancyParticleExplosion(this.x, this.y);
+    } catch {}
+  }
+
+  public setBlinkEnabled(enabled: boolean): void {
+    this.blinkEnabled = !!enabled;
 
   // HP바 렌더링
   private renderHealthBar(): void {

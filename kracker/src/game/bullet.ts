@@ -13,6 +13,17 @@ export interface BulletConfig {
   useWorldGravity?: boolean;
   lifetime?: number; // ms
   homingStrength?: number; // 0~1 (간이 유도)
+  // 증강 파라미터 (선택적)
+  damageMul?: number;
+  damageAdd?: number;
+  speedMul?: number;
+  sizeMul?: number;
+  spreadMul?: number;
+  explodeRadius?: number;
+  slowOnHitMs?: number;
+  slowMul?: number;
+  stunMs?: number;
+  knockbackMul?: number;
 }
 
 export interface BulletEvents {
@@ -100,6 +111,17 @@ export class Bullet {
       useWorldGravity: false,
       lifetime: 8000,
       homingStrength: 0,
+      // 증강 파라미터 기본값
+      damageMul: 1,
+      damageAdd: 0,
+      speedMul: 1,
+      sizeMul: 1,
+      spreadMul: 1,
+      explodeRadius: 0,
+      slowOnHitMs: 0,
+      slowMul: 1,
+      stunMs: 0,
+      knockbackMul: 1,
       ...config,
     };
 
@@ -542,6 +564,21 @@ export class Bullet {
     // 폭발 효과 생성 (충돌 각도 고려)
     this.createSafeExplosionEffect(hitX, hitY);
 
+    // 증강: 폭발 대미지 적용을 위한 이벤트 브로드캐스트 (서버 보고는 GameScene에서 처리)
+    try {
+      const cfg = this.getConfig();
+      if (cfg.explodeRadius && cfg.explodeRadius > 0) {
+        const ownerId = (this as any).__ownerId || (this.sprite as any)?.ownerId || null;
+        (this.scene as any).events?.emit?.("bullet:explosion", {
+          x: hitX,
+          y: hitY,
+          radius: cfg.explodeRadius,
+          damage: cfg.damage,
+          ownerId,
+        });
+      }
+    } catch {}
+
     // 이알 제거
     this.destroy(true);
   }
@@ -823,6 +860,17 @@ export class Bullet {
       useWorldGravity: false,
       lifetime: 8000,
       homingStrength: 0,
+      // 증강 파라미터 기본값
+      damageMul: 1,
+      damageAdd: 0,
+      speedMul: 1,
+      sizeMul: 1,
+      spreadMul: 1,
+      explodeRadius: 0,
+      slowOnHitMs: 0,
+      slowMul: 1,
+      stunMs: 0,
+      knockbackMul: 1,
     };
   }
 
@@ -991,6 +1039,7 @@ export class ShootingSystem {
   private muzzleFlashConfig: MuzzleFlashConfig;
   private onShotCallback?: (recoil: number) => void;
   private maxBullets: number = 30;
+  private fireIntervalAddMs: number = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -1075,7 +1124,7 @@ export class ShootingSystem {
       return false;
     }
 
-    const fireInterval = 60000 / this.weaponConfig.fireRate;
+    const fireInterval = 60000 / this.weaponConfig.fireRate + this.fireIntervalAddMs;
     if (now - this.state.lastShotTime < fireInterval) {
       return false;
     }
@@ -1109,6 +1158,7 @@ export class ShootingSystem {
       recoilBase: this.weaponConfig.recoil,
       wobbleBase: 0.3,
       collisionSystem: { getBulletGroup: () => this.bulletGroup },
+      bulletConfig,
     });
 
     this.bullets.set(shot.bullet.id, shot.bullet);
@@ -1264,6 +1314,23 @@ export class ShootingSystem {
     if (this.bulletGroup) {
       this.bulletGroup.destroy(true);
     }
+  }
+
+  // ===== 증강으로 인한 무기 파라미터 변경 적용 =====
+  public setReloadTime(ms: number): void {
+    this.weaponConfig.reloadTime = Math.max(0, Math.floor(ms));
+  }
+
+  public setMagazineSize(size: number): void {
+    const newSize = Math.max(1, Math.floor(size));
+    this.weaponConfig.magazineSize = newSize;
+    if (this.state.currentAmmo > newSize) {
+      this.state.currentAmmo = newSize;
+    }
+  }
+
+  public setFireIntervalAddMs(ms: number): void {
+    this.fireIntervalAddMs = Math.max(0, Math.floor(ms));
   }
 
   // ===== 디버깅 메서드들 =====
