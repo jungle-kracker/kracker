@@ -27,7 +27,12 @@ const imageMap: Record<string, string> = (() => {
   }
 })();
 
-const jsonData: Array<{ id: string; name: string; description: string; imageFile: string }> = (raw as any);
+const jsonData: Array<{
+  id: string;
+  name: string;
+  description: string;
+  imageFile: string;
+}> = raw as any;
 
 export const AUGMENTS: AugmentInfo[] = jsonData.map((a) => ({
   id: a.id,
@@ -50,7 +55,11 @@ export function getRandomAugments(count: number): AugmentInfo[] {
 export type AugmentSnapshot = Record<string, { id: string; startedAt: number }>;
 
 export interface AggregatedAugments {
-  weapon: { reloadTimeDeltaMs: number; magazineDelta: number; fireIntervalAddMs: number };
+  weapon: {
+    reloadTimeDeltaMs: number;
+    magazineDelta: number;
+    fireIntervalAddMs: number;
+  };
   bullet: {
     speedMul: number;
     damageMul: number;
@@ -64,6 +73,7 @@ export interface AggregatedAugments {
     slowMul: number;
     stunMs: number;
     knockbackMul: number;
+    gravityResistance: number;
   };
   player: {
     jumpHeightMul: number;
@@ -82,15 +92,21 @@ export type AugmentJsonEffect = {
   description: string;
   imageFile: string;
   effects?: {
-    weapon?: Partial<AggregatedAugments["weapon"]> & { reloadTimeDeltaMs?: number; magazineDelta?: number; fireIntervalAddMs?: number };
+    weapon?: Partial<AggregatedAugments["weapon"]> & {
+      reloadTimeDeltaMs?: number;
+      magazineDelta?: number;
+      fireIntervalAddMs?: number;
+    };
     bullet?: Partial<AggregatedAugments["bullet"]>;
     player?: Partial<AggregatedAugments["player"]>;
   };
 };
 
-export const AUGMENT_JSON: AugmentJsonEffect[] = (raw as any);
+export const AUGMENT_JSON: AugmentJsonEffect[] = raw as any;
 
-export function aggregateAugments(snapshot?: AugmentSnapshot | null): AggregatedAugments {
+export function aggregateAugments(
+  snapshot?: AugmentSnapshot | null
+): AggregatedAugments {
   const base: AggregatedAugments = {
     weapon: { reloadTimeDeltaMs: 0, magazineDelta: 0, fireIntervalAddMs: 0 },
     bullet: {
@@ -106,6 +122,7 @@ export function aggregateAugments(snapshot?: AugmentSnapshot | null): Aggregated
       slowMul: 1,
       stunMs: 0,
       knockbackMul: 1,
+      gravityResistance: 0,
     },
     player: {
       jumpHeightMul: 1,
@@ -121,7 +138,8 @@ export function aggregateAugments(snapshot?: AugmentSnapshot | null): Aggregated
   if (!snapshot) return base;
 
   const byId = new Map<string, AugmentJsonEffect>();
-  for (let i = 0; i < AUGMENT_JSON.length; i++) byId.set(AUGMENT_JSON[i].id, AUGMENT_JSON[i]);
+  for (let i = 0; i < AUGMENT_JSON.length; i++)
+    byId.set(AUGMENT_JSON[i].id, AUGMENT_JSON[i]);
 
   const keys = Object.keys(snapshot);
   for (let i = 0; i < keys.length; i++) {
@@ -134,35 +152,84 @@ export function aggregateAugments(snapshot?: AugmentSnapshot | null): Aggregated
     } catch {}
     const e = def.effects;
     if (e.weapon) {
-      if (typeof e.weapon.magazineDelta === "number" && e.weapon.magazineDelta !== 0) {
-        try { console.log(`🔧 무기-탄창(총 탄창 수량) 변화: ${e.weapon.magazineDelta}`); } catch {}
+      if (
+        typeof e.weapon.magazineDelta === "number" &&
+        e.weapon.magazineDelta !== 0
+      ) {
+        try {
+          console.log(
+            `🔧 무기-탄창(총 탄창 수량) 변화: ${e.weapon.magazineDelta}`
+          );
+        } catch {}
       }
-      if (typeof e.weapon.reloadTimeDeltaMs === "number") base.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
-      if (typeof e.weapon.magazineDelta === "number") base.weapon.magazineDelta += e.weapon.magazineDelta;
-      if (typeof e.weapon.fireIntervalAddMs === "number") base.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
+      if (typeof e.weapon.reloadTimeDeltaMs === "number")
+        base.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
+      if (typeof e.weapon.magazineDelta === "number")
+        base.weapon.magazineDelta += e.weapon.magazineDelta;
+      if (typeof e.weapon.fireIntervalAddMs === "number")
+        base.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
     }
     if (e.bullet) {
-      if (typeof e.bullet.speedMul === "number") base.bullet.speedMul *= e.bullet.speedMul;
-      if (typeof e.bullet.damageMul === "number") base.bullet.damageMul *= e.bullet.damageMul;
-      if (typeof e.bullet.damageAdd === "number") base.bullet.damageAdd += e.bullet.damageAdd;
-      if (typeof e.bullet.sizeMul === "number") base.bullet.sizeMul *= e.bullet.sizeMul;
-      if (typeof e.bullet.homingStrength === "number") base.bullet.homingStrength = Math.max(base.bullet.homingStrength, e.bullet.homingStrength);
-      if (typeof e.bullet.bounceCount === "number") base.bullet.bounceCount += e.bullet.bounceCount;
-      if (typeof e.bullet.pierceCount === "number") base.bullet.pierceCount += e.bullet.pierceCount;
-      if (typeof e.bullet.explodeRadius === "number") base.bullet.explodeRadius = Math.max(base.bullet.explodeRadius, e.bullet.explodeRadius);
-      if (typeof e.bullet.slowOnHitMs === "number") base.bullet.slowOnHitMs = Math.max(base.bullet.slowOnHitMs, e.bullet.slowOnHitMs);
-      if (typeof e.bullet.slowMul === "number") base.bullet.slowMul = Math.min(base.bullet.slowMul, e.bullet.slowMul);
-      if (typeof e.bullet.stunMs === "number") base.bullet.stunMs = Math.max(base.bullet.stunMs, e.bullet.stunMs);
-      if (typeof e.bullet.knockbackMul === "number") base.bullet.knockbackMul *= e.bullet.knockbackMul;
+      if (typeof e.bullet.speedMul === "number")
+        base.bullet.speedMul *= e.bullet.speedMul;
+      if (typeof e.bullet.damageMul === "number")
+        base.bullet.damageMul *= e.bullet.damageMul;
+      if (typeof e.bullet.damageAdd === "number")
+        base.bullet.damageAdd += e.bullet.damageAdd;
+      if (typeof e.bullet.sizeMul === "number")
+        base.bullet.sizeMul *= e.bullet.sizeMul;
+      if (typeof e.bullet.homingStrength === "number")
+        base.bullet.homingStrength = Math.max(
+          base.bullet.homingStrength,
+          e.bullet.homingStrength
+        );
+      if (typeof e.bullet.bounceCount === "number")
+        base.bullet.bounceCount += e.bullet.bounceCount;
+      if (typeof e.bullet.pierceCount === "number")
+        base.bullet.pierceCount += e.bullet.pierceCount;
+      if (typeof e.bullet.explodeRadius === "number")
+        base.bullet.explodeRadius = Math.max(
+          base.bullet.explodeRadius,
+          e.bullet.explodeRadius
+        );
+      if (typeof e.bullet.slowOnHitMs === "number")
+        base.bullet.slowOnHitMs = Math.max(
+          base.bullet.slowOnHitMs,
+          e.bullet.slowOnHitMs
+        );
+      if (typeof e.bullet.slowMul === "number")
+        base.bullet.slowMul = Math.min(base.bullet.slowMul, e.bullet.slowMul);
+      if (typeof e.bullet.stunMs === "number")
+        base.bullet.stunMs = Math.max(base.bullet.stunMs, e.bullet.stunMs);
+      if (typeof e.bullet.knockbackMul === "number")
+        base.bullet.knockbackMul *= e.bullet.knockbackMul;
+      if (typeof e.bullet.gravityResistance === "number")
+        base.bullet.gravityResistance = Math.max(
+          base.bullet.gravityResistance,
+          e.bullet.gravityResistance
+        );
     }
     if (e.player) {
-      if (typeof e.player.jumpHeightMul === "number") base.player.jumpHeightMul *= e.player.jumpHeightMul;
-      if (typeof e.player.extraJumps === "number") base.player.extraJumps += e.player.extraJumps;
-      if (typeof e.player.gravityMul === "number") base.player.gravityMul *= e.player.gravityMul;
-      if (typeof e.player.moveSpeedMul === "number") base.player.moveSpeedMul *= e.player.moveSpeedMul;
-      if (typeof e.player.maxHealthDelta === "number") base.player.maxHealthDelta += e.player.maxHealthDelta;
-      if (typeof e.player.lifestealOnHit === "number") base.player.lifestealOnHit += e.player.lifestealOnHit;
-      if (typeof e.player.blink === "boolean") base.player.blink = base.player.blink || e.player.blink;
+      if (typeof e.player.jumpHeightMul === "number")
+        base.player.jumpHeightMul *= e.player.jumpHeightMul;
+      if (typeof e.player.extraJumps === "number")
+        base.player.extraJumps += e.player.extraJumps;
+      if (typeof e.player.gravityMul === "number")
+        base.player.gravityMul *= e.player.gravityMul;
+      if (typeof e.player.moveSpeedMul === "number") {
+        base.player.moveSpeedMul *= e.player.moveSpeedMul;
+        try {
+          console.log(
+            `🏃‍♂️ 이동속도 증강 적용: ${def.name} -> 배율 ${e.player.moveSpeedMul}, 최종 배율: ${base.player.moveSpeedMul}`
+          );
+        } catch {}
+      }
+      if (typeof e.player.maxHealthDelta === "number")
+        base.player.maxHealthDelta += e.player.maxHealthDelta;
+      if (typeof e.player.lifestealOnHit === "number")
+        base.player.lifestealOnHit += e.player.lifestealOnHit;
+      if (typeof e.player.blink === "boolean")
+        base.player.blink = base.player.blink || e.player.blink;
     }
   }
   return base;
@@ -171,11 +238,14 @@ export function aggregateAugments(snapshot?: AugmentSnapshot | null): Aggregated
 // ===== 중앙화된 조회/헬퍼 =====
 
 export function getAugmentDefById(id: string): AugmentJsonEffect | undefined {
-  for (let i = 0; i < AUGMENT_JSON.length; i++) if (AUGMENT_JSON[i].id === id) return AUGMENT_JSON[i];
+  for (let i = 0; i < AUGMENT_JSON.length; i++)
+    if (AUGMENT_JSON[i].id === id) return AUGMENT_JSON[i];
   return undefined;
 }
 
-export function getActiveAugmentNames(snapshot?: AugmentSnapshot | null): string[] {
+export function getActiveAugmentNames(
+  snapshot?: AugmentSnapshot | null
+): string[] {
   if (!snapshot) return [];
   const ids = Object.keys(snapshot);
   const names: string[] = [];
@@ -201,7 +271,10 @@ export function findAugmentNamesWithEffect(
 }
 
 export function getAugmentsForPlayer(
-  augmentByPlayer: Map<string, AugmentSnapshot> | Record<string, AugmentSnapshot> | undefined,
+  augmentByPlayer:
+    | Map<string, AugmentSnapshot>
+    | Record<string, AugmentSnapshot>
+    | undefined,
   playerId: string | null | undefined
 ): AggregatedAugments | null {
   if (!augmentByPlayer || !playerId) return null;
@@ -213,5 +286,3 @@ export function getAugmentsForPlayer(
   }
   return aggregateAugments(snap || {});
 }
-
-

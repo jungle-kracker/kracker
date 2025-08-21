@@ -337,7 +337,8 @@ const AugmentTestPanel = styled.div`
   gap: 6px;
   min-width: 260px;
 
-  select, button {
+  select,
+  button {
     font-size: 12px;
   }
 
@@ -386,7 +387,9 @@ const RoundsGame: React.FC = () => {
   const [isAugmentPhaseActive, setIsAugmentPhaseActive] = React.useState(false);
   const hasCompletedRef = React.useRef(false);
   const [testAugmentId, setTestAugmentId] = React.useState<string>("");
-  const [augmentEvents, setAugmentEvents] = React.useState<Array<{ type: string; payload: any; t: number }>>([]);
+  const [augmentEvents, setAugmentEvents] = React.useState<
+    Array<{ type: string; payload: any; t: number }>
+  >([]);
 
   // ★ 게임 상태 로드
   useEffect(() => {
@@ -471,6 +474,11 @@ const RoundsGame: React.FC = () => {
         };
 
         console.log("🎮 게임 씬에 플레이어 데이터 전달:", gameData);
+        console.log("🔍 myPlayerId 확인:", {
+          myPlayerId: gameState.myPlayerId,
+          type: typeof gameState.myPlayerId,
+          length: gameState.myPlayerId?.length,
+        });
 
         if (typeof (scene as any).initializeMultiplayer === "function") {
           (scene as any).initializeMultiplayer(gameData);
@@ -602,6 +610,7 @@ const RoundsGame: React.FC = () => {
       players: Array<{ id: string; nickname: string; color: string }>;
       round: number;
     }) => {
+      console.log(`🎯 라운드 증강 이벤트 수신: 라운드 ${data.round}`);
       // 결과 모달 닫고 증강 선택 모달 열기
       setShowRoundModal(false);
       setIsAugmentSelectModalOpen(true);
@@ -639,9 +648,14 @@ const RoundsGame: React.FC = () => {
         round: data.round,
         selections: data.selections,
         progress: `${data.selectedCount}/${data.totalPlayers}`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
-      setAugmentEvents((prev) => [{ type: "progress", payload: data, t: Date.now() }, ...prev].slice(0, 12));
+      setAugmentEvents((prev) =>
+        [{ type: "progress", payload: data, t: Date.now() }, ...prev].slice(
+          0,
+          12
+        )
+      );
     };
 
     const onAugmentComplete = (data: {
@@ -653,30 +667,45 @@ const RoundsGame: React.FC = () => {
         round: data.round,
         selections: data.selections,
         playerCount: Object.keys(data.selections).length,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
       setIsAugmentSelectModalOpen(false);
       setIsAugmentPhaseActive(false);
       hasCompletedRef.current = true;
-      setAugmentEvents((prev) => [{ type: "complete", payload: data, t: Date.now() }, ...prev].slice(0, 12));
+      setAugmentEvents((prev) =>
+        [{ type: "complete", payload: data, t: Date.now() }, ...prev].slice(
+          0,
+          12
+        )
+      );
     };
 
     const onAugmentSnapshot = (data: {
       round: number;
-      players: Record<string, Record<string, { id: string; startedAt: number }>>;
+      players: Record<
+        string,
+        Record<string, { id: string; startedAt: number }>
+      >;
     }) => {
       console.log(`📸 라운드 ${data.round} 증강 스냅샷 수신:`, data.players);
       console.log("📊 증강 스냅샷 상세 분석:", {
         round: data.round,
         playerCount: Object.keys(data.players).length,
-        playerAugments: Object.entries(data.players).map(([playerId, augments]) => ({
-          playerId,
-          augmentCount: Object.keys(augments).length,
-          augmentIds: Object.keys(augments),
-          timestamp: new Date().toISOString()
-        }))
+        playerAugments: Object.entries(data.players).map(
+          ([playerId, augments]) => ({
+            playerId,
+            augmentCount: Object.keys(augments).length,
+            augmentIds: Object.keys(augments),
+            timestamp: new Date().toISOString(),
+          })
+        ),
       });
-      setAugmentEvents((prev) => [{ type: "snapshot", payload: data, t: Date.now() }, ...prev].slice(0, 12));
+      setAugmentEvents((prev) =>
+        [{ type: "snapshot", payload: data, t: Date.now() }, ...prev].slice(
+          0,
+          12
+        )
+      );
     };
 
     socket.on("round:result", onRoundResult);
@@ -756,6 +785,7 @@ const RoundsGame: React.FC = () => {
             <button
               onClick={() => {
                 if (!testAugmentId) return;
+                console.log(`🎯 증강 테스트 전송: 라운드 ${currentRound ?? 1}`);
                 socket.emit(
                   "augment:select",
                   {
@@ -765,7 +795,10 @@ const RoundsGame: React.FC = () => {
                   },
                   (res: any) => {
                     if (res?.ok) {
-                      console.log("✅ 증강 테스트 전송 성공", { testAugmentId });
+                      console.log("✅ 증강 테스트 전송 성공", {
+                        testAugmentId,
+                        round: currentRound ?? 1,
+                      });
                     } else {
                       console.warn("❌ 증강 테스트 전송 실패", res?.error);
                     }
@@ -775,8 +808,86 @@ const RoundsGame: React.FC = () => {
             >
               적용
             </button>
+            <button
+              onClick={() => {
+                socket.emit(
+                  "augment:select",
+                  {
+                    augmentId: "도망간다냥",
+                    round: currentRound ?? 1,
+                    roomId: gameState?.room?.roomId,
+                  },
+                  (res: any) => {
+                    if (res?.ok) {
+                      console.log("✅ 도망간다냥 증강 테스트 전송 성공");
+                    } else {
+                      console.warn(
+                        "❌ 도망간다냥 증강 테스트 전송 실패",
+                        res?.error
+                      );
+                    }
+                  }
+                );
+              }}
+            >
+              도망간다냥 테스트
+            </button>
+            <button
+              onClick={() => {
+                socket.emit(
+                  "augment:select",
+                  {
+                    augmentId: "풍선처럼",
+                    round: currentRound ?? 1,
+                    roomId: gameState?.room?.roomId,
+                  },
+                  (res: any) => {
+                    if (res?.ok) {
+                      console.log("✅ 풍선처럼 증강 테스트 전송 성공");
+                    } else {
+                      console.warn(
+                        "❌ 풍선처럼 증강 테스트 전송 실패",
+                        res?.error
+                      );
+                    }
+                  }
+                );
+              }}
+            >
+              풍선처럼 테스트
+            </button>
+            <button
+              onClick={() => {
+                socket.emit(
+                  "augment:select",
+                  {
+                    augmentId: "먼저가요",
+                    round: currentRound ?? 1,
+                    roomId: gameState?.room?.roomId,
+                  },
+                  (res: any) => {
+                    if (res?.ok) {
+                      console.log("✅ 먼저가요 증강 테스트 전송 성공");
+                    } else {
+                      console.warn(
+                        "❌ 먼저가요 증강 테스트 전송 실패",
+                        res?.error
+                      );
+                    }
+                  }
+                );
+              }}
+            >
+              먼저가요 테스트
+            </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "auto auto auto", gap: 6 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "auto auto auto",
+              gap: 6,
+            }}
+          >
             <div>round: {currentRound ?? "-"}</div>
             <div>room: {gameState?.room?.roomId ?? "-"}</div>
             <div>me: {gameState?.myPlayerId ?? "-"}</div>
@@ -784,9 +895,13 @@ const RoundsGame: React.FC = () => {
           <div className="log">
             {augmentEvents.map((e, idx) => (
               <div key={idx} style={{ opacity: 0.9 }}>
-                [{new Date(e.t).toLocaleTimeString()}] {e.type}
-                : {(() => {
-                  try { return JSON.stringify(e.payload); } catch { return "(unserializable)"; }
+                [{new Date(e.t).toLocaleTimeString()}] {e.type}:{" "}
+                {(() => {
+                  try {
+                    return JSON.stringify(e.payload);
+                  } catch {
+                    return "(unserializable)";
+                  }
                 })()}
               </div>
             ))}

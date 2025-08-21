@@ -499,6 +499,7 @@ export class NetworkManager {
     this.onPlayerJoinCallback = undefined;
     this.onPlayerLeaveCallback = undefined;
     this.onHealthUpdateCallback = undefined;
+    this.onAugmentSnapshotCallback = undefined;
 
     console.log("✅ NetworkManager 정리 완료");
   }
@@ -524,6 +525,43 @@ export class NetworkManager {
     console.log("=== NETWORK MANAGER DEBUG INFO ===");
     console.log("네트워크 상태:", info.network);
     console.log("===============================");
+  }
+
+  // 콜백 설정 메서드들
+  public setPlayerMoveCallback(
+    callback: (playerId: string, movement: PlayerMovement) => void
+  ): void {
+    this.onPlayerMoveCallback = callback;
+  }
+
+  public setPlayerShootCallback(
+    callback: (playerId: string, shootData: any) => void
+  ): void {
+    this.onPlayerShootCallback = callback;
+  }
+
+  public setBulletHitCallback(callback: (data: BulletHit) => void): void {
+    this.onBulletHitCallback = callback;
+  }
+
+  public setGameEventCallback(callback: (event: GameEvent) => void): void {
+    this.onGameEventCallback = callback;
+  }
+
+  public setPlayerJoinCallback(callback: (playerData: any) => void): void {
+    this.onPlayerJoinCallback = callback;
+  }
+
+  public setPlayerLeaveCallback(callback: (playerId: string) => void): void {
+    this.onPlayerLeaveCallback = callback;
+  }
+
+  public setHealthUpdateCallback(callback: (data: any) => void): void {
+    this.onHealthUpdateCallback = callback;
+  }
+
+  public setAugmentSnapshotCallback(callback: (data: any) => void): void {
+    this.onAugmentSnapshotCallback = callback;
   }
 
   // 개발자 도구

@@ -753,8 +753,15 @@ export default class Player {
   }
 
   public setPosition(x: number, y: number): void {
+    const oldX = this.x;
+    const oldY = this.y;
     this.x = x;
     this.y = y;
+    console.log(
+      `🎯 setPosition: (${oldX.toFixed(1)}, ${oldY.toFixed(
+        1
+      )}) -> (${this.x.toFixed(1)}, ${this.y.toFixed(1)})`
+    );
     updatePose(this.gfx, {
       x: this.x,
       y: this.y,
@@ -947,13 +954,47 @@ export default class Player {
 
   private blinkEnabled: boolean = false;
   private lastBlinkAt: number = 0;
-  private blinkCooldownMs: number = 1000; // 1초 쿨타임
+  private blinkCooldownMs: number = 2000; // 2초 쿨타임
   private performBlink(direction: -1 | 1): void {
     // 간단한 텔레포트: 150px + 충돌 보정은 생략
     const distance = 150;
     this.x += distance * direction;
     try {
       this.particleSystem.createFancyParticleExplosion(this.x, this.y);
+    } catch {}
+  }
+
+  // 🆕 마우스 위치로 텔레포트 (X축만, 짧은 거리)
+  private performBlinkToMouse(mouseX: number, mouseY: number): void {
+    // 현재 위치에서 짧은 거리만 이동 (최대 100px)
+    const currentX = this.x;
+    const targetX = mouseX;
+    const distance = targetX - currentX;
+    const maxDistance = 100; // 최대 이동 거리
+
+    let newX = currentX;
+    if (Math.abs(distance) > maxDistance) {
+      // 최대 거리를 넘으면 방향에 따라 제한
+      newX = currentX + (distance > 0 ? maxDistance : -maxDistance);
+    } else {
+      newX = targetX;
+    }
+
+    // X축으로만 텔레포트 (Y축은 현재 위치 유지)
+    this.setPosition(newX, this.y);
+
+    try {
+      // 현재 위치에서 파티클 생성 (이동 전 위치)
+      this.particleSystem.createSimpleTeleportParticle(
+        currentX,
+        this.y,
+        this.colors.head
+      );
+      console.log(
+        `🎯 텔레포트: ${currentX.toFixed(1)} -> ${newX.toFixed(
+          1
+        )} (거리: ${Math.abs(newX - currentX).toFixed(1)}px)`
+      );
     } catch {}
   }
 
@@ -964,6 +1005,22 @@ export default class Player {
         `🧩 증강 함수 발동: 블링크 ${this.blinkEnabled ? "ON" : "OFF"}`
       );
     } catch {}
+  }
+
+  // 🆕 마우스 위치로 블링크 실행 (X축만)
+  public performBlinkToMousePosition(mouseX: number, mouseY: number): void {
+    if (!this.blinkEnabled) return;
+
+    const nowMs = Date.now();
+    if (nowMs - this.lastBlinkAt >= this.blinkCooldownMs) {
+      console.log(
+        `🎯 X축 블링크 실행: 현재 X (${this.x.toFixed(
+          1
+        )}) -> 목표 X (${mouseX.toFixed(1)})`
+      );
+      this.performBlinkToMouse(mouseX, mouseY);
+      this.lastBlinkAt = nowMs;
+    }
   }
 
   // HP바 렌더링

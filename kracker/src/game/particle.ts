@@ -136,6 +136,62 @@ export class ParticleSystem {
     }
   }
 
+  // 🆕 간단한 텔레포트 파티클 (매우 적은 양)
+  createSimpleTeleportParticle(x: number, y: number, color: number = 0xee9841) {
+    console.log(
+      `🎨 텔레포트 파티클 생성 시도: (${x.toFixed(1)}, ${y.toFixed(
+        1
+      )}) 색상: ${color}`
+    );
+
+    if (!this.isSceneValid()) {
+      console.warn("❌ 씬이 유효하지 않음");
+      return;
+    }
+
+    if (!this.ensureParticleTexture()) {
+      console.warn("❌ 파티클 텍스처 생성 실패");
+      return;
+    }
+
+    try {
+      // 매우 간단한 파티클 (2-3개만)
+      const teleportEmitter = this.scene.add.particles(
+        x,
+        y,
+        "particle_circle",
+        {
+          quantity: { min: 1, max: 1 },
+          speed: { min: 30, max: 50 },
+          angle: { min: 0, max: 360 },
+          gravityY: 0,
+          lifespan: { min: 200, max: 300 },
+          scale: { start: 1, end: 0 },
+          alpha: { start: 1, end: 0 },
+          rotate: 0,
+          emitting: false,
+          tint: color, // 직접 색상 사용
+        }
+      );
+
+      // 적당한 양으로 폭발
+      const particleCount = Phaser.Math.Between(5, 8);
+      teleportEmitter.explode(particleCount);
+      teleportEmitter.setDepth(10);
+
+      console.log(`✅ 텔레포트 파티클 생성 성공: ${particleCount}개`);
+
+      // 0.5초 뒤 정리
+      this.scene.time.delayedCall(500, () => {
+        if (teleportEmitter && teleportEmitter.active) {
+          teleportEmitter.destroy();
+        }
+      });
+    } catch (error) {
+      console.warn("❌ ParticleSystem: 텔레포트 파티클 생성 실패:", error);
+    }
+  }
+
   createJumpParticle(x: number, y: number, color: number = 0xee9841) {
     if (!this.isSceneValid()) {
       console.warn(
