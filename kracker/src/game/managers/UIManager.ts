@@ -56,7 +56,7 @@ const DEFAULT_UI_CONFIG: UIConfig = {
   },
   visibility: {
     instructions: true,
-    debugInfo: true,
+    debugInfo: false, // 디버그 정보 비활성화
     shadowStatus: true,
     mapStatus: true,
   },
@@ -94,12 +94,23 @@ export class UIManager {
   // UI 생성
   initialize(): void {
     this.createContainer();
-    this.createInstructionTexts();
-    this.createStatusTexts();
+    // 모든 텍스트 생성 제거
+    // this.createInstructionTexts();
+    // this.createStatusTexts();
 
     this.updatePositions();
 
+    // 디버그 텍스트 제거
+    this.removeDebugText();
+
     Debug.log.info(LogCategory.UI, "UI 생성 완료");
+  }
+
+  // UI 완전 재생성 (모든 텍스트 제거용)
+  forceRecreate(): void {
+    this.destroy();
+    this.initialize();
+    Debug.log.info(LogCategory.UI, "UI 강제 재생성 완료 - 모든 텍스트 제거됨");
   }
 
   // UI 컨테이너 생성
@@ -111,72 +122,78 @@ export class UIManager {
     Debug.log.debug(LogCategory.UI, "UI 컨테이너 생성됨");
   }
 
-  // 안내 텍스트들 생성
+  // 안내 텍스트들 생성 - 모든 키 설정 텍스트 제거됨
   private createInstructionTexts(): void {
-    if (!this.config.visibility.instructions) return;
+    // 모든 키 설정 텍스트 제거
+    return;
 
-    this.currentYOffset = this.config.position.y;
+    // if (!this.config.visibility.instructions) return;
 
-    // 맵 전환 안내
-    this.addTextElement("mapInstruction", "Press 1, 2, 3 to switch maps", {
-      font: this.config.styles.titleFont,
-      color: this.config.styles.textColors.title,
-    });
+    // this.currentYOffset = this.config.position.y;
 
-    // 색상 변경 안내
-    this.addTextElement(
-      "colorInstruction",
-      "Q:빨강 E:주황 R:초록 T:파랑 Y:보라 U:핑크 I:기본",
-      {
-        font: this.config.styles.defaultFont,
-        color: this.config.styles.textColors.instruction,
-      }
-    );
+    // // 맵 전환 안내
+    // this.addTextElement("mapInstruction", "Press 1, 2, 3 to switch maps", {
+    //   font: this.config.styles.titleFont,
+    //   color: this.config.styles.textColors.title,
+    // });
 
-    // 그림자 조작 안내
-    this.addTextElement(
-      "shadowInstruction",
-      "그림자: 4,5,6(각도) 7(애니메이션) M,N,.,,(프리셋) BS(ON/OFF) 8,9,0(테스트)",
-      {
-        font: this.config.styles.defaultFont,
-        color: this.config.styles.textColors.shadow,
-      }
-    );
+    // // 색상 변경 안내
+    // this.addTextElement(
+    //   "colorInstruction",
+    //   "Q:빨강 E:주황 R:초록 T:파랑 Y:보라 U:핑크 I:기본",
+    //   {
+    //     font: this.config.styles.defaultFont,
+    //     color: this.config.styles.textColors.instruction,
+    //   }
+    // );
 
-    // 디버그 키 안내
-    if (this.config.visibility.debugInfo) {
-      this.addTextElement(
-        "debugInstruction",
-        "디버그: F1(패널) F2(모드) F3(로그레벨) F4(슬로우모션) F12(스크린샷)",
-        {
-          font: this.config.styles.defaultFont,
-          color: this.config.styles.textColors.debug,
-        }
-      );
-    }
+    // // 그림자 조작 안내
+    // this.addTextElement(
+    //   "shadowInstruction",
+    //   "그림자: 4,5,6(각도) 7(애니메이션) M,N,.,,(프리셋) BS(ON/OFF) 8,9,0(테스트)",
+    //   {
+    //     font: this.config.styles.defaultFont,
+    //     color: this.config.styles.textColors.shadow,
+    //   }
+    // );
 
-    Debug.log.debug(LogCategory.UI, "안내 텍스트 생성 완료");
+    // // 디버그 키 안내 - 제거됨
+    // // if (this.config.visibility.debugInfo) {
+    // //   this.addTextElement(
+    // //     "debugInstruction",
+    // //     "디버그: F1(패널) F2(모드) F3(로그레벨) F4(슬로우모션) F12(스크린샷)",
+    // //     {
+    // //       font: this.config.styles.defaultFont,
+    // //       color: this.config.styles.textColors.debug,
+    // //     }
+    // //   );
+    // }
+
+    // Debug.log.debug(LogCategory.UI, "안내 텍스트 생성 완료");
   }
 
-  // 상태 텍스트들 생성
+  // 상태 텍스트들 생성 - 모든 상태 텍스트 제거됨
   private createStatusTexts(): void {
-    // 현재 맵 표시
-    if (this.config.visibility.mapStatus) {
-      this.addTextElement("mapStatus", "Map: Loading...", {
-        font: "14px Arial",
-        color: this.config.styles.textColors.status,
-      });
-    }
+    // 모든 상태 텍스트 제거
+    return;
 
-    // 그림자 상태 표시
-    if (this.config.visibility.shadowStatus) {
-      this.addTextElement("shadowStatus", "그림자: 초기화 중...", {
-        font: this.config.styles.defaultFont,
-        color: this.config.styles.textColors.shadow,
-      });
-    }
+    // // 현재 맵 표시
+    // if (this.config.visibility.mapStatus) {
+    //   this.addTextElement("mapStatus", "Map: Loading...", {
+    //     font: "14px Arial",
+    //     color: this.config.styles.textColors.status,
+    //   });
+    // }
 
-    Debug.log.debug(LogCategory.UI, "상태 텍스트 생성 완료");
+    // // 그림자 상태 표시
+    // if (this.config.visibility.shadowStatus) {
+    //   this.addTextElement("shadowStatus", "그림자: 초기화 중...", {
+    //     font: this.config.styles.defaultFont,
+    //     color: this.config.styles.textColors.shadow,
+    //   });
+    // }
+
+    // Debug.log.debug(LogCategory.UI, "상태 텍스트 생성 완료");
   }
 
   // 닉네임 태그 생성
@@ -358,31 +375,48 @@ export class UIManager {
     return this.isVisible;
   }
 
-  // 카테고리별 UI 표시/숨김
-  setInstructionsVisible(visible: boolean): void {
-    const instructionKeys = [
-      "mapInstruction",
-      "colorInstruction",
-      "shadowInstruction",
-      "debugInstruction",
-    ];
-    instructionKeys.forEach((key) => {
-      this.setElementVisible(key, visible);
+  // 모든 텍스트 제거
+  removeDebugText(): void {
+    // 모든 UI 텍스트 요소 제거
+    this.uiElements.forEach((element, key) => {
+      element.text.destroy();
+      Debug.log.info(LogCategory.UI, `텍스트 제거됨: ${key}`);
     });
+    this.uiElements.clear();
+    Debug.log.info(LogCategory.UI, "모든 UI 텍스트 제거됨");
+  }
 
-    this.config.visibility.instructions = visible;
-    Debug.log.info(LogCategory.UI, `안내 텍스트: ${visible ? "표시" : "숨김"}`);
+  // 카테고리별 UI 표시/숨김 - 모든 텍스트 제거됨
+  setInstructionsVisible(visible: boolean): void {
+    // 모든 안내 텍스트 제거됨
+    return;
+
+    // const instructionKeys = [
+    //   "mapInstruction",
+    //   "colorInstruction",
+    //   "shadowInstruction",
+    //   // "debugInstruction", // 디버그 텍스트 제거
+    // ];
+    // instructionKeys.forEach((key) => {
+    //   this.setElementVisible(key, visible);
+    // });
+
+    // this.config.visibility.instructions = visible;
+    // Debug.log.info(LogCategory.UI, `안내 텍스트: ${visible ? "표시" : "숨김"}`);
   }
 
   setStatusVisible(visible: boolean): void {
-    const statusKeys = ["mapStatus", "shadowStatus"];
-    statusKeys.forEach((key) => {
-      this.setElementVisible(key, visible);
-    });
+    // 모든 상태 텍스트 제거됨
+    return;
 
-    this.config.visibility.mapStatus = visible;
-    this.config.visibility.shadowStatus = visible;
-    Debug.log.info(LogCategory.UI, `상태 텍스트: ${visible ? "표시" : "숨김"}`);
+    // const statusKeys = ["mapStatus", "shadowStatus"];
+    // statusKeys.forEach((key) => {
+    //   this.setElementVisible(key, visible);
+    // });
+
+    // this.config.visibility.mapStatus = visible;
+    // this.config.visibility.shadowStatus = visible;
+    // Debug.log.info(LogCategory.UI, `상태 텍스트: ${visible ? "표시" : "숨김"}`);
   }
 
   // 설정 업데이트

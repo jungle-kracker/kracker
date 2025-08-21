@@ -6,11 +6,11 @@ import { LogLevel, LogCategory } from "./Logger";
 export class DebugManager {
   private static instance: DebugManager;
   private scene: Phaser.Scene | null = null;
-  private keyboardInput: Phaser.Input.Keyboard.KeyboardPlugin | null = null;
+  // private keyboardInput: Phaser.Input.Keyboard.KeyboardPlugin | null = null;
   private isInitialized = false;
 
-  // 키 입력 상태 추적
-  private pressedKeys = new Set<string>();
+  // 키 입력 상태 추적 - 제거됨
+  // private pressedKeys = new Set<string>();
 
   private constructor() {}
 
@@ -24,10 +24,9 @@ export class DebugManager {
   // 초기화 (씬과 연결)
   initialize(scene: Phaser.Scene): void {
     this.scene = scene;
-    this.keyboardInput = scene.input.keyboard;
+    // this.keyboardInput = scene.input.keyboard;
 
     if (!this.isInitialized) {
-      this.setupKeyBindings();
       this.syncLoggerWithConfig();
       this.isInitialized = true;
 
@@ -54,57 +53,10 @@ export class DebugManager {
     });
   }
 
-  // 키 바인딩 설정
+  // 키 바인딩 설정 - 제거됨
   private setupKeyBindings(): void {
-    // 디버그 키 바인딩 비활성화
+    // 디버그 키 바인딩이 제거됨
     return;
-    
-    if (!this.keyboardInput || !this.scene) return;
-
-    const config = debugConfig.get();
-    const keyBindings = config.keyBindings;
-
-    logger.debug(
-      LogCategory.GAME,
-      "Debug key bindings setup complete",
-      keyBindings
-    );
-  }
-
-  private handleKeyDown(
-    key: string,
-    keyBindings: DebugSettings["keyBindings"]
-  ): void {
-    // 이미 눌린 키는 무시 (연속 입력 방지)
-    if (this.pressedKeys.has(key)) return;
-    this.pressedKeys.add(key);
-
-    // 디버그 키 처리
-    switch (key) {
-      case keyBindings.toggleDebugPanel:
-        this.toggleDebugPanel();
-        break;
-
-      case keyBindings.toggleDebugMode:
-        this.toggleDebugMode();
-        break;
-
-      case keyBindings.cycleLogLevel:
-        this.cycleLogLevel();
-        break;
-
-      case keyBindings.toggleSlowMotion:
-        this.toggleSlowMotion();
-        break;
-
-      case keyBindings.takeScreenshot:
-        this.takeScreenshot();
-        break;
-    }
-  }
-
-  private handleKeyUp(key: string): void {
-    this.pressedKeys.delete(key);
   }
 
   // 디버그 기능들
@@ -367,8 +319,8 @@ export class DebugManager {
   // 정리
   destroy(): void {
     this.scene = null;
-    this.keyboardInput = null;
-    this.pressedKeys.clear();
+    // this.keyboardInput = null; // 제거됨
+    // this.pressedKeys.clear(); // 제거됨
     this.isInitialized = false;
 
     logger.info(LogCategory.GAME, "DebugManager destroyed");

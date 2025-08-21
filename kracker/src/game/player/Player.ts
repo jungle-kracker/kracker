@@ -435,11 +435,13 @@ export default class Player {
 
       if (key.left && !key.right) {
         const speedMul = (this as any).__speedMul ?? 1.0;
-        this.velocityX = -GAME_CONFIG.playerSpeed * moveMul * speedMul * this.moveSpeedMul;
+        this.velocityX =
+          -GAME_CONFIG.playerSpeed * moveMul * speedMul * this.moveSpeedMul;
         this.legSwing += 0.3;
       } else if (key.right && !key.left) {
         const speedMul = (this as any).__speedMul ?? 1.0;
-        this.velocityX = GAME_CONFIG.playerSpeed * moveMul * speedMul * this.moveSpeedMul;
+        this.velocityX =
+          GAME_CONFIG.playerSpeed * moveMul * speedMul * this.moveSpeedMul;
         this.legSwing += 0.3;
       } else {
         this.velocityX = dampen(this.velocityX, 0.8, 10);
@@ -899,7 +901,9 @@ export default class Player {
   }
   public setExtraJumps(n: number): void {
     this.extraJumpsAllowed = Math.max(0, Math.floor(n || 0));
-    this.remainingExtraJumps = this.isGrounded ? this.extraJumpsAllowed : Math.min(this.remainingExtraJumps, this.extraJumpsAllowed);
+    this.remainingExtraJumps = this.isGrounded
+      ? this.extraJumpsAllowed
+      : Math.min(this.remainingExtraJumps, this.extraJumpsAllowed);
   }
   public setGravityMultiplier(mult: number): void {
     this.gravityMul = Math.max(0.1, mult || 1);
@@ -921,7 +925,11 @@ export default class Player {
     this.isCrouching = false;
 
     this.wobble += 1;
-    this.particleSystem.createJumpParticle(this.x, this.y + 25, this.colors.head);
+    this.particleSystem.createJumpParticle(
+      this.x,
+      this.y + 25,
+      this.colors.head
+    );
     if (this.onParticleCreated) {
       this.onParticleCreated("jump", this.x, this.y + 25, this.colors.head);
     }
@@ -939,6 +947,7 @@ export default class Player {
 
   public setBlinkEnabled(enabled: boolean): void {
     this.blinkEnabled = !!enabled;
+  }
 
   // HP바 렌더링
   private renderHealthBar(): void {

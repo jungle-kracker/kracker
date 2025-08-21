@@ -14,207 +14,33 @@ export interface KeyBindingGroup {
   [key: string]: KeyBinding;
 }
 
-// ===== 맵 전환 키 =====
+// ===== 맵 전환 키 - 제거됨 =====
 export const MAP_KEYS: KeyBindingGroup = {
-  level1: {
-    key: "ONE",
-    description: "Level 1 맵으로 전환",
-    category: "맵 전환",
-    defaultKey: "1",
-    alternativeKeys: ["NUM_ONE"],
-  },
-  arena1: {
-    key: "TWO",
-    description: "Arena 1 맵으로 전환",
-    category: "맵 전환",
-    defaultKey: "2",
-    alternativeKeys: ["NUM_TWO"],
-  },
-  sky_temple: {
-    key: "THREE",
-    description: "Sky Temple 맵으로 전환",
-    category: "맵 전환",
-    defaultKey: "3",
-    alternativeKeys: ["NUM_THREE"],
-  },
-};
-
-// ===== 플레이어 색상 변경 키 =====
-export const COLOR_KEYS: KeyBindingGroup = {
-  red: {
-    key: "Q",
-    description: "빨간색으로 변경",
-    category: "색상 변경",
-    defaultKey: "Q",
-  },
-  orange: {
-    key: "E",
-    description: "주황색으로 변경",
-    category: "색상 변경",
-    defaultKey: "E",
-  },
-  green: {
-    key: "R",
-    description: "초록색으로 변경",
-    category: "색상 변경",
-    defaultKey: "R",
-  },
-  blue: {
-    key: "T",
-    description: "파란색으로 변경",
-    category: "색상 변경",
-    defaultKey: "T",
-  },
-  purple: {
-    key: "Y",
-    description: "보라색으로 변경",
-    category: "색상 변경",
-    defaultKey: "Y",
-  },
-  pink: {
-    key: "U",
-    description: "핑크색으로 변경",
-    category: "색상 변경",
-    defaultKey: "U",
-  },
-  default: {
-    key: "I",
-    description: "기본 색상으로 변경",
-    category: "색상 변경",
-    defaultKey: "I",
-  },
+  // 모든 맵 전환 키 제거됨
 } as const;
 
-// ===== 그림자 조작 키 =====
+// ===== 플레이어 색상 변경 키 - 제거됨 =====
+export const COLOR_KEYS: KeyBindingGroup = {
+  // 모든 색상 변경 키 제거됨
+} as const;
+
+// ===== 그림자 조작 키 - 제거됨 =====
 export const SHADOW_KEYS: KeyBindingGroup = {
-  // 각도 조절
-  angle75: {
-    key: "FOUR",
-    description: "그림자 각도 75도 (아침)",
-    category: "그림자 각도",
-    defaultKey: "4",
-  },
-  angle90: {
-    key: "FIVE",
-    description: "그림자 각도 90도 (정오)",
-    category: "그림자 각도",
-    defaultKey: "5",
-  },
-  angle105: {
-    key: "SIX",
-    description: "그림자 각도 105도 (저녁)",
-    category: "그림자 각도",
-    defaultKey: "6",
-  },
-
-  // 애니메이션
-  animate: {
-    key: "SEVEN",
-    description: "하루 주기 애니메이션 시작",
-    category: "그림자 애니메이션",
-    defaultKey: "7",
-  },
-
-  // 토글
-  toggle: {
-    key: "BACKSPACE",
-    description: "그림자 ON/OFF 토글",
-    category: "그림자 제어",
-    defaultKey: "Backspace",
-  },
-
-  // 프리셋
-  morning: {
-    key: "M",
-    description: "아침 프리셋 적용",
-    category: "그림자 프리셋",
-    defaultKey: "M",
-  },
-  noon: {
-    key: "N",
-    description: "정오 프리셋 적용",
-    category: "그림자 프리셋",
-    defaultKey: "N",
-  },
-  evening: {
-    key: "PERIOD",
-    description: "저녁 프리셋 적용",
-    category: "그림자 프리셋",
-    defaultKey: ".",
-  },
-  night: {
-    key: "COMMA",
-    description: "밤 프리셋 적용",
-    category: "그림자 프리셋",
-    defaultKey: ",",
-  },
-
-  // 테스트 키 바인딩 제거
-  // testColor, testDepth, forceTest 제거
-
+  // 모든 그림자 조작 키 제거됨
 } as const;
 
 // ===== 디버그 키 제거 =====
 // DEBUG_KEYS 전체 제거
 
-// ===== 카메라 조작 키 (추가) =====
+// ===== 카메라 조작 키 - 제거됨 =====
 export const CAMERA_KEYS: KeyBindingGroup = {
-  zoomIn: {
-    key: "PLUS",
-    description: "카메라 줌 인",
-    category: "카메라",
-    defaultKey: "+",
-    alternativeKeys: ["EQUALS"],
-  },
-  zoomOut: {
-    key: "MINUS",
-    description: "카메라 줌 아웃",
-    category: "카메라",
-    defaultKey: "-",
-  },
-  resetZoom: {
-    key: "ZERO",
-    description: "줌 리셋",
-    category: "카메라",
-    defaultKey: "0",
-    alternativeKeys: ["NUM_ZERO"],
-  },
-  focusPlayer: {
-    key: "SPACE",
-    description: "플레이어에게 포커스",
-    category: "카메라",
-    defaultKey: "Space",
-  },
-};
+  // 모든 카메라 조작 키 제거됨
+} as const;
 
-// ===== 게임 제어 키 (추가) =====
+// ===== 게임 제어 키 - 제거됨 =====
 export const GAME_KEYS: KeyBindingGroup = {
-  pause: {
-    key: "ESC",
-    description: "게임 일시정지",
-    category: "게임 제어",
-    defaultKey: "Escape",
-    alternativeKeys: ["P"],
-  },
-  restart: {
-    key: "F5",
-    description: "게임 재시작",
-    category: "게임 제어",
-    defaultKey: "F5",
-  },
-  toggleUI: {
-    key: "TAB",
-    description: "UI 표시/숨김",
-    category: "게임 제어",
-    defaultKey: "Tab",
-  },
-  toggleFullscreen: {
-    key: "F11",
-    description: "전체화면 토글",
-    category: "게임 제어",
-    defaultKey: "F11",
-  },
-};
+  // 모든 게임 제어 키 제거됨
+} as const;
 
 // ===== 전체 키 바인딩 통합 =====
 export const ALL_KEY_BINDINGS = {
