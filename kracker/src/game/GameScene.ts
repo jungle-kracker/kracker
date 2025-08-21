@@ -137,7 +137,10 @@ export default class GameScene extends Phaser.Scene {
   private isInitialized: boolean = false;
 
   // 증강 스냅샷: playerId -> Record<augmentId, { id, startedAt }>
-  private augmentByPlayer: Map<string, Record<string, { id: string; startedAt: number }>> = new Map();
+  private augmentByPlayer: Map<
+    string,
+    Record<string, { id: string; startedAt: number }>
+  > = new Map();
   // 퍼포먼스 모니터링
   private performanceTimer: number = 0;
   private frameCount: number = 0;
@@ -558,8 +561,21 @@ export default class GameScene extends Phaser.Scene {
     for (const b of bullets) {
       if (!b || b._hitProcessed) continue;
 
-      const bx = b.x ?? b.position?.x ?? b.body?.x;
-      const by = b.y ?? b.position?.y ?? b.body?.y;
+      // 원격 총알은 충돌 감지에서 제외 (시각적으로만 보임)
+      if (b._remote) continue;
+
+      // 총알 위치 가져오기 - 여러 방법 시도
+      let bx = b.x ?? b.position?.x ?? b.body?.x;
+      let by = b.y ?? b.position?.y ?? b.body?.y;
+
+      // 스프라이트에서 직접 위치 가져오기
+      if (bx == null && b.sprite) {
+        bx = b.sprite.x;
+      }
+      if (by == null && b.sprite) {
+        by = b.sprite.y;
+      }
+
       if (bx == null || by == null) continue;
 
       // 디버깅: 총알 정보 로그
@@ -672,10 +688,67 @@ export default class GameScene extends Phaser.Scene {
         }
       }
 
-      // 충돌이 감지되었으면 총알 제거
-      if (hitDetected && b && typeof b.hit === "function") {
+      // 충돌이 감지되었으면 총알 제거 (원격 총알은 제거하지 않음)
+      if (hitDetected && b && !b._remote) {
         console.log(`🎯 총알 히트! 총알 ID: ${b.id}, 위치: (${bx}, ${by})`);
-        b.hit(bx, by);
+
+        // 총알 제거 - 여러 방법 시도
+        if (typeof b.hit === "function") {
+          b.hit(bx, by);
+        }
+
+        // 추가로 총알 비활성화
+        if (typeof b.destroy === "function") {
+          b.destroy(true);
+        }
+
+        // 총알 스프라이트 직접 제거
+        if (b.sprite && typeof b.sprite.destroy === "function") {
+          b.sprite.destroy(true);
+        }
+
+        // 총알 물리 바디 비활성화
+        if (b.body && typeof b.body.disable === "function") {
+          b.body.disable();
+        }
+
+        // 총알을 비활성 상태로 설정
+        b._active = false;
+        b._hitProcessed = true;
+
+        // 총알 그룹에서 제거
+        if (this.shootingManager) {
+          const bulletGroup = this.shootingManager.getBulletGroup();
+          if (bulletGroup && b.sprite) {
+            bulletGroup.remove(b.sprite, true, true);
+          }
+        }
+      }
+    }
+  }
+
+  // 원격 총알 정리 (수명이 다한 총알 제거)
+  private cleanupRemoteBullets(): void {
+    if (!this.shootingManager) return;
+
+    const bullets: any[] = this.shootingManager.getAllBullets();
+    const currentTime = Date.now();
+
+    for (const b of bullets) {
+      if (!b || !b._remote) continue;
+
+      // 원격 총알의 수명 체크 (3초)
+      const bulletAge = currentTime - (b.createdTime || currentTime);
+      if (bulletAge > 3000) {
+        // 수명이 다한 원격 총알 제거
+        if (typeof b.destroy === "function") {
+          b.destroy(true);
+        }
+        if (b.sprite && typeof b.sprite.destroy === "function") {
+          b.sprite.destroy(true);
+        }
+        b._active = false;
+        b._hitProcessed = true;
       }
     }
   }
@@ -743,11 +816,16 @@ export default class GameScene extends Phaser.Scene {
           const spawns = this.mapRenderer?.getSpawns?.() || [];
           // 내 플레이어
           if (this.player && this.myPlayerId) {
-            const myData = this.gameData?.players.find((p) => p.id === this.myPlayerId);
+
+            const myData = this.gameData?.players.find(
+              (p) => p.id === this.myPlayerId
+            );
             let spawn = spawns[0];
             if (this.gameData?.room.gameMode === "팀전") {
-              if (myData?.team === 1) spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
-              else if (myData?.team === 2) spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
+              if (myData?.team === 1)
+                spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
+              else if (myData?.team === 2)
+                spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
             }
             if (spawn) {
               this.setPlayerPosition(spawn.x, spawn.y);
@@ -764,8 +842,11 @@ export default class GameScene extends Phaser.Scene {
             const rpData = this.gameData?.players.find((p) => p.id === pid);
             let spawn = spawns[0];
             if (this.gameData?.room.gameMode === "팀전") {
-              if (rpData?.team === 1) spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
-              else if (rpData?.team === 2) spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
+
+              if (rpData?.team === 1)
+                spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
+              else if (rpData?.team === 2)
+                spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
             }
             if (spawn) {
               rp.lastPosition = { x: spawn.x, y: spawn.y };
@@ -784,7 +865,11 @@ export default class GameScene extends Phaser.Scene {
           if (pid === this.myPlayerId) {
             this.playerHide();
             // 내 사망 이펙트
-            this.createParticleEffect(pos.x ?? this.getPlayerX(), pos.y ?? this.getPlayerY(), true);
+            this.createParticleEffect(
+              pos.x ?? this.getPlayerX(),
+              pos.y ?? this.getPlayerY(),
+              true
+            );
           } else {
             const rp = this.remotePlayers.get(pid);
             if (rp) {
@@ -797,9 +882,15 @@ export default class GameScene extends Phaser.Scene {
               refs?.leftLeg?.setVisible?.(false);
               refs?.rightLeg?.setVisible?.(false);
               refs?.gun?.setVisible?.(false);
-              try { this.uiManager.destroyNameTag(pid); } catch {}
+              try {
+                this.uiManager.destroyNameTag(pid);
+              } catch {}
               // 원격 사망 이펙트: 해당 좌표에서만 생성
-              this.createParticleEffect(pos.x ?? rp.lastPosition.x, pos.y ?? rp.lastPosition.y, true);
+              this.createParticleEffect(
+                pos.x ?? rp.lastPosition.x,
+                pos.y ?? rp.lastPosition.y,
+                true
+              );
             }
           }
         } catch (e) {}
@@ -1280,7 +1371,11 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // 가시성/사망 상태 체크
-    if (!remotePlayer.isVisible || (remotePlayer.networkState.health || 0) <= 0) {
+    if (
+      !remotePlayer.isVisible ||
+      (remotePlayer.networkState.health || 0) <= 0
+    ) {
+
       return;
     }
 
@@ -1652,6 +1747,22 @@ export default class GameScene extends Phaser.Scene {
   // ☆ 사격 시스템 콜백 설정 (네트워크 전송 추가)
   private setupShootingCallbacks(): void {
     // ☆ 사격시 네트워크로 전송
+    this.shootingManager.onShot((recoil) => {
+      if (this.isMultiplayer && this.player) {
+        const gunPos = this.player.getGunPosition();
+        const shootData = {
+          x: gunPos.x,
+          y: gunPos.y,
+          angle: gunPos.angle,
+          gunX: gunPos.x,
+          gunY: gunPos.y,
+        };
+
+        this.networkManager.sendShoot(shootData);
+      }
+    });
+
+    // 재장전시 네트워크로 전송
     this.shootingManager.onReload(() => {
       if (this.isMultiplayer && this.player) {
         const gunPos = this.player.getGunPosition();
@@ -1665,22 +1776,7 @@ export default class GameScene extends Phaser.Scene {
 
         this.networkManager.sendShoot(shootData);
       }
-
-      // 사격 반동 적용
-      // 반동 효과는 필요시 구현
-
-      // 재장전 처리
-      // if (this.shootingManager?.isReloading()) {
-      //   // 디버그 재장전 로그 비활성화
-      //   // Debug.log.info(LogCategory.GAME, "재장전 시작");
-      //   this.player?.setReloading(true);
-      // } else {
-      //   this.player?.setReloading(false);
-      // }
     });
-
-    // 재장전시 로그
-    this.shootingManager.onReload(() => {});
 
     // ☆ 명중시 네트워크로 충돌 데이터 전송 (CollisionSystem에서 처리하므로 비활성화)
     // this.shootingManager.onHit((x, y) => {
@@ -1947,7 +2043,8 @@ export default class GameScene extends Phaser.Scene {
 
     // 원격 플레이어들: 현재 렌더 기준 좌표 사용 (사망자는 스킵)
     this.remotePlayers.forEach((rp) => {
-      if (!rp.networkState || rp.networkState.health <= 0 || !rp.isVisible) return;
+      if (!rp.networkState || rp.networkState.health <= 0 || !rp.isVisible)
+        return;
       const x = rp.lastPosition.x;
       const hpBarTopY = rp.lastPosition.y - 25;
       this.uiManager.updateNameTagPosition(rp.id, x, hpBarTopY);
@@ -2011,6 +2108,9 @@ export default class GameScene extends Phaser.Scene {
   private updateGameLogic(): void {
     this.cullBulletsOutsideViewport();
     this.clampPlayerInsideWorld();
+    this.detectBulletHitsAgainstPlayers();
+    this.cleanupRemoteBullets();
+
   }
 
   private updatePerformanceMonitoring(time: number, deltaTime: number): void {
@@ -2731,7 +2831,12 @@ export default class GameScene extends Phaser.Scene {
   private canCreateText(): boolean {
     const add: any = (this as any)?.add;
     const isActive = (this as any)?.sys?.isActive?.() ?? true;
-    return !!(add && typeof add.text === "function" && isActive && this.sceneState === GAME_STATE.SCENE_STATES.RUNNING);
+    return !!(
+      add &&
+      typeof add.text === "function" &&
+      isActive &&
+      this.sceneState === GAME_STATE.SCENE_STATES.RUNNING
+    );
   }
 
   private tryCreateNameTag(playerId: string, name: string): void {
@@ -2746,8 +2851,6 @@ export default class GameScene extends Phaser.Scene {
       }, 50);
     }
   }
-  
-  // 🆕 로컬 플레이어 가시성 토글
   private playerHide(): void {
     try {
       (this.player as any)?.setVisible?.(false);

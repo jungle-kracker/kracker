@@ -35,7 +35,10 @@ export class ShootingManager {
   private onReloadCallback?: () => void;
   private onHitCallback?: (x: number, y: number) => void;
   private ownerId: string | null = null;
-  private getAugmentsFor?: (playerId: string) => Record<string, { id: string; startedAt: number }> | undefined;
+  private augmentResolver?: (
+    playerId: string
+  ) => Record<string, { id: string; startedAt: number }> | undefined;
+
 
   // 총 위 총알 표시를 위한 그래픽 객체
   private ammoGraphics?: Phaser.GameObjects.Graphics;
@@ -227,6 +230,9 @@ export class ShootingManager {
 
       // 카메라 흔들림 효과
       this.scene.cameras.main.shake(5000, 0.005);
+
+      // 사격 콜백 호출 (네트워크 전송용)
+      this.onShotCallback?.(this.config.recoil);
     } else {
       this.logShootFailureReason();
     }
@@ -444,6 +450,14 @@ export class ShootingManager {
   // ===== 상태 조회 메서드들 =====
   public setOwnerId(id: string) {
     this.ownerId = id;
+  }
+
+  public setAugmentResolver(
+    resolver: (
+      playerId: string
+    ) => Record<string, { id: string; startedAt: number }> | undefined
+  ) {
+    this.augmentResolver = resolver;
   }
 
   public getAllBullets(): any[] {

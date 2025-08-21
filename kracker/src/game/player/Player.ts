@@ -375,7 +375,38 @@ export default class Player {
     this.velocityY = wallStateOut.velocityY;
 
     // 착지 감지 (벽잡기 업데이트 후)
+    const wasGrounded = this.isGrounded;
     this.isGrounded = wallStateOut.isGrounded;
+
+    // 앉기 상태에서 isGrounded 판정 안정화
+    if (this.isCrouching && !this.isGrounded && wasGrounded) {
+      // 앉기 상태에서 착지 상태가 해제되었을 때, 약간의 여유를 두고 다시 체크
+      const bounds = computePlayerBounds(this.x, this.y + 2, this.crouchHeight);
+      let hasGroundContact = false;
+
+      for (const platform of this.platforms) {
+        const platBounds = {
+          left: platform.x,
+          right: platform.x + platform.width,
+          top: platform.y,
+          bottom: platform.y + platform.height,
+        };
+
+        if (
+          bounds.right > platBounds.left &&
+          bounds.left < platBounds.right &&
+          bounds.bottom > platBounds.top &&
+          bounds.top < platBounds.bottom
+        ) {
+          hasGroundContact = true;
+          break;
+        }
+      }
+
+      if (hasGroundContact) {
+        this.isGrounded = true;
+      }
+    }
 
     //Hp바 표시 타이머 감소
     if (this.hpBarShowTimerMs > 0) {
@@ -536,26 +567,7 @@ export default class Player {
     this.velocityX = resolver.vx;
     this.velocityY = resolver.vy;
 
-    const wasGrounded = this.isGrounded;
     this.isGrounded = resolver.isGrounded;
-
-    // 앉기 상태에서 착지 판정 안정화
-    if (this.isCrouching && !this.isGrounded && wasGrounded) {
-      // 앉기 상태에서 착지 상태가 해제되었을 때, 약간의 여유를 두고 다시 체크
-      const bounds = computePlayerBounds(this.x, this.y + 3, this.crouchHeight);
-      let hasGroundContact = false;
-
-      for (const platform of this.platforms) {
-        if (checkOverlap(bounds, platform)) {
-          hasGroundContact = true;
-          break;
-        }
-      }
-
-      if (hasGroundContact) {
-        this.isGrounded = true;
-      }
-    }
 
     if (!wasGrounded && this.isGrounded) {
       // 착지
@@ -607,7 +619,7 @@ export default class Player {
           // 착지 후 자동 앉기 시작 (더 긴 지속시간으로 안정화)
           this.isLandingCrouch = true;
           this.landingCrouchStartTime = currentTime;
-          this.landingCrouchDuration = 0.2; // 0.2초로 증가
+          this.landingCrouchDuration = 0.15; // 0.15초로 증가
         }
       }
     }
