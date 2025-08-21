@@ -187,7 +187,14 @@ export class ShootingManager {
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
     // ShootingSystem으로 사격 시도
     // 증강 파라미터 계산
-    const aug = this.ownerId && this.augmentResolver ? this.augmentResolver(this.ownerId) : undefined;
+
+    const aug =
+      this.ownerId && this.getAugmentsFor
+        ? this.getAugmentsFor(this.ownerId)
+        : undefined;
+    let speedMul = 1.0;
+    if (aug?.["벌이야!"]) speedMul *= 1.2; // 카드: +20% 총알 속도 증가
+
     const agg = this.aggregateAugments(aug);
 
     // 총알 기본치 기반 파라미터 구성
@@ -677,47 +684,37 @@ export class ShootingManager {
     const targetX = shootData.gunX + Math.cos(shootData.angle) * range;
     const targetY = shootData.gunY + Math.sin(shootData.angle) * range;
 
-    // 기존 총알 시스템을 이용하되 충돌 비활성화
-    const originalPlayer = this.player;
-
-    // 가짜 플레이어 객체 (위치만 원격 플레이어 총구로 설정)
-    const fakePlayer = {
-      getX: () => shootData.gunX,
-      getY: () => shootData.gunY,
-      getHealth: () => 100,
-    };
-
-    this.setPlayer(fakePlayer as any);
-
-    // 총알 발사 (시각적 효과용)
+    // 원격 총알 생성을 위한 별도 메서드 사용 (탄창 감소 없음)
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
+
     // 원격 사수의 증강 반영
     const remoteAug = this.augmentResolver ? this.augmentResolver(shootData.shooterId) : undefined;
     const rAgg = this.aggregateAugments(remoteAug);
+  const shotFired = this.shootingSystem.createRemoteBullet(
 
-    const shotFired = this.shootingSystem.tryShoot(
       shootData.gunX,
       shootData.gunY,
       targetX,
       targetY,
       {
-        color: shootData.color || 0xff4444, // 빨간색
-        tailColor: shootData.color || 0xff4444,
+
+        color: 0xffaa00, // 원래 총알과 동일한 색상
+        tailColor: 0xffaa00, // 원래 총알과 동일한 색상
+
+        gravity: { x: 0, y: 1500 }, // 원래 중력
+
         radius: Math.max(2, Math.round(6 * rAgg.bullet.sizeMul)),
         speed: this.config.muzzleVelocity * rAgg.bullet.speedMul * 0.8,
         damage: Math.max(0, Math.round(this.config.damage * rAgg.bullet.damageMul + rAgg.bullet.damageAdd)),
         homingStrength: rAgg.bullet.homingStrength,
         explodeRadius: rAgg.bullet.explodeRadius,
-        gravity: { x: 0, y: 500 },
+
+
         useWorldGravity: false,
-        lifetime: 3000, // 짧은 수명
+        lifetime: 8000, // 원래 수명
       }
     );
 
-    // 원래 플레이어로 복구 (undefined 체크)
-    if (originalPlayer) {
-      this.setPlayer(originalPlayer);
-    }
     if (shotFired) {
       const after = this.shootingSystem?.getAllBullets() || [];
       after.forEach((b: any) => {
