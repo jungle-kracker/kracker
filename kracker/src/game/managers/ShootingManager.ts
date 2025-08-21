@@ -180,12 +180,17 @@ export class ShootingManager {
       return false;
     }
 
-    // 총의 실제 위치 계산 (동적)
-    const playerX = this.player.getX();
-    const playerY = this.player.getY();
-    const playerState = this.player.getState();
-    const gunX = playerX + (playerState.facingDirection === "right" ? 30 : -30);
-    const gunY = playerY - 10;
+    // 총의 실제 위치 계산 (Player.getGunPosition()과 동일하게)
+    const gunPos = this.player.getGunPosition();
+    const gunX = gunPos.x;
+    const gunY = gunPos.y;
+
+    console.log(
+      `🎯 로컬 총구 위치: (${gunX.toFixed(1)}, ${gunY.toFixed(1)}), 각도: ${(
+        (gunPos.angle * 180) /
+        Math.PI
+      ).toFixed(1)}도`
+    );
 
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
     // ShootingSystem으로 사격 시도
@@ -205,6 +210,7 @@ export class ShootingManager {
     const baseDamage = this.config.damage;
     const baseRadius = 6;
 
+    // 증강 효과 적용 (서버에서도 동일하게 계산됨)
     const bulletConfig = {
       speed: baseSpeed * agg.bullet.speedMul,
       damage: Math.max(
@@ -215,6 +221,11 @@ export class ShootingManager {
       homingStrength: agg.bullet.homingStrength,
       explodeRadius: agg.bullet.explodeRadius,
     } as const;
+
+    console.log(
+      `🎯 로컬 총알 목표: (${targetX.toFixed(1)}, ${targetY.toFixed(1)})`
+    );
+    console.log(`🎯 로컬 bulletConfig:`, bulletConfig);
 
     const shotFired = this.shootingSystem.tryShoot(
       gunX,
@@ -229,7 +240,7 @@ export class ShootingManager {
         speed: bulletConfig.speed,
         damage: bulletConfig.damage,
         homingStrength: bulletConfig.homingStrength,
-        gravity: { x: 0, y: 3000 },
+        gravity: { x: 0, y: 3000 }, // 서버 기준으로 통일
         useWorldGravity: false,
         lifetime: 8000,
       }
@@ -755,11 +766,32 @@ export class ShootingManager {
     angle: number;
     color?: number;
     shooterId: string;
+    targetX?: number; // 마우스 목표 위치 추가
+    targetY?: number;
+    bulletConfig?: {
+      gravity: { x: number; y: number };
+      speed: number;
+      damage: number;
+      radius: number;
+      lifetime: number;
+      useWorldGravity: boolean;
+    };
   }): void {
-    // 목표 지점 계산 (각도를 이용해서)
-    const range = 1000; // 총알 사정거리
-    const targetX = shootData.gunX + Math.cos(shootData.angle) * range;
-    const targetY = shootData.gunY + Math.sin(shootData.angle) * range;
+    // 목표 지점 계산 (마우스 위치 우선, 없으면 각도 사용)
+    const targetX =
+      shootData.targetX !== undefined
+        ? shootData.targetX
+        : shootData.gunX + Math.cos(shootData.angle) * 1000;
+    const targetY =
+      shootData.targetY !== undefined
+        ? shootData.targetY
+        : shootData.gunY + Math.sin(shootData.angle) * 1000;
+
+    console.log(
+      `🎯 원격 총알 목표: (${targetX.toFixed(1)}, ${targetY.toFixed(1)})`
+    );
+    console.log(`🎯 원격 bulletConfig:`, shootData.bulletConfig);
+    console.log(`🎯 원격 shootData 전체:`, shootData);
 
     // 원격 총알 생성을 위한 별도 메서드 사용 (탄창 감소 없음)
     const before = new Set(this.shootingSystem?.getAllBullets() || []);
@@ -769,31 +801,21 @@ export class ShootingManager {
       ? this.augmentResolver(shootData.shooterId)
       : undefined;
     const rAgg = this.aggregateAugments(remoteAug);
+    // 서버 설정 우선, 없으면 기본값 사용
+    const serverConfig = shootData.bulletConfig;
+    // 서버 bulletConfig에 색상 정보 추가
+    const remoteBulletConfig = {
+      ...shootData.bulletConfig,
+      color: shootData.color || 0xffaa00,
+      tailColor: shootData.color || 0xffaa00,
+    };
+
     const shotFired = this.shootingSystem.createRemoteBullet(
       shootData.gunX,
       shootData.gunY,
       targetX,
       targetY,
-      {
-        color: 0xffaa00, // 원래 총알과 동일한 색상
-        tailColor: 0xffaa00, // 원래 총알과 동일한 색상
-
-        gravity: { x: 0, y: 3000 }, // 원래 중력
-
-        radius: Math.max(2, Math.round(6 * rAgg.bullet.sizeMul)),
-        speed: this.config.muzzleVelocity * rAgg.bullet.speedMul * 0.8,
-        damage: Math.max(
-          0,
-          Math.round(
-            this.config.damage * rAgg.bullet.damageMul + rAgg.bullet.damageAdd
-          )
-        ),
-        homingStrength: rAgg.bullet.homingStrength,
-        explodeRadius: rAgg.bullet.explodeRadius,
-
-        useWorldGravity: false,
-        lifetime: 8000, // 원래 수명
-      }
+      remoteBulletConfig
     );
 
     if (shotFired) {

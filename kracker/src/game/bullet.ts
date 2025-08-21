@@ -281,6 +281,13 @@ export class Bullet {
     // 초기 속도
     const vx = Math.cos(angle) * this.config.speed;
     const vy = Math.sin(angle) * this.config.speed;
+    console.log(
+      `🎯 총알 velocity 계산: cos(${angle.toFixed(3)}) * ${
+        this.config.speed
+      } = ${vx.toFixed(1)}, sin(${angle.toFixed(3)}) * ${
+        this.config.speed
+      } = ${vy.toFixed(1)}`
+    );
     this.sprite.setVelocity(vx, vy);
 
     body.setAllowGravity(true);
@@ -340,6 +347,7 @@ export class Bullet {
         gravity: body.gravity,
         velocity: { x: body.velocity.x, y: body.velocity.y },
         position: { x, y },
+        speed: this.config.speed,
       });
       this._debugLogged = true;
     }
@@ -363,17 +371,6 @@ export class Bullet {
 
     // 🔥 단순한 삼각형 테일 그리기
     this.updateSimpleTail();
-
-    // 디버깅: 총알 꼬리 상태 확인
-    if (this.tail && this.tail.scene) {
-      console.log("🎯 총알 꼬리 상태:", {
-        visible: this.tail.visible,
-        alpha: this.tail.alpha,
-        depth: this.tail.depth,
-        x: this.tail.x,
-        y: this.tail.y,
-      });
-    }
 
     // 간이 유도탄(유도)
     if (
@@ -949,7 +946,7 @@ export function doShoot(opts: {
     gunY,
     targetX,
     targetY,
-    speed = 1500,
+    speed = 1000, // 서버 기준으로 통일
     recoilBase = 1.5,
     wobbleBase = 0.3,
     collisionSystem,
@@ -959,10 +956,12 @@ export function doShoot(opts: {
   console.log(`   이구: (${gunX.toFixed(1)}, ${gunY.toFixed(1)})`);
   console.log(`   목표: (${targetX.toFixed(1)}, ${targetY.toFixed(1)})`);
   console.log(`🎯 전달받은 bulletConfig:`, opts.bulletConfig);
+  console.log(`🎯 전달받은 opts 전체:`, opts);
 
   // 1. 발사 각도 계산
   const angle = Math.atan2(targetY - gunY, targetX - gunX);
   console.log(`   각도: ${((angle * 180) / Math.PI).toFixed(1)}도`);
+  console.log(`   각도 계산: atan2(${targetY - gunY}, ${targetX - gunX})`);
 
   // 2. 이알 스폰 위치 - 이구에서 약간 앞으로
   const spawnDistance = 70;
@@ -1018,7 +1017,7 @@ export function doShoot(opts: {
     {
       ...(opts.bulletConfig || {}), // 먼저 전달받은 설정 적용
       speed: opts.bulletConfig?.speed || speed, // speed는 기본값 유지
-      gravity: opts.bulletConfig?.gravity || { x: 0, y: 3000 }, // gravity는 기본값 유지 (더 크게)
+      gravity: opts.bulletConfig?.gravity || { x: 0, y: 3000 }, // 서버 기준으로 통일
       useWorldGravity:
         opts.bulletConfig?.useWorldGravity !== undefined
           ? opts.bulletConfig.useWorldGravity

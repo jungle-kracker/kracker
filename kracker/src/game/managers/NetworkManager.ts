@@ -21,6 +21,17 @@ interface ShootData {
   angle: number;
   gunX: number;
   gunY: number;
+  targetX?: number; // 마우스 목표 위치 추가
+  targetY?: number;
+  bulletConfig?: {
+    gravity: { x: number; y: number };
+    speed: number;
+    damage: number;
+    radius: number;
+    lifetime: number;
+    useWorldGravity: boolean;
+  };
+  playerColor?: string;
 }
 
 interface BulletHit {
@@ -282,7 +293,7 @@ export class NetworkManager {
       targetPlayerId: hitData.targetPlayerId,
       damage: hitData.damage,
       bulletId: hitData.bulletId,
-      position: `(${hitData.x}, ${hitData.y})`
+      position: `(${hitData.x}, ${hitData.y})`,
     });
 
     socket.emit("game:bulletHit", payload);
@@ -301,23 +312,29 @@ export class NetworkManager {
   }
 
   // 라운드 종료 전송 (승리 스택 포함)
-  public sendRoundEnd(players: Array<{
-    id: string;
-    nickname: string;
-    color: string;
-    wins: number;
-  }>): void {
+  public sendRoundEnd(
+    players: Array<{
+      id: string;
+      nickname: string;
+      color: string;
+      wins: number;
+    }>
+  ): void {
     if (!this.isConnected || !this.roomId) return;
 
-    socket.emit("round:end", {
-      players: players,
-    }, (response: any) => {
-      if (response?.ok) {
-        console.log("✅ 라운드 종료 전송 성공");
-      } else {
-        console.error("❌ 라운드 종료 전송 실패:", response?.error);
+    socket.emit(
+      "round:end",
+      {
+        players: players,
+      },
+      (response: any) => {
+        if (response?.ok) {
+          console.log("✅ 라운드 종료 전송 성공");
+        } else {
+          console.error("❌ 라운드 종료 전송 실패:", response?.error);
+        }
       }
-    });
+    );
 
     console.log(`🏆 라운드 종료 전송: ${players.length}명의 플레이어`);
   }
