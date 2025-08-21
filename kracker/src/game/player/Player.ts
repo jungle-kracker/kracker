@@ -26,7 +26,11 @@ import { setupPointer, PointerHandle } from "../input/pointer";
 
 import { applyGravity } from "../physics/gravity";
 import { integrate, dampen } from "../physics/kinematics";
-import { resolveCollisions, computePlayerBounds } from "../physics/collisions";
+import {
+  resolveCollisions,
+  computePlayerBounds,
+  checkOverlap,
+} from "../physics/collisions";
 
 import {
   checkWallCollision,
@@ -35,7 +39,7 @@ import {
 } from "../mechanics/wallgrab";
 
 // 기존 config / Bullet 의존성은 유지
-import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../config";
+import { GAME_CONFIG, CHARACTER_PRESETS, GameUtils } from "../Config";
 import { Bullet } from "../bullet";
 
 export default class Player {
@@ -405,9 +409,10 @@ export default class Player {
         this.jumpStartTime = Date.now() / 1000; // 점프 시작 시간 기록
         this.jumpStartY = this.y; // 점프 시작 Y 위치 저장
 
-        // 착지 앉기 상태 취소
+        // 착지 앉기 상태 취소 및 앉기 상태 해제
         this.isLandingCrouch = false;
         this.landingCrouchStartTime = 0;
+        this.isCrouching = false; // 점프 시 앉기 상태 해제
 
         // console.log(
         //   "🎯 점프 시작! jumpStartTime:",
@@ -534,10 +539,23 @@ export default class Player {
     const wasGrounded = this.isGrounded;
     this.isGrounded = resolver.isGrounded;
 
-    // 앉기 상태에서 착지 판정 디버깅 (필요시)
-    // if (this.isCrouching && this.isGrounded !== wasGrounded) {
-    //   console.log(`🛬 Crouch landing: ${wasGrounded} → ${this.isGrounded}, crouchHeight: ${this.crouchHeight.toFixed(2)}`);
-    // }
+    // 앉기 상태에서 착지 판정 안정화
+    if (this.isCrouching && !this.isGrounded && wasGrounded) {
+      // 앉기 상태에서 착지 상태가 해제되었을 때, 약간의 여유를 두고 다시 체크
+      const bounds = computePlayerBounds(this.x, this.y + 3, this.crouchHeight);
+      let hasGroundContact = false;
+
+      for (const platform of this.platforms) {
+        if (checkOverlap(bounds, platform)) {
+          hasGroundContact = true;
+          break;
+        }
+      }
+
+      if (hasGroundContact) {
+        this.isGrounded = true;
+      }
+    }
 
     if (!wasGrounded && this.isGrounded) {
       // 착지
@@ -586,10 +604,10 @@ export default class Player {
             effectScale
           );
 
-          // 착지 후 자동 앉기 시작 (고정 0.1초)
+          // 착지 후 자동 앉기 시작 (더 긴 지속시간으로 안정화)
           this.isLandingCrouch = true;
           this.landingCrouchStartTime = currentTime;
-          this.landingCrouchDuration = 0.1; // 고정 0.1초
+          this.landingCrouchDuration = 0.2; // 0.2초로 증가
         }
       }
     }
