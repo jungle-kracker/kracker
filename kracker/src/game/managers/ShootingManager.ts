@@ -151,7 +151,21 @@ export class ShootingManager {
   private setupInputEvents(): void {
     // 마우스 클릭으로 사격
     this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      // 일반 사격
       this.tryShoot(pointer.worldX, pointer.worldY);
+    });
+
+    // Shift 키로 블링크
+    const shiftKey = this.scene.input.keyboard?.addKey("SHIFT");
+    shiftKey?.on("down", () => {
+      if (this.player) {
+        // 마우스 현재 위치로 텔레포트
+        const pointer = this.scene.input.activePointer;
+        (this.player as any).performBlinkToMousePosition?.(
+          pointer.worldX,
+          pointer.worldY
+        );
+      }
     });
 
     // R키로 수동 재장전
@@ -205,7 +219,12 @@ export class ShootingManager {
     if (aug?.["벌이야!"]) speedMul *= 1.2; // 카드: +20% 총알 속도 증가
 
     const agg = centralAggregate(aug);
-    try { console.log("🛠️ 증강 적용(사격):", { weapon: agg.weapon, bullet: agg.bullet }); } catch {}
+    try {
+      console.log("🛠️ 증강 적용(사격):", {
+        weapon: agg.weapon,
+        bullet: agg.bullet,
+      });
+    } catch {}
 
     // 총알 기본치 기반 파라미터 구성
     const baseSpeed = this.config.muzzleVelocity;
@@ -216,6 +235,10 @@ export class ShootingManager {
     let bulletColor = 0xffaa00;
     if (aug?.["독걸려랑"]) bulletColor = 0x00ff00;
     else if (aug?.["벌이야!"]) bulletColor = 0xffff00;
+    // 중력 저항 계산 (그날 인류는 떠올렸다 카드용)
+    const gravityResistance = agg.bullet.gravityResistance || 0;
+    const gravityMultiplier = 1 - gravityResistance;
+
     const bulletConfig = {
       speed: baseSpeed * agg.bullet.speedMul,
       damage: Math.max(
@@ -225,6 +248,7 @@ export class ShootingManager {
       radius: Math.max(2, Math.round(baseRadius * agg.bullet.sizeMul)),
       homingStrength: agg.bullet.homingStrength,
       explodeRadius: agg.bullet.explodeRadius,
+      gravityResistance: gravityResistance,
     } as const;
 
     console.log(
@@ -246,7 +270,7 @@ export class ShootingManager {
         damage: bulletConfig.damage,
         homingStrength: bulletConfig.homingStrength,
         explodeRadius: bulletConfig.explodeRadius,
-        gravity: { x: 0, y: 3000 }, // 서버 기준으로 통일
+        gravity: { x: 0, y: 3000 * gravityMultiplier }, // 중력 저항 적용
         useWorldGravity: false,
         lifetime: 8000,
       }
@@ -423,6 +447,7 @@ export class ShootingManager {
       slowMul: number;
       stunMs: number;
       knockbackMul: number;
+      gravityResistance: number;
     };
     player: {
       jumpHeightMul: number;
@@ -449,6 +474,7 @@ export class ShootingManager {
         slowMul: 1,
         stunMs: 0,
         knockbackMul: 1,
+        gravityResistance: 0,
       },
       player: {
         jumpHeightMul: 1,
@@ -524,6 +550,11 @@ export class ShootingManager {
           );
         if (typeof e.bullet.knockbackMul === "number")
           mutable.bullet.knockbackMul *= e.bullet.knockbackMul;
+        if (typeof e.bullet.gravityResistance === "number")
+          mutable.bullet.gravityResistance = Math.max(
+            mutable.bullet.gravityResistance,
+            e.bullet.gravityResistance
+          );
       }
 
       if (e.player) {
@@ -556,7 +587,8 @@ export class ShootingManager {
     try {
       const prevReload = this.config.reloadTime;
       const prevMag = this.config.magazineSize;
-      const reload = this.config.reloadTime + (weaponAgg?.reloadTimeDeltaMs || 0);
+      const reload =
+        this.config.reloadTime + (weaponAgg?.reloadTimeDeltaMs || 0);
       const mag = this.config.magazineSize + (weaponAgg?.magazineDelta || 0);
       const addInterval = Math.max(0, weaponAgg?.fireIntervalAddMs || 0);
       this.shootingSystem.setReloadTime(reload);
@@ -564,13 +596,19 @@ export class ShootingManager {
       this.shootingSystem.setFireIntervalAddMs(addInterval);
       try {
         if ((weaponAgg?.magazineDelta || 0) !== 0) {
-          console.log(`🧩 증강(탄창): 총 탄창 수량 ${prevMag} -> ${mag} (Δ ${weaponAgg.magazineDelta})`);
+          console.log(
+            `🧩 증강(탄창): 총 탄창 수량 ${prevMag} -> ${mag} (Δ ${weaponAgg.magazineDelta})`
+          );
         }
         if ((weaponAgg?.reloadTimeDeltaMs || 0) !== 0) {
-          console.log(`🧩 증강(재장전): 재장전 시간 ${prevReload}ms -> ${reload}ms (Δ ${weaponAgg.reloadTimeDeltaMs}ms)`);
+          console.log(
+            `🧩 증강(재장전): 재장전 시간 ${prevReload}ms -> ${reload}ms (Δ ${weaponAgg.reloadTimeDeltaMs}ms)`
+          );
         }
         if ((weaponAgg?.fireIntervalAddMs || 0) !== 0) {
-          console.log(`🧩 증강(발사간격): 추가 간격 +${weaponAgg.fireIntervalAddMs}ms`);
+          console.log(
+            `🧩 증강(발사간격): 추가 간격 +${weaponAgg.fireIntervalAddMs}ms`
+          );
         }
       } catch {}
     } catch {}

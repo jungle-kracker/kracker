@@ -85,13 +85,14 @@
   {
     "id": "그날인류는떠올렸다",
     "name": "그날 인류는 떠올렸다",
-    "description": "총알 크기 증가(+50%), 데미지 증가 +10, 총알 속도 감소 -10%",
+    "description": "거대한 직선 대포! 크기 증가(+300%), 데미지 증가 +10, 총알 속도 감소 -60%, 중력 무시",
     "imageFile": "그날인류는떠올렸다.svg",
     "effects": {
       "bullet": {
-        "sizeMul": 1.5,
+        "sizeMul": 4.0,
         "damageAdd": 10,
-        "speedMul": 0.9
+        "speedMul": 0.4,
+        "gravityResistance": 0.95
       }
     }
   },
@@ -193,7 +194,7 @@
     "imageFile": "끼얏호우.svg",
     "effects": {
       "player": {
-        "jumpHeightMul": 0.9,
+        "jumpHeightMul": 0.5,
         "extraJumps": 1
       }
     }
@@ -205,19 +206,19 @@
     "imageFile": "풍선처럼.svg",
     "effects": {
       "player": {
-        "jumpHeightMul": 1.2,
-        "gravityMul": 0.7
+        "jumpHeightMul": 1.1,
+        "gravityMul": 0.8
       }
     }
   },
   {
     "id": "도망간다냥",
     "name": "도망간다냥",
-    "description": "이동속도 +20%",
+    "description": "이동속도 +200%",
     "imageFile": "도망간다냥.svg",
     "effects": {
       "player": {
-        "moveSpeedMul": 1.2
+        "moveSpeedMul": 2
       }
     }
   },

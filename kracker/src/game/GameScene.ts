@@ -338,7 +338,7 @@ export default class GameScene extends Phaser.Scene {
   // ☆ 네트워크 콜백 설정
   private setupNetworkCallbacks(): void {
     // 플레이어 움직임 수신
-    this.networkManager.onPlayerMove((playerId, movement) => {
+    this.networkManager.setPlayerMoveCallback((playerId, movement) => {
       this.handleRemotePlayerMovement(playerId, movement);
     });
 
@@ -363,19 +363,25 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 게임 이벤트 수신
-    this.networkManager.onGameEvent((event) => {
+    this.networkManager.setGameEventCallback((event) => {
       this.handleGameEvent(event);
     });
 
     // 체력 업데이트 수신
-    this.networkManager.onHealthUpdate((data) => {
+    this.networkManager.setHealthUpdateCallback((data: any) => {
       this.handleHealthUpdate(data);
     });
     // 🆕 증강 스냅샷 수신
-    (this.networkManager as any).onAugmentSnapshot?.((data: any) => {
+    this.networkManager.setAugmentSnapshotCallback((data: any) => {
       try {
+        console.log("📦 증강 스냅샷 수신:", data);
+        console.log("🔍 현재 myPlayerId:", this.myPlayerId);
         (data.players || []).forEach((p: any) => {
           this.augmentByPlayer.set(p.id, p.augments || {});
+          console.log(`📦 플레이어 ${p.id} 증강 설정:`, p.augments);
+          if (p.id === this.myPlayerId) {
+            console.log("🎯 내 플레이어 증강 발견!");
+          }
         });
         // 로컬 플레이어 무기/사격 파라미터 재적용
         try {
@@ -397,6 +403,11 @@ export default class GameScene extends Phaser.Scene {
             (this.player as any).setMoveSpeedMultiplier?.(
               eff.player.moveSpeedMul || 1
             );
+            try {
+              console.log(
+                `🏃‍♂️ 플레이어 이동속도 설정: ${eff.player.moveSpeedMul || 1}`
+              );
+            } catch {}
             (this.player as any).setBlinkEnabled?.(!!eff.player.blink);
             if ((eff.player.maxHealthDelta || 0) !== 0) {
               try {
@@ -411,11 +422,11 @@ export default class GameScene extends Phaser.Scene {
     });
 
     // 플레이어 입장/퇴장
-    this.networkManager.onPlayerJoin((playerData) => {
+    this.networkManager.setPlayerJoinCallback((playerData) => {
       this.handlePlayerJoin(playerData);
     });
 
-    this.networkManager.onPlayerLeave((playerId) => {
+    this.networkManager.setPlayerLeaveCallback((playerId) => {
       this.handlePlayerLeave(playerId);
     });
 
@@ -999,7 +1010,18 @@ export default class GameScene extends Phaser.Scene {
   private getAugmentAggregatedEffectsForPlayer(playerId: string): any {
     const res = getAugmentsForPlayer(this.augmentByPlayer, playerId);
     try {
-      console.log("🛠️ 증강 적용(플레이어):", { playerId, res });
+      console.log("🛠️ 증강 적용(플레이어):", {
+        playerId,
+        res,
+        moveSpeedMul: res?.player?.moveSpeedMul,
+        hasAugments: this.augmentByPlayer.has(playerId),
+        augmentCount: this.augmentByPlayer.get(playerId)
+          ? Object.keys(this.augmentByPlayer.get(playerId)!).length
+          : 0,
+        myPlayerId: this.myPlayerId,
+        augmentByPlayerSize: this.augmentByPlayer.size,
+        allPlayerIds: Array.from(this.augmentByPlayer.keys()),
+      });
     } catch {}
     return res as any;
   }
