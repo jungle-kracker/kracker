@@ -335,7 +335,10 @@ export class Bullet {
     }
 
     // 간이 유도탄(유도)
-    if (typeof this.config.homingStrength === "number" && this.config.homingStrength! > 0) {
+    if (
+      typeof this.config.homingStrength === "number" &&
+      this.config.homingStrength! > 0
+    ) {
       // 화면 중앙을 가상의 목표로 삼는 간이 유도 (실전은 실제 타겟 필요)
       const cam = this.scene.cameras.main;
       const targetX = cam.scrollX + cam.width / 2;
@@ -1112,6 +1115,36 @@ export class ShootingSystem {
     this.limitBulletCount();
 
     this.onShotCallback?.(shot.recoilAdd);
+  }
+
+  // 원격 플레이어 총알 생성 (탄창 감소 없음)
+  public createRemoteBullet(
+    gunX: number,
+    gunY: number,
+    targetX: number,
+    targetY: number,
+    bulletConfig?: Partial<BulletConfig>
+  ): boolean {
+    const shot = doShoot({
+      scene: this.scene,
+      gunX,
+      gunY,
+      targetX,
+      targetY,
+      speed: bulletConfig?.speed || this.weaponConfig.muzzleVelocity,
+      cooldownMs: 0,
+      lastShotTime: 0,
+      recoilBase: 0, // 원격 총알은 반동 없음
+      wobbleBase: 0,
+      collisionSystem: { getBulletGroup: () => this.bulletGroup },
+      bulletConfig: bulletConfig, // bulletConfig를 doShoot에 전달
+    });
+
+    this.bullets.set(shot.bullet.id, shot.bullet);
+    this.limitBulletCount();
+
+    // 원격 총알이므로 콜백 호출하지 않음
+    return true;
   }
 
   private startReload(): void {
