@@ -901,7 +901,24 @@ io.on("connection", (socket) => {
             damage: 0,
             timestamp: Date.now(),
           });
-          // 각 플레이어 alive 신호
+        });
+
+        // 모든 플레이어에게 스폰 위치로 복귀 지시 (클라에서 맵 스폰에 맞춰 위치 리셋)
+        const playerEntries = Object.entries(room.players);
+        playerEntries.forEach(([playerId, player], index) => {
+          io.to(rid).emit("game:event", {
+            type: "respawnAll",
+            playerId: "server",
+            data: { 
+              round: payload.round,
+              spawnIndex: index, // 입장 순서 기반 스폰 인덱스
+              targetPlayerId: playerId // 해당 플레이어에게만 전송
+            },
+          });
+        });
+
+        // 스폰 이동 후 alive 신호로 입력/가시성 해제
+        Object.values(room.players).forEach((p) => {
           io.to(rid).emit("game:event", {
             type: "alive",
             playerId: p.id,
@@ -909,15 +926,8 @@ io.on("connection", (socket) => {
           });
         });
 
-        // 모든 플레이어에게 스폰 위치로 복귀 지시 (클라에서 맵 스폰에 맞춰 위치 리셋)
-        io.to(rid).emit("game:event", {
-          type: "respawnAll",
-          playerId: "server",
-          data: { round: payload.round },
-        });
-
         // 선택 상태 초기화(서버)
-        // 진행 상황을 즉시 0으로 재방송하면 클라이언트에 혼란(0/1 {})을 주므로,
+        // 진행 상태를 즉시 0으로 재방송하면 클라이언트에 혼란(0/1 {})을 주므로,
         // 내부 상태만 초기화하고 진행 이벤트는 다음 라운드 전환에서만 보내도록 함.
         roundSelection.selections = {};
 

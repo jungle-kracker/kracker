@@ -146,6 +146,8 @@ export default class GameScene extends Phaser.Scene {
   private currentMapKey: MapKey = GAME_SETTINGS.DEFAULT_MAP as MapKey;
   private sceneState: any = GAME_STATE.SCENE_STATES.LOADING;
   private isInitialized: boolean = false;
+  // 라운드 결과/증강 선택 등 전투 비활성 구간 여부
+  private isBetweenRounds: boolean = false;
 
   // 증강 스냅샷: playerId -> Record<augmentId, { id, startedAt }>
   private augmentByPlayer: Map<
@@ -1137,45 +1139,40 @@ export default class GameScene extends Phaser.Scene {
       case "respawnAll":
         // 모든 플레이어를 스폰 위치로 이동
         try {
+          // 서버에서 보낸 spawnIndex가 현재 플레이어에게만 적용
+          if (event.data?.targetPlayerId && event.data.targetPlayerId !== this.myPlayerId) {
+            return; // 다른 플레이어용 이벤트는 무시
+          }
+          
           const spawns = this.mapRenderer?.getSpawns?.() || [];
+          
           // 내 플레이어
           if (this.player && this.myPlayerId) {
             const myData = this.gameData?.players.find(
               (p) => p.id === this.myPlayerId
             );
-            let spawn = spawns[0];
-            if (this.gameData?.room.gameMode === "팀전") {
-              if (myData?.team === 1)
-                spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
-              else if (myData?.team === 2)
-                spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
+            
+            // 최적의 스폰 위치 선택
+            const optimalSpawn = this.getOptimalSpawnPoint(
+              spawns,
+              this.gameData?.room.gameMode || "개인전",
+              this.myPlayerId!,
+              myData?.team
+            ) || spawns[0];
+            
+            if (optimalSpawn) {
+              this.setPlayerPosition(optimalSpawn.x, optimalSpawn.y);
             }
-            if (spawn) {
-              this.setPlayerPosition(spawn.x, spawn.y);
-            }
+            
             // 이름표 복구
             if (myData) this.tryCreateNameTag(myData.id, myData.name);
           }
-          // 원격 플레이어
-          const playerIds = Array.from(this.remotePlayers.keys());
-          for (let i = 0; i < playerIds.length; i++) {
-            const pid = playerIds[i];
-            const rp = this.remotePlayers.get(pid);
-            if (!rp) continue;
-            const rpData = this.gameData?.players.find((p) => p.id === pid);
-            let spawn = spawns[0];
-            if (this.gameData?.room.gameMode === "팀전") {
-              if (rpData?.team === 1)
-                spawn = spawns.find((s: any) => s.name === "A") || spawns[0];
-              else if (rpData?.team === 2)
-                spawn = spawns.find((s: any) => s.name === "B") || spawns[0];
-            }
-            if (spawn) {
-              rp.lastPosition = { x: spawn.x, y: spawn.y };
-              rp.gfxRefs?.body?.setPosition?.(spawn.x, spawn.y);
-            }
-            if (rpData) this.tryCreateNameTag(pid, rpData.name);
-          }
+          
+          // 원격 플레이어는 각자 서버에서 받은 spawnIndex로 처리됨
+          // (서버가 각 플레이어별로 개별 이벤트를 보내므로)
+          
+          // 라운드 사이 구간: 리스폰 시점이므로 여전히 betweenRounds 유지
+          this.isBetweenRounds = true;
         } catch (e) {}
         break;
 
@@ -1464,14 +1461,12 @@ export default class GameScene extends Phaser.Scene {
     const spawns = this.mapRenderer.getSpawns();
 
     // 스폰 포인트 선택
-    let spawnPoint;
-    if (this.gameData?.room.gameMode === "팀전") {
-      spawnPoint =
-        spawns.find((s) => s.name === (playerData.team === 1 ? "A" : "B")) ||
-        spawns[0];
-    } else {
-      spawnPoint = spawns[playerData.team - 1] || spawns[0];
-    }
+    const spawnPoint = this.getOptimalSpawnPoint(
+      spawns,
+      this.gameData?.room.gameMode || "개인전",
+      playerData.id,
+      playerData.team
+    ) || spawns[0];
 
     // ⭐ 플레이어가 없으면 생성
     if (!this.player) {
@@ -1499,14 +1494,12 @@ export default class GameScene extends Phaser.Scene {
     const spawns = this.mapRenderer.getSpawns();
 
     // 팀별 스폰 포인트 선택
-    let spawnPoint;
-    if (this.gameData?.room.gameMode === "팀전") {
-      spawnPoint =
-        spawns.find((s) => s.name === (playerData.team === 1 ? "A" : "B")) ||
-        spawns[0];
-    } else {
-      spawnPoint = spawns[playerData.team - 1] || spawns[0];
-    }
+    const spawnPoint = this.getOptimalSpawnPoint(
+      spawns,
+      this.gameData?.room.gameMode || "개인전",
+      playerData.id,
+      playerData.team
+    ) || spawns[0];
 
     // ☆ 핵심: 캐릭터 그래픽 생성
     const characterColors: CharacterColors = {
@@ -2321,8 +2314,25 @@ export default class GameScene extends Phaser.Scene {
 
   private createPlayer(spawnData?: { x: number; y: number }): void {
     const spawns = this.mapRenderer.getSpawns();
-    const defaultSpawn =
-      spawns.length > 0 ? spawns[0] : PLAYER_CONSTANTS.DEFAULT_SPAWN;
+    let defaultSpawn = PLAYER_CONSTANTS.DEFAULT_SPAWN;
+    
+    try {
+      if (!spawnData) {
+        const me = (this.gameData?.players || []).find(
+          (p) => p.id === this.myPlayerId
+        );
+        const optimalSpawn = this.getOptimalSpawnPoint(
+          spawns,
+          this.gameData?.room.gameMode || "개인전",
+          this.myPlayerId!,
+          me?.team
+        );
+        if (optimalSpawn) {
+          defaultSpawn = optimalSpawn;
+        }
+      }
+    } catch {}
+    
     const spawnX = spawnData?.x ?? defaultSpawn.x;
     const spawnY = spawnData?.y ?? defaultSpawn.y;
 
@@ -3262,5 +3272,95 @@ export default class GameScene extends Phaser.Scene {
     });
 
     console.log("=============================");
+  }
+
+  // 🆕 라운드 사이 상태 설정 (RoundsGame에서 호출)
+  public setBetweenRounds(value: boolean): void {
+    this.isBetweenRounds = value;
+  }
+
+  // 스폰 위치 최적화를 위한 새로운 메서드
+  private getOptimalSpawnPoint(
+    spawns: any[],
+    gameMode: string,
+    playerId: string,
+    team?: number
+  ): any {
+    if (spawns.length === 0) return null;
+
+    if (gameMode === "팀전") {
+      // 팀전: 팀별로 스폰 포인트 분산
+      const teamSpawns = spawns.filter((s) => s.name === (team === 1 ? "A" : "B"));
+      if (teamSpawns.length === 0) return spawns[0];
+
+      const teamOrder = (this.gameData?.players || []).filter(p => p.team === team).map(p => p.id);
+      const teamIdx = Math.max(0, teamOrder.indexOf(playerId));
+      const clampedTeamIdx = Math.min(teamIdx, Math.max(0, teamSpawns.length - 1));
+      
+      // 팀 내에서 입장 순서에 따라 스폰 위치 선택
+      const selectedSpawn = teamSpawns[clampedTeamIdx] || teamSpawns[0];
+      
+      // 이미 사용 중인 스폰 위치와의 거리를 고려하여 최적화
+      return this.getFarthestSpawnFromOthers(teamSpawns, selectedSpawn);
+    } else {
+      // 개인전: 전체 입장 순서에 따라 스폰 포인트 분산
+      const order = (this.gameData?.players || []).map((p) => p.id);
+      const idx = Math.max(0, order.indexOf(playerId));
+      const clamped = Math.min(idx, Math.max(0, spawns.length - 1));
+      const selectedSpawn = spawns[clamped] || spawns[0];
+      
+      // 이미 사용 중인 스폰 위치와의 거리를 고려하여 최적화
+      return this.getFarthestSpawnFromOthers(spawns, selectedSpawn);
+    }
+  }
+
+  // 다른 플레이어들과 가장 멀리 떨어진 스폰 위치를 찾는 메서드
+  private getFarthestSpawnFromOthers(availableSpawns: any[], preferredSpawn: any): any {
+    if (availableSpawns.length <= 1) return preferredSpawn;
+
+    // 현재 활성화된 플레이어들의 위치 수집
+    const activePositions: { x: number; y: number }[] = [];
+    
+    // 내 플레이어 위치 추가
+    if (this.player) {
+      const myPos = this.player.getPosition();
+      activePositions.push({ x: myPos.x, y: myPos.y });
+    }
+    
+    // 원격 플레이어들의 위치 추가
+    this.remotePlayers.forEach((remotePlayer) => {
+      if (remotePlayer.isVisible) {
+        activePositions.push({
+          x: remotePlayer.lastPosition.x,
+          y: remotePlayer.lastPosition.y
+        });
+      }
+    });
+
+    // 활성 플레이어가 없으면 선호하는 스폰 위치 반환
+    if (activePositions.length === 0) return preferredSpawn;
+
+    // 각 스폰 위치에서 활성 플레이어들과의 최소 거리 계산
+    let bestSpawn = preferredSpawn;
+    let maxMinDistance = 0;
+
+    availableSpawns.forEach((spawn) => {
+      let minDistance = Infinity;
+      
+      activePositions.forEach((pos) => {
+        const distance = Math.sqrt(
+          Math.pow(spawn.x - pos.x, 2) + Math.pow(spawn.y - pos.y, 2)
+        );
+        minDistance = Math.min(minDistance, distance);
+      });
+
+      // 더 멀리 떨어진 스폰 위치를 선택
+      if (minDistance > maxMinDistance) {
+        maxMinDistance = minDistance;
+        bestSpawn = spawn;
+      }
+    });
+
+    return bestSpawn;
   }
 }
