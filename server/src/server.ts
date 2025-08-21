@@ -17,6 +17,9 @@ type Player = {
   wins?: number; // 🆕 라운드 승리 스택
   // 🆕 활성 증강: augmentId -> { id, startedAt }
   augments?: Record<string, { id: string; startedAt: number }>;
+  // 🆕 서버가 추적하는 마지막 위치(상태/넉백 계산용)
+  x?: number;
+  y?: number;
 };
 
 type Room = {
@@ -479,6 +482,15 @@ io.on("connection", (socket) => {
     }) => {
       const rid = currentRoomIdOf(socket);
       if (!rid) return;
+      // 서버에 마지막 위치 저장(넉백 등 상태 계산용)
+      const room = rooms.get(rid);
+      if (room) {
+        const me = room.players[socket.id];
+        if (me) {
+          me.x = data.x;
+          me.y = data.y;
+        }
+      }
       socket
         .to(rid)
         .emit("state:move", { id: socket.id, ...data, t: Date.now() });
@@ -607,13 +619,57 @@ io.on("connection", (socket) => {
           }, 2000);
         }
 
-        // 끈적여요: 둔화 상태 방송 (클라에서 이동속도 적용)
-        if (shooter?.augments && shooter.augments["끈적여요"]) {
-          io.to(roomId).emit("game:event", {
-            type: "status",
-            playerId: hit.targetPlayerId,
-            data: { status: "slow", ms: 1500, multiplier: 0.7 },
-          });
+        // ===== 서버 권위 상태이상/버프 처리 =====
+        if (shooter?.augments) {
+          // 끈적여요: 둔화 (augments.json 기준 1500ms, 0.5)
+          if (shooter.augments["끈적여요"]) {
+            io.to(roomId).emit("game:event", {
+              type: "status",
+              playerId: hit.targetPlayerId,
+              data: { status: "slow", ms: 1500, multiplier: 0.5 },
+            });
+          }
+
+          // 앗따거: 스턴(1000ms)
+          if (shooter.augments["앗따거"]) {
+            io.to(roomId).emit("game:event", {
+              type: "status",
+              playerId: hit.targetPlayerId,
+              data: { status: "stun", ms: 1000 },
+            });
+          }
+
+          // 잠깐만: 넉백 (기본 임펄스 * 2)
+          if (shooter.augments["잠깐만"]) {
+            const victim = room.players[hit.targetPlayerId];
+            const px = victim?.x ?? hit.x;
+            const py = victim?.y ?? hit.y;
+            let dx = (px as number) - hit.x;
+            let dy = (py as number) - hit.y;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            dx /= len;
+            dy /= len;
+            const impulseBase = 400 * 2;
+            io.to(roomId).emit("game:event", {
+              type: "status",
+              playerId: hit.targetPlayerId,
+              data: { status: "knockback", vx: dx * impulseBase, vy: dy * impulseBase, ms: 0 },
+            });
+          }
+
+          // 기생충: 라이프스틸(+15)
+          if (shooter.augments["기생충"]) {
+            const healer = room.players[payload.playerId];
+            const old = healer?.health ?? 100;
+            const nh = Math.min(100, old + 15);
+            if (healer) healer.health = nh;
+            io.to(roomId).emit("game:healthUpdate", {
+              playerId: payload.playerId,
+              health: nh,
+              damage: 0,
+              timestamp: Date.now(),
+            });
+          }
         }
 
         // 사망 브로드캐스트
