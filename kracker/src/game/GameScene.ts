@@ -583,15 +583,30 @@ export default class GameScene extends Phaser.Scene {
     const gunX = shootData.gunX || shootData.x;
     const gunY = shootData.gunY || shootData.y;
 
+    console.log(
+      `🎯 원격 총구 위치: (${gunX.toFixed(1)}, ${gunY.toFixed(1)}), 각도: ${(
+        (shootData.angle * 180) /
+        Math.PI
+      ).toFixed(1)}도`
+    );
+
     // 3. ShootingManager에서 원격 총알 생성 (안전하게)
     try {
       if (this.shootingManager) {
+        // 서버 색상을 16진수에서 숫자로 변환
+        const serverColor = shootData.playerColor
+          ? parseInt(shootData.playerColor.replace("#", ""), 16)
+          : 0xff4444;
+
         this.shootingManager.createRemotePlayerBullet({
           gunX: gunX,
           gunY: gunY,
           angle: shootData.angle,
-          color: 0xff4444, // 빨간색으로 구분
+          color: serverColor, // 서버 색상 사용
           shooterId: playerId,
+          targetX: shootData.targetX, // 마우스 목표 위치 전달
+          targetY: shootData.targetY,
+          bulletConfig: shootData.bulletConfig, // 서버 설정 사용
         });
       }
     } catch (error) {
@@ -1147,9 +1162,6 @@ export default class GameScene extends Phaser.Scene {
 
   // ☆ 체력 업데이트 처리 (서버에서 받은 체력 동기화)
   private handleHealthUpdate(data: any): void {
-    console.log(`💚 체력 업데이트 수신:`, data);
-    console.log(`💚 현재 내 플레이어 ID: ${this.myPlayerId}`);
-
     const { playerId, health, damage } = data;
 
     if (playerId === this.myPlayerId) {
@@ -1626,11 +1638,6 @@ export default class GameScene extends Phaser.Scene {
     // HP바 그래픽 초기화
     remotePlayer.hpBarGraphics.clear();
 
-    // 타이머에 따라 체력바 표시
-    console.log(
-      `💚 ${remotePlayer.name} 체력바 렌더링: 체력=${remotePlayer.networkState.health}`
-    );
-
     // HP바 그리기 (상시 표시)
     drawHealthBar(
       remotePlayer.hpBarGraphics,
@@ -1682,8 +1689,6 @@ export default class GameScene extends Phaser.Scene {
     if (refs.leftLeg) refs.leftLeg.setVisible(!isDead);
     if (refs.rightLeg) refs.rightLeg.setVisible(!isDead);
     if (refs.gun) refs.gun.setVisible(!isDead);
-
-    console.log(`💚 ${remotePlayer.name} 체력: ${networkState.health}/100`);
 
     // 사망하지 않은 경우에만 포즈와 팔다리 렌더링
     if (!isDead) {
@@ -2001,7 +2006,7 @@ export default class GameScene extends Phaser.Scene {
       damage: 25,
       accuracy: 0.95,
       recoil: 2.0,
-      muzzleVelocity: 1000,
+      muzzleVelocity: 1000, // 서버 기준으로 통일
       magazineSize: 6,
       reloadTime: 1000,
     });
@@ -2066,12 +2071,18 @@ export default class GameScene extends Phaser.Scene {
     this.shootingManager.onShot((recoil) => {
       if (this.isMultiplayer && this.player) {
         const gunPos = this.player.getGunPosition();
+        // 마우스 목표 위치 계산
+        const mouseX = this.input?.pointer1?.worldX || gunPos.x;
+        const mouseY = this.input?.pointer1?.worldY || gunPos.y;
+
         const shootData = {
           x: gunPos.x,
           y: gunPos.y,
           angle: gunPos.angle,
           gunX: gunPos.x,
           gunY: gunPos.y,
+          targetX: mouseX, // 마우스 목표 위치 추가
+          targetY: mouseY,
         };
 
         this.networkManager.sendShoot(shootData);

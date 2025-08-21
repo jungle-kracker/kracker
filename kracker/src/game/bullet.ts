@@ -81,6 +81,7 @@ export class Bullet {
   private _id: string;
   private createdTime: number;
   public _hitProcessed: boolean = false; // 충돌 처리 상태 추적
+  private _debugLogged: boolean = false; // 디버그 로그 중복 방지
 
   // 테일 효과를 위한 위치 히스토리
   private positionHistory: Array<{ x: number; y: number; time: number }> = [];
@@ -115,7 +116,7 @@ export class Bullet {
       color: 0xffaa40, // 연한 주황색으로 변경
       tailColor: 0xffaa40, // 연한 주황색으로 변경
       tailLength: 200,
-      gravity: { x: 0, y: 30 },
+      gravity: { x: 0, y: 3000 },
       useWorldGravity: false,
       lifetime: 8000,
       homingStrength: 0,
@@ -134,6 +135,11 @@ export class Bullet {
     };
 
     console.log(`🎯 이알 설정:`, this.config);
+    console.log(`🎯 중력 설정:`, {
+      configGravity: this.config.gravity,
+      useWorldGravity: this.config.useWorldGravity,
+      worldGravity: this.scene.physics.world.gravity,
+    });
 
     this.createBulletAssets(x, y, angle, bulletGroup);
     this.setupPhysics(angle);
@@ -298,6 +304,13 @@ export class Bullet {
     // 초기 속도
     const vx = Math.cos(angle) * this.config.speed;
     const vy = Math.sin(angle) * this.config.speed;
+    console.log(
+      `🎯 총알 velocity 계산: cos(${angle.toFixed(3)}) * ${
+        this.config.speed
+      } = ${vx.toFixed(1)}, sin(${angle.toFixed(3)}) * ${
+        this.config.speed
+      } = ${vy.toFixed(1)}`
+    );
     this.sprite.setVelocity(vx, vy);
 
     body.setAllowGravity(true);
@@ -307,11 +320,13 @@ export class Bullet {
     if (this.config.useWorldGravity) {
       // 월드 중력만 사용
       body.setGravity(0, 0);
+      console.log(`🎯 월드 중력 사용: body gravity = (0, 0)`);
     } else {
       // (월드 + 바디) = 원하는 중력 이 되도록 보정
       const gx = this.config.gravity.x - worldG.x;
       const gy = this.config.gravity.y - worldG.y;
       body.setGravity(gx, gy);
+      console.log(`🎯 커스텀 중력 사용: body gravity = (${gx}, ${gy})`);
     }
 
     // 기타 물리 속성
@@ -347,6 +362,18 @@ export class Bullet {
     const x = this.sprite.x;
     const y = this.sprite.y;
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+
+    // 디버깅: 중력 상태 확인 (첫 번째 업데이트에서만)
+    if (!this._debugLogged) {
+      console.log(`🎯 총알 업데이트 시작:`, {
+        id: this._id,
+        gravity: body.gravity,
+        velocity: { x: body.velocity.x, y: body.velocity.y },
+        position: { x, y },
+        speed: this.config.speed,
+      });
+      this._debugLogged = true;
+    }
 
     // 위치 히스토리 업데이트
     this.addToHistory(x, y);
@@ -628,7 +655,8 @@ export class Bullet {
     try {
       const cfg = this.getConfig();
       if (cfg.explodeRadius && cfg.explodeRadius > 0) {
-        const ownerId = (this as any).__ownerId || (this.sprite as any)?.ownerId || null;
+        const ownerId =
+          (this as any).__ownerId || (this.sprite as any)?.ownerId || null;
         (this.scene as any).events?.emit?.("bullet:explosion", {
           x: hitX,
           y: hitY,
@@ -989,7 +1017,7 @@ export function doShoot(opts: {
     gunY,
     targetX,
     targetY,
-    speed = 3000,
+    speed = 1000, // 서버 기준으로 통일
     recoilBase = 1.5,
     wobbleBase = 0.3,
     collisionSystem,
@@ -998,10 +1026,13 @@ export function doShoot(opts: {
   console.log(`🔫 단순화된 사격:`);
   console.log(`   이구: (${gunX.toFixed(1)}, ${gunY.toFixed(1)})`);
   console.log(`   목표: (${targetX.toFixed(1)}, ${targetY.toFixed(1)})`);
+  console.log(`🎯 전달받은 bulletConfig:`, opts.bulletConfig);
+  console.log(`🎯 전달받은 opts 전체:`, opts);
 
   // 1. 발사 각도 계산
   const angle = Math.atan2(targetY - gunY, targetX - gunX);
   console.log(`   각도: ${((angle * 180) / Math.PI).toFixed(1)}도`);
+  console.log(`   각도 계산: atan2(${targetY - gunY}, ${targetX - gunX})`);
 
   // 2. 이알 스폰 위치 - 이구에서 약간 앞으로
   const spawnDistance = 70;
@@ -1055,14 +1086,17 @@ export function doShoot(opts: {
     spawnY,
     angle,
     {
-      speed,
-      gravity: { x: 0, y: 1500 },
-      useWorldGravity: false,
-      radius: 6,
-      color: 0xffaa00,
-      tailColor: 0xffaa00, // 🔥 총알과 같은 색상
-      lifetime: 8000,
-      ...(opts.bulletConfig || {}),
+      ...(opts.bulletConfig || {}), // 먼저 전달받은 설정 적용
+      speed: opts.bulletConfig?.speed || speed, // speed는 기본값 유지
+      gravity: opts.bulletConfig?.gravity || { x: 0, y: 3000 }, // 서버 기준으로 통일
+      useWorldGravity:
+        opts.bulletConfig?.useWorldGravity !== undefined
+          ? opts.bulletConfig.useWorldGravity
+          : false, // useWorldGravity는 기본값 유지
+      radius: opts.bulletConfig?.radius || 6, // radius는 기본값 유지
+      color: opts.bulletConfig?.color || 0xffaa00, // color는 기본값 유지
+      tailColor: opts.bulletConfig?.tailColor || 0xffaa00, // tailColor는 기본값 유지
+      lifetime: opts.bulletConfig?.lifetime || 8000, // lifetime은 기본값 유지
     },
     {}
   );
@@ -1184,7 +1218,8 @@ export class ShootingSystem {
       return false;
     }
 
-    const fireInterval = 60000 / this.weaponConfig.fireRate + this.fireIntervalAddMs;
+    const fireInterval =
+      60000 / this.weaponConfig.fireRate + this.fireIntervalAddMs;
     if (now - this.state.lastShotTime < fireInterval) {
       return false;
     }
@@ -1212,7 +1247,7 @@ export class ShootingSystem {
       gunY,
       targetX,
       targetY,
-      speed: this.weaponConfig.muzzleVelocity,
+      speed: bulletConfig?.speed || this.weaponConfig.muzzleVelocity,
       cooldownMs: 0,
       lastShotTime: 0,
       recoilBase: this.weaponConfig.recoil,
