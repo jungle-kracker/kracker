@@ -181,28 +181,38 @@ export class UIManager {
 
   // 닉네임 태그 생성
   public createNameTag(playerId: string, nickname: string): void {
-    // 기존 태그 있으면 제거
-    const prev = this.nameTags.get(playerId);
-    prev?.destroy();
+    try {
+      // Scene이 준비되지 않은 경우 안전하게 무시
+      const add: any = (this.scene as any)?.add;
+      if (!add || typeof add.text !== "function") {
+        return;
+      }
 
-    const text = this.scene.add
-      .text(0, 0, nickname, {
-        fontFamily: "Apple SD Gothic Neo",
-        fontSize: "14px",
-        color: "#FFFFFF",
-        align: "center",
-        padding: { left: 3, right: 3, top: 1, bottom: 1 },
-      })
-      .setOrigin(0.5, 1) // 중앙 정렬, 아래쪽 기준
-      .setScrollFactor(1) // 월드 좌표 따라다님(카메라 스크롤 반영)
-      .setDepth(this.NAME_TAG_DEPTH);
+      // 기존 태그 있으면 제거
+      const prev = this.nameTags.get(playerId);
+      prev?.destroy();
 
-    // 너무 길면 자동 축소
-    if (text.width > this.NAME_TAG_MAX_WIDTH) {
-      text.setScale(this.NAME_TAG_MAX_WIDTH / text.width);
+      const text = this.scene.add
+        .text(0, 0, nickname, {
+          fontFamily: "Apple SD Gothic Neo",
+          fontSize: "14px",
+          color: "#FFFFFF",
+          align: "center",
+          padding: { left: 3, right: 3, top: 1, bottom: 1 },
+        })
+        .setOrigin(0.5, 1) // 중앙 정렬, 아래쪽 기준
+        .setScrollFactor(1) // 월드 좌표 따라다님(카메라 스크롤 반영)
+        .setDepth(this.NAME_TAG_DEPTH);
+
+      // 너무 길면 자동 축소
+      if (text.width > this.NAME_TAG_MAX_WIDTH) {
+        text.setScale(this.NAME_TAG_MAX_WIDTH / text.width);
+      }
+
+      this.nameTags.set(playerId, text);
+    } catch (e) {
+      // 안전하게 무시
     }
-
-    this.nameTags.set(playerId, text);
   }
 
   // 닉네임 태그 위치 갱신 (hpBarTopY 바로 위에 촘촘히)

@@ -35,6 +35,7 @@ export class ShootingManager {
   private onReloadCallback?: () => void;
   private onHitCallback?: (x: number, y: number) => void;
   private ownerId: string | null = null;
+  private getAugmentsFor?: (playerId: string) => Record<string, { id: string; startedAt: number }> | undefined;
 
   // 총 위 총알 표시를 위한 그래픽 객체
   private ammoGraphics?: Phaser.GameObjects.Graphics;
@@ -195,6 +196,15 @@ export class ShootingManager {
           b.ownerId = this.ownerId || "local";
           b._remote = false;
           b._hitProcessed = false;
+          // 🆕 간단한 증강 이펙트: 빨리뽑기이면 탄속 살짝 증가 (시각효과)
+          try {
+            if (this.ownerId && this.getAugmentsFor) {
+              const aug = this.getAugmentsFor(this.ownerId);
+              if (aug && aug["빨리뽑기"]) {
+                b.speed = (b.speed || this.config.muzzleVelocity) * 1.05;
+              }
+            }
+          } catch {}
         }
       });
 
@@ -444,6 +454,11 @@ export class ShootingManager {
 
   public getBulletGroup(): Phaser.Physics.Arcade.Group {
     return this.shootingSystem.getBulletGroup();
+  }
+
+  // 🆕 증강 조회 콜백을 등록(씬에서 세팅)
+  public setAugmentResolver(fn: (playerId: string) => Record<string, { id: string; startedAt: number }> | undefined) {
+    this.getAugmentsFor = fn;
   }
 
   public getShootingSystem(): ShootingSystem {

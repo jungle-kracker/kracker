@@ -64,6 +64,7 @@ export class NetworkManager {
   private lastPoseSentAt = 0;
   private lastPoseCache?: any;
   private onHealthUpdateCallback?: (data: any) => void;
+  private onAugmentSnapshotCallback?: (data: any) => void;
 
   constructor(scene: any) {
     this.scene = scene;
@@ -198,6 +199,11 @@ export class NetworkManager {
       if (this.onHealthUpdateCallback) {
         this.onHealthUpdateCallback(data);
       }
+    });
+    // 🆕 증강 스냅샷 수신
+    socket.on("augment:snapshot", (data: any) => {
+      console.log("📦 증강 스냅샷 수신:", data);
+      this.onAugmentSnapshotCallback?.(data);
     });
 
     // 플레이어 입장/퇴장

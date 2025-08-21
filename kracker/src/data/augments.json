@@ -1,0 +1,21 @@
+[
+  { "id": "그날인류는떠올렸다", "name": "그날 인류는 떠올렸다", "description": "점프력과 체공 시간이 잠시 증가합니다.", "imageFile": "그날인류는떠올렸다.svg" },
+  { "id": "기생충", "name": "기생충", "description": "적을 명중시키면 일정 시간 동안 추가 도트 피해를 가합니다.", "imageFile": "기생충.svg" },
+  { "id": "끈적여요", "name": "끈적여요", "description": "총알에 감속 효과가 부여되어 적의 이동을 둔화시킵니다.", "imageFile": "끈적여요.svg" },
+  { "id": "끼얏호우", "name": "끼얏호우", "description": "이동 속도가 상승하고 가속이 빨라집니다.", "imageFile": "끼얏호우.svg" },
+  { "id": "도망간다냥", "name": "도망간다냥", "description": "짧은 대시를 사용할 수 있습니다.", "imageFile": "도망간다냥.svg" },
+  { "id": "독걸려랑", "name": "독걸려랑", "description": "총알이 적에게 중독을 부여해 추가 피해를 줍니다.", "imageFile": "독걸려랑.svg" },
+  { "id": "먼저가요", "name": "먼저가요", "description": "라운드 시작 시 잠깐 은신 상태가 됩니다.", "imageFile": "먼저가요.svg" },
+  { "id": "목표를포착했다", "name": "목표를 포착했다", "description": "조준 정확도가 올라가며 반동이 감소합니다.", "imageFile": "목표를포착했다.svg" },
+  { "id": "벌이야", "name": "벌이야!", "description": "사격 시 벌 떼 파편이 추가로 퍼져나갑니다.", "imageFile": "벌이야.svg" },
+  { "id": "빨리뽑기", "name": "빨리뽑기", "description": "연사 속도가 증가하고 재장전이 빨라집니다.", "imageFile": "빨리뽑기.svg" },
+  { "id": "안아줘요", "name": "안아줘요", "description": "근접 범위의 적에게 추가 피해를 줍니다.", "imageFile": "안아줘요.svg" },
+  { "id": "앗따거", "name": "앗따거", "description": "피해를 받을 때 짧은 무적과 노크백이 발생합니다.", "imageFile": "앗따거.svg" },
+  { "id": "유령이다", "name": "유령이다", "description": "일시적으로 벽 통과가 가능해집니다(낮은 속도에서).", "imageFile": "유령이다.svg" },
+  { "id": "이건폭탄이여", "name": "이건 폭탄이여", "description": "총알이 충돌 시 작은 폭발을 일으킵니다.", "imageFile": "이건폭탄이여.svg" },
+  { "id": "잠깐만", "name": "잠깐만~", "description": "시간이 짧게 느려지며 정밀 조준이 쉬워집니다.", "imageFile": "잠깐만.svg" },
+  { "id": "준비끝", "name": "준비끝", "description": "라운드 시작 시 추가 탄약과 방어막을 얻습니다.", "imageFile": "준비끝.svg" },
+  { "id": "팅팅탕탕", "name": "팅팅탕탕", "description": "벽에 튕기는 탄환을 발사합니다.", "imageFile": "팅팅탕탕.svg" },
+  { "id": "풍선처럼", "name": "풍선처럼", "description": "낙하 속도가 감소하고 추락 피해를 받지 않습니다.", "imageFile": "풍선처럼.svg" }
+]
+
