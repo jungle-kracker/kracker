@@ -141,6 +141,7 @@ export function resolveCollisions(
 
   // 🔧 착지 안정성을 위한 추가 체크
   const GROUND_TOLERANCE = 3; // 착지 허용 오차
+  const CROUCH_GROUND_TOLERANCE = 5; // 앉기 상태에서 더 큰 허용 오차
 
   for (const platform of platforms) {
     // 겹침 체크
@@ -163,8 +164,12 @@ export function resolveCollisions(
         // 📍 착지 처리 - 간단하고 정확하게
         const targetY = platform.y - RADIUS + heightReduction;
 
+        // 앉기 상태에서는 더 큰 허용 오차 사용
+        const tolerance =
+          crouchHeight > 0.1 ? CROUCH_GROUND_TOLERANCE : GROUND_TOLERANCE;
+
         // 🔧 미세한 오차 보정
-        if (Math.abs(newY - targetY) <= GROUND_TOLERANCE || newVy > 0) {
+        if (Math.abs(newY - targetY) <= tolerance || newVy > 0) {
           newY = targetY;
           newVy = 0;
           isGrounded = true;
@@ -210,9 +215,11 @@ export function resolveCollisions(
   // 🔧 추가 착지 안정성 체크
   if (!isGrounded && Math.abs(newVy) < 50) {
     // 속도가 거의 0이고 바닥 근처에 있는지 체크
+    const tolerance =
+      crouchHeight > 0.1 ? CROUCH_GROUND_TOLERANCE : GROUND_TOLERANCE;
     const groundCheckBounds = computePlayerBounds(
       newX,
-      newY + GROUND_TOLERANCE,
+      newY + tolerance,
       crouchHeight
     );
 
@@ -220,7 +227,7 @@ export function resolveCollisions(
       if (checkOverlap(groundCheckBounds, platform)) {
         // 바닥과 거의 접촉하고 있다면 착지로 처리
         const targetY = platform.y - RADIUS + heightReduction;
-        if (Math.abs(newY - targetY) <= GROUND_TOLERANCE * 2) {
+        if (Math.abs(newY - targetY) <= tolerance * 2) {
           //   console.log(
           //     `🔧 Stability landing: Y ${newY.toFixed(1)} → ${targetY.toFixed(1)}`
           //   );
