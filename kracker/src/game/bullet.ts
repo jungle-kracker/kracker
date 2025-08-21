@@ -12,6 +12,7 @@ export interface BulletConfig {
   gravity?: { x: number; y: number };
   useWorldGravity?: boolean;
   lifetime?: number; // ms
+  homingStrength?: number; // 0~1 (간이 유도)
 }
 
 export interface BulletEvents {
@@ -98,6 +99,7 @@ export class Bullet {
       gravity: { x: 0, y: 30 },
       useWorldGravity: false,
       lifetime: 8000,
+      homingStrength: 0,
       ...config,
     };
 
@@ -330,6 +332,24 @@ export class Bullet {
         x: this.tail.x,
         y: this.tail.y,
       });
+    }
+
+    // 간이 유도탄(유도)
+    if (typeof this.config.homingStrength === "number" && this.config.homingStrength! > 0) {
+      // 화면 중앙을 가상의 목표로 삼는 간이 유도 (실전은 실제 타겟 필요)
+      const cam = this.scene.cameras.main;
+      const targetX = cam.scrollX + cam.width / 2;
+      const targetY = cam.scrollY + cam.height / 2;
+      const dx = targetX - x;
+      const dy = targetY - y;
+      const desired = Math.atan2(dy, dx);
+      const current = Math.atan2(body.velocity.y, body.velocity.x);
+      const diff = Phaser.Math.Angle.Wrap(desired - current);
+      const turn = diff * Math.min(1, Math.max(0, this.config.homingStrength));
+      const speed = body.velocity.length();
+      const nx = Math.cos(current + turn) * speed;
+      const ny = Math.sin(current + turn) * speed;
+      body.setVelocity(nx, ny);
     }
 
     // 속도 기반 시각적 효과
@@ -799,6 +819,7 @@ export class Bullet {
       gravity: { x: 0, y: 900 },
       useWorldGravity: false,
       lifetime: 8000,
+      homingStrength: 0,
     };
   }
 
@@ -844,6 +865,7 @@ export function doShoot(opts: {
   recoilBase?: number;
   wobbleBase?: number;
   collisionSystem?: any;
+  bulletConfig?: Partial<BulletConfig>;
 }): {
   bullet: Bullet;
   lastShotTime: number;
@@ -915,15 +937,24 @@ export function doShoot(opts: {
   }
 
   // 4. 이알 생성 (총알과 테일 같은 색상으로)
-  const bullet = new Bullet(scene, bulletGroup, spawnX, spawnY, angle, {
-    speed,
-    gravity: { x: 0, y: 1500 },
-    useWorldGravity: false,
-    radius: 6,
-    color: 0xffaa00,
-    tailColor: 0xffaa00, // 🔥 총알과 같은 색상
-    lifetime: 8000,
-  });
+  const bullet = new Bullet(
+    scene,
+    bulletGroup,
+    spawnX,
+    spawnY,
+    angle,
+    {
+      speed,
+      gravity: { x: 0, y: 1500 },
+      useWorldGravity: false,
+      radius: 6,
+      color: 0xffaa00,
+      tailColor: 0xffaa00, // 🔥 총알과 같은 색상
+      lifetime: 8000,
+      ...(opts.bulletConfig || {}),
+    },
+    {}
+  );
 
   console.log(`✅ 이알 생성 완료: ${bullet.id}`);
 

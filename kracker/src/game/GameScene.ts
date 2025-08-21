@@ -1,5 +1,5 @@
 // src/game/GameScene.ts - NetworkManager 통합된 멀티플레이어 GameScene
-import { Platform, Bullet, CHARACTER_PRESETS } from "./Config";
+import { Platform, Bullet, CHARACTER_PRESETS } from "./config";
 import Player from "./player/Player";
 import MapRenderer from "./MapRenderer";
 import { MapLoader } from "./maps/MapLoader";
@@ -1640,6 +1640,13 @@ export default class GameScene extends Phaser.Scene {
 
     // UI 상태 업데이트
     this.updateAllUI();
+
+    // 🆕 ShootingManager에 증강 조회 연결
+    try {
+      this.shootingManager.setAugmentResolver((playerId: string) => {
+        return this.augmentByPlayer.get(playerId);
+      });
+    } catch {}
   }
 
   // ☆ 사격 시스템 콜백 설정 (네트워크 전송 추가)
@@ -2738,5 +2745,18 @@ export default class GameScene extends Phaser.Scene {
         }
       }, 50);
     }
+  }
+  
+  // 🆕 로컬 플레이어 가시성 토글
+  private playerHide(): void {
+    try {
+      (this.player as any)?.setVisible?.(false);
+    } catch {}
+  }
+
+  private playerShow(): void {
+    try {
+      (this.player as any)?.setVisible?.(true);
+    } catch {}
   }
 }

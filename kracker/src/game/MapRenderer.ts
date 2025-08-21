@@ -1,5 +1,5 @@
 // src/game/MapRenderer.ts - 플랫폼을 물리 바디로 변경
-import { GAME_CONFIG, Platform } from "./Config";
+import { GAME_CONFIG, Platform } from "./config";
 import { MapData, MapLoader } from "./maps/MapLoader";
 import { ShadowSystem } from "./shadow/ShadowSystem";
 

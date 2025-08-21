@@ -210,12 +210,18 @@ export class CollisionSystem {
               );
             }
 
-            // 총알 폭발/제거
-            try {
-              if (bulletRef?.hit) bulletRef.hit(b.x, b.y);
-              else b.destroy(true);
-            } catch (e) {
-              b.destroy(true);
+            // 관통 처리: __pierce > 0 이면 제거하지 않고 관통 횟수 감소
+            const pierceLeft = (b.getData && b.getData("__pierce")) as number | undefined;
+            if (pierceLeft && pierceLeft > 0) {
+              b.setData && b.setData("__pierce", pierceLeft - 1);
+            } else {
+              // 총알 폭발/제거
+              try {
+                if (bulletRef?.hit) bulletRef.hit(b.x, b.y);
+                else b.destroy(true);
+              } catch (e) {
+                b.destroy(true);
+              }
             }
 
             // 이 총알은 처리 완료 → 다음 총알로
@@ -391,6 +397,24 @@ export class CollisionSystem {
     platformSprite: Phaser.GameObjects.GameObject | null
   ) => {
     if (!bulletSprite.active) return;
+
+    // 유령 탄: 플랫폼 무시
+    if (bulletSprite.getData("__ghost")) {
+      return;
+    }
+
+    // 바운스 탄: 반사 후 생존 (횟수 감소)
+    const bounceLeft = bulletSprite.getData("__bounce") as number | undefined;
+    if (bounceLeft && bounceLeft > 0) {
+      const body = bulletSprite.body as Phaser.Physics.Arcade.Body;
+      if (body) {
+        // 단순 반사: 속도 반전 + 약간 감쇠
+        body.setVelocity(-body.velocity.x * 0.9, -body.velocity.y * 0.9);
+      }
+      bulletSprite.setData("__bounce", bounceLeft - 1);
+      return;
+    }
+
     if (bulletSprite.getData("__handled")) return;
     bulletSprite.setData("__handled", true);
     // 총알 파괴
