@@ -7,7 +7,6 @@ import FinalResultModal from "./modals/FinalResultModal";
 import type { PlayerRoundResult } from "./panels/RoundResultPanel";
 import AugmentSelectModal from "./modals/AugmentSelectModal";
 import { socket } from "../lib/socket";
-import { AUGMENT_JSON } from "../data/augments";
 
 // ★ 게임 상태 타입 정의
 interface GamePlayer {
@@ -390,10 +389,7 @@ const RoundsGame: React.FC = () => {
     React.useState(false);
   const [isAugmentPhaseActive, setIsAugmentPhaseActive] = React.useState(false);
   const hasCompletedRef = React.useRef(false);
-  const [testAugmentId, setTestAugmentId] = React.useState<string>("");
-  const [augmentEvents, setAugmentEvents] = React.useState<
-    Array<{ type: string; payload: any; t: number }>
-  >([]);
+  
 
   // 모달 상태 변화 추적 (디버깅용)
   useEffect(() => {
@@ -748,187 +744,7 @@ const RoundsGame: React.FC = () => {
         </PlayerListUI>
       )} */}
 
-      {/* ★ 증강 테스트 패널 (드롭다운 선택 -> 서버 전송) */}
-      {isGameReady && (
-        <AugmentTestPanel>
-          <div className="row">
-            <select
-              value={testAugmentId}
-              onChange={(e) => setTestAugmentId(e.target.value)}
-            >
-              <option value="">증강 선택...</option>
-              {AUGMENT_JSON.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({a.id})
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={() => {
-                if (!testAugmentId) return;
-                socket.emit(
-                  "augment:select",
-                  {
-                    augmentId: testAugmentId,
-                    round: currentRound ?? 1,
-                    roomId: gameState?.room?.roomId,
-                  },
-                  (res: any) => {
-                    if (res?.ok) {
-                      
-                    } else {
-                      
-                    }
-                  }
-                );
-              }}
-            >
-              적용
-            </button>
-            <button
-              onClick={() => {
-                socket.emit(
-                  "augment:select",
-                  {
-                    augmentId: "도망간다냥",
-                    round: currentRound ?? 1,
-                    roomId: gameState?.room?.roomId,
-                  },
-                  (res: any) => {
-                    if (res?.ok) {
-                      
-                    } else {
-                      
-                    }
-                  }
-                );
-              }}
-            >
-              도망간다냥 테스트
-            </button>
-            <button
-              onClick={() => {
-                socket.emit(
-                  "augment:select",
-                  {
-                    augmentId: "풍선처럼",
-                    round: currentRound ?? 1,
-                    roomId: gameState?.room?.roomId,
-                  },
-                  (res: any) => {
-                    if (res?.ok) {
-                      
-                    } else {
-                      
-                    }
-                  }
-                );
-              }}
-            >
-              풍선처럼 테스트
-            </button>
-            <button
-              onClick={() => {
-                socket.emit(
-                  "augment:select",
-                  {
-                    augmentId: "먼저가요",
-                    round: currentRound ?? 1,
-                    roomId: gameState?.room?.roomId,
-                  },
-                  (res: any) => {
-                    if (res?.ok) {
-                      
-                    } else {
-                      
-                    }
-                  }
-                );
-              }}
-            >
-              먼저가요 테스트
-            </button>
-            <button
-              onClick={() => {
-                if (!gameState?.room?.roomId) {
-                  console.warn("❌ 방 ID가 없어서 증강 지우기 실패");
-                  return;
-                }
-                socket.emit(
-                  "augment:clear",
-                  {
-                    roomId: gameState.room.roomId,
-                  },
-                  (res: any) => {
-                    if (res?.ok) {
-                      setAugmentEvents((prev) =>
-                        [
-                          {
-                            type: "clear",
-                            payload: { success: true },
-                            t: Date.now(),
-                          },
-                          ...prev,
-                        ].slice(0, 12)
-                      );
-                    } else {
-                      setAugmentEvents((prev) =>
-                        [
-                          {
-                            type: "clear",
-                            payload: { error: res?.error },
-                            t: Date.now(),
-                          },
-                          ...prev,
-                        ].slice(0, 12)
-                      );
-                    }
-                  }
-                );
-              }}
-              style={{
-                backgroundColor: "#ff4444",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                padding: "4px 8px",
-                cursor: "pointer",
-                fontSize: "12px",
-              }}
-            >
-              🗑️ 증강 다 지우기
-            </button>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "auto auto auto",
-              gap: 6,
-            }}
-          >
-            <div>round: {currentRound ?? "-"}</div>
-            <div>room: {gameState?.room?.roomId ?? "-"}</div>
-            <div>me: {gameState?.myPlayerId ?? "-"}</div>
-          </div>
-          <div className="log">
-            {augmentEvents.map((e, idx) => (
-              <div key={idx} style={{ opacity: 0.9 }}>
-                [{new Date(e.t).toLocaleTimeString()}] {e.type}:{" "}
-                {(() => {
-                  try {
-                    return JSON.stringify(e.payload);
-                  } catch {
-                    return "(unserializable)";
-                  }
-                })()}
-              </div>
-            ))}
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <button onClick={() => setAugmentEvents([])}>로그 지우기</button>
-          </div>
-        </AugmentTestPanel>
-      )}
+      {/* 증강 디버그 패널 제거 */}
 
       <LoadingOverlay isVisible={isLoading}>
         <div>
