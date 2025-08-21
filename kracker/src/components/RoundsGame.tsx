@@ -27,6 +27,10 @@ interface GameState {
   };
   myPlayerId: string;
   startTime: number;
+  // 🔢 서버가 내려준 초기 스폰 인덱스 계획(선택)
+  spawnPlan?: Record<string, number>;
+  // 🗺️ 서버가 내려준 초기 스폰 좌표(선택)
+  spawnPositions?: Record<string, { x: number; y: number }>;
 }
 
 // ⭐ 글로우 효과가 있는 고급 크로스헤어 컴포넌트

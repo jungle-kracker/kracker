@@ -65,6 +65,10 @@ interface GameData {
     roomName: string;
   };
   startTime: number;
+  // 🔢 서버가 내려주는 초기 스폰 인덱스 계획(선택 사항)
+  spawnPlan?: Record<string, number>;
+  // 🗺️ 서버가 내려주는 초기 스폰 좌표(선택 사항)
+  spawnPositions?: Record<string, { x: number; y: number }>;
 }
 
 // ☆ 원격 플레이어 타입 수정 (그래픽 참조 포함)
@@ -1178,17 +1182,21 @@ export default class GameScene extends Phaser.Scene {
             const myData = this.gameData?.players.find(
               (p) => p.id === this.myPlayerId
             );
-            
-            // 최적의 스폰 위치 선택
-            const optimalSpawn = this.getOptimalSpawnPoint(
-              spawns,
-              this.gameData?.room.gameMode || "개인전",
-              this.myPlayerId!,
-              myData?.team
-            ) || spawns[0];
-            
-            if (optimalSpawn) {
-              this.setPlayerPosition(optimalSpawn.x, optimalSpawn.y);
+            const mode = this.gameData?.room.gameMode || "개인전";
+            const spawnIdx = Number(event.data?.spawnIndex ?? 0);
+            let candidateSpawns = spawns;
+            if (mode === "팀전") {
+              const teamName = myData?.team === 1 ? "A" : "B";
+              const teamFiltered = spawns.filter((s: any) => s.name === teamName);
+              if (teamFiltered.length > 0) candidateSpawns = teamFiltered;
+            }
+
+            const chosen = candidateSpawns.length > 0
+              ? candidateSpawns[Math.abs(spawnIdx) % candidateSpawns.length]
+              : spawns[0];
+
+            if (chosen) {
+              this.setPlayerPosition(chosen.x, chosen.y);
             }
             
             // 이름표 복구
@@ -1453,6 +1461,9 @@ export default class GameScene extends Phaser.Scene {
     this.isMultiplayer = true;
     this.expectedPlayerCount = gameData.players.length;
 
+    // 스폰 포인트는 라운드/게임 시작 시 한 번만 초기화
+    this.resetSpawnPoints();
+
     // 로딩 모달 열기
     this.isLoadingModalOpen = true;
 
@@ -1495,18 +1506,34 @@ export default class GameScene extends Phaser.Scene {
 
   // 새로운 메서드
   private setupMyPlayer(playerData: GamePlayer): void {
-    // 게임 시작 시 스폰 위치 초기화
-    this.resetSpawnPoints();
-    
     const spawns = this.mapRenderer.getSpawns();
+    const planIndex = this.gameData?.spawnPlan?.[playerData.id];
+    const serverSpawn = this.gameData?.spawnPositions?.[playerData.id];
 
-    // 스폰 포인트 선택
-    const spawnPoint = this.getOptimalSpawnPoint(
-      spawns,
-      this.gameData?.room.gameMode || "개인전",
-      playerData.id,
-      playerData.team
-    ) || spawns[0];
+    // 스폰 포인트 선택 (서버 제공 인덱스 우선)
+    const spawnPoint = (() => {
+      if (serverSpawn) return serverSpawn;
+      const mode = this.gameData?.room.gameMode || "개인전";
+      if (typeof planIndex === "number") {
+        let candidates = spawns;
+        if (mode === "팀전") {
+          const teamName = playerData.team === 1 ? "A" : "B";
+          const byTeam = spawns.filter((s: any) => s.name === teamName);
+          if (byTeam.length > 0) candidates = byTeam;
+        }
+        return candidates.length > 0
+          ? candidates[Math.abs(planIndex) % candidates.length]
+          : spawns[0];
+      }
+      return (
+        this.getOptimalSpawnPoint(
+          spawns,
+          mode,
+          playerData.id,
+          playerData.team
+        ) || spawns[0]
+      );
+    })();
 
     // ⭐ 플레이어가 없으면 생성
     if (!this.player) {
@@ -1531,20 +1558,34 @@ export default class GameScene extends Phaser.Scene {
 
   // ☆ 원격 플레이어 생성 (완전히 새로운 구현)
   private createRemotePlayer(playerData: GamePlayer): void {
-    // 게임 시작 시 스폰 위치 초기화 (첫 번째 원격 플레이어 생성 시)
-    if (this.remotePlayers.size === 0) {
-      this.resetSpawnPoints();
-    }
-    
     const spawns = this.mapRenderer.getSpawns();
+    const planIndex = this.gameData?.spawnPlan?.[playerData.id];
+    const serverSpawn = this.gameData?.spawnPositions?.[playerData.id];
 
-    // 팀별 스폰 포인트 선택
-    const spawnPoint = this.getOptimalSpawnPoint(
-      spawns,
-      this.gameData?.room.gameMode || "개인전",
-      playerData.id,
-      playerData.team
-    ) || spawns[0];
+    // 팀별 스폰 포인트 선택 (서버 제공 인덱스 우선)
+    const spawnPoint = (() => {
+      if (serverSpawn) return serverSpawn;
+      const mode = this.gameData?.room.gameMode || "개인전";
+      if (typeof planIndex === "number") {
+        let candidates = spawns;
+        if (mode === "팀전") {
+          const teamName = playerData.team === 1 ? "A" : "B";
+          const byTeam = spawns.filter((s: any) => s.name === teamName);
+          if (byTeam.length > 0) candidates = byTeam;
+        }
+        return candidates.length > 0
+          ? candidates[Math.abs(planIndex) % candidates.length]
+          : spawns[0];
+      }
+      return (
+        this.getOptimalSpawnPoint(
+          spawns,
+          mode,
+          playerData.id,
+          playerData.team
+        ) || spawns[0]
+      );
+    })();
 
     // ☆ 핵심: 캐릭터 그래픽 생성
     const characterColors: CharacterColors = {

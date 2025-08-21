@@ -100,6 +100,55 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 const rooms = new Map<string, Room>();
 
+// ──────────────────────────────────────────────────────────────
+// 맵 스폰 좌표(기본 level1)
+// 클라이언트의 public/maps/level1.json과 동일하게 유지
+const DEFAULT_SPAWNS: Array<{ name: "A" | "B"; x: number; y: number }> = [
+  { name: "A", x: 165, y: 350 },
+  { name: "B", x: 1755, y: 350 },
+  { name: "A", x: 500, y: 100 },
+  { name: "B", x: 1420, y: 100 },
+  { name: "A", x: 375, y: 750 },
+  { name: "B", x: 1545, y: 750 },
+];
+
+function computeSpawnPositions(room: Room): Record<string, { x: number; y: number }> {
+  const positions: Record<string, { x: number; y: number }> = {};
+  const entries = Object.entries(room.players);
+
+  const byTeam = (team: Team) => DEFAULT_SPAWNS.filter((s) => s.name === team);
+  const all = DEFAULT_SPAWNS.slice();
+
+  if (room.gameMode === "팀전") {
+    const teamAIds = entries.filter(([, p]) => p.team === "A").map(([id]) => id);
+    const teamBIds = entries.filter(([, p]) => p.team === "B").map(([id]) => id);
+
+    const aSpawns = byTeam("A");
+    const bSpawns = byTeam("B");
+
+    teamAIds.forEach((id, idx) => {
+      const candidate = aSpawns.length > 0 ? aSpawns[idx % aSpawns.length] : all[idx % all.length];
+      const base = candidate || all[0];
+      const cycle = Math.floor(idx / Math.max(1, (aSpawns.length || all.length)));
+      positions[id] = { x: base!.x + (cycle % 2 === 0 ? 10 * cycle : -10 * cycle), y: base!.y };
+    });
+    teamBIds.forEach((id, idx) => {
+      const candidate = bSpawns.length > 0 ? bSpawns[idx % bSpawns.length] : all[idx % all.length];
+      const base = candidate || all[0];
+      const cycle = Math.floor(idx / Math.max(1, (bSpawns.length || all.length)));
+      positions[id] = { x: base!.x + (cycle % 2 === 0 ? 10 * cycle : -10 * cycle), y: base!.y };
+    });
+  } else {
+    entries.forEach(([id], idx) => {
+      const base = all[idx % all.length] || all[0];
+      const cycle = Math.floor(idx / Math.max(1, all.length));
+      positions[id] = { x: base!.x + (cycle % 2 === 0 ? 10 * cycle : -10 * cycle), y: base!.y };
+    });
+  }
+
+  return positions;
+}
+
 function safeRoomState(room: Room) {
   const players = Object.values(room.players).map((p) => ({
     id: p.id,
@@ -451,11 +500,25 @@ io.on("connection", (socket) => {
       health: player.health || 100,
     }));
 
+    // 🔢 스폰 인덱스 사전 배정 (팀전은 팀별 인덱스, 개인전은 전체 인덱스)
+    const spawnPlan: Record<string, number> = {};
+    const entries = Object.entries(room.players);
+    if (room.gameMode === "팀전") {
+      const teamA = entries.filter(([, p]) => p.team === "A").map(([id]) => id);
+      const teamB = entries.filter(([, p]) => p.team === "B").map(([id]) => id);
+      teamA.forEach((id, idx) => (spawnPlan[id] = idx));
+      teamB.forEach((id, idx) => (spawnPlan[id] = idx));
+    } else {
+      entries.forEach(([id], idx) => (spawnPlan[id] = idx));
+    }
+
     io.to(rid).emit("game:started", {
       // ← "game:started"로 변경
       startTime: Date.now(), // ← "at" 대신 "startTime"
       room: safeRoomState(room),
       players: playersWithHealth, // ← 체력 정보가 포함된 플레이어 데이터
+      spawnPlan, // 🔢 초기 스폰 인덱스 전달
+      spawnPositions: computeSpawnPositions(room), // 🗺️ 초기 스폰 좌표 직접 전달
     });
 
     // 게임 시작 시 모든 플레이어의 현재 체력 정보를 각각 전송

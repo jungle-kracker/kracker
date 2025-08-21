@@ -315,6 +315,10 @@ const GameLobby: React.FC<GameLobbyProps> = ({ roomCode = "", onExit }) => {
           },
           myPlayerId: myId,
           startTime: gameData.startTime || Date.now(),
+          // 🔢 서버에서 내려온 초기 스폰 계획 전달
+          spawnPlan: gameData.spawnPlan || undefined,
+          // 🗺️ 서버가 내려온 초기 스폰 좌표 전달
+          spawnPositions: gameData.spawnPositions || undefined,
         };
 
         sessionStorage.setItem("gameState", JSON.stringify(gameState));
