@@ -7,6 +7,7 @@ import FinalResultModal from "./modals/FinalResultModal";
 import type { PlayerRoundResult } from "./panels/RoundResultPanel";
 import AugmentSelectModal from "./modals/AugmentSelectModal";
 import { socket } from "../lib/socket";
+import { AUGMENT_JSON } from "../data/augments";
 
 // ★ 게임 상태 타입 정의
 interface GamePlayer {
@@ -321,6 +322,40 @@ const PlayerListUI = styled.div`
   }
 `;
 
+// ★ 증강 선택 테스트 버튼 스타일
+const AugmentTestPanel = styled.div`
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  z-index: 1000;
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+
+  select, button {
+    font-size: 12px;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 6px;
+  }
+
+  .log {
+    max-height: 160px;
+    overflow: auto;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    padding: 6px;
+  }
+`;
+
 const RoundsGame: React.FC = () => {
   const gameRef = useRef<HTMLDivElement>(null);
   const gameManagerRef = useRef<GameManager | null>(null);
@@ -348,6 +383,10 @@ const RoundsGame: React.FC = () => {
     React.useState(false);
   const [isFinalResultModalOpen, setIsFinalResultModalOpen] =
     React.useState(false);
+  const [isAugmentPhaseActive, setIsAugmentPhaseActive] = React.useState(false);
+  const hasCompletedRef = React.useRef(false);
+  const [testAugmentId, setTestAugmentId] = React.useState<string>("");
+  const [augmentEvents, setAugmentEvents] = React.useState<Array<{ type: string; payload: any; t: number }>>([]);
 
   // ★ 게임 상태 로드
   useEffect(() => {
@@ -567,6 +606,8 @@ const RoundsGame: React.FC = () => {
       setShowRoundModal(false);
       setIsAugmentSelectModalOpen(true);
       setCurrentRound(data.round);
+      setIsAugmentPhaseActive(true);
+      hasCompletedRef.current = false;
     };
 
     const onFinal = (data: { round: number; players: PlayerRoundResult[] }) => {
@@ -582,10 +623,25 @@ const RoundsGame: React.FC = () => {
       selectedCount: number;
       totalPlayers: number;
     }) => {
+      if (!isAugmentPhaseActive) {
+        // 완료 후 초기화(progress 0/..) 등은 무시
+        return;
+      }
+      if (hasCompletedRef.current && data.selectedCount === 0) {
+        // 완료 직후 서버가 selections를 초기화하며 보내는 0/.. 진행 이벤트는 스킵
+        return;
+      }
       console.log(
         `📡 증강 진행 상황: ${data.selectedCount}/${data.totalPlayers}`,
         data.selections
       );
+      console.log("🔍 상세 선택 정보:", {
+        round: data.round,
+        selections: data.selections,
+        progress: `${data.selectedCount}/${data.totalPlayers}`,
+        timestamp: new Date().toISOString()
+      });
+      setAugmentEvents((prev) => [{ type: "progress", payload: data, t: Date.now() }, ...prev].slice(0, 12));
     };
 
     const onAugmentComplete = (data: {
@@ -593,7 +649,34 @@ const RoundsGame: React.FC = () => {
       selections: Record<string, string>;
     }) => {
       console.log(`🎯 라운드 ${data.round} 증강 선택 완료:`, data.selections);
+      console.log("🏁 증강 선택 완료 상세:", {
+        round: data.round,
+        selections: data.selections,
+        playerCount: Object.keys(data.selections).length,
+        timestamp: new Date().toISOString()
+      });
       setIsAugmentSelectModalOpen(false);
+      setIsAugmentPhaseActive(false);
+      hasCompletedRef.current = true;
+      setAugmentEvents((prev) => [{ type: "complete", payload: data, t: Date.now() }, ...prev].slice(0, 12));
+    };
+
+    const onAugmentSnapshot = (data: {
+      round: number;
+      players: Record<string, Record<string, { id: string; startedAt: number }>>;
+    }) => {
+      console.log(`📸 라운드 ${data.round} 증강 스냅샷 수신:`, data.players);
+      console.log("📊 증강 스냅샷 상세 분석:", {
+        round: data.round,
+        playerCount: Object.keys(data.players).length,
+        playerAugments: Object.entries(data.players).map(([playerId, augments]) => ({
+          playerId,
+          augmentCount: Object.keys(augments).length,
+          augmentIds: Object.keys(augments),
+          timestamp: new Date().toISOString()
+        }))
+      });
+      setAugmentEvents((prev) => [{ type: "snapshot", payload: data, t: Date.now() }, ...prev].slice(0, 12));
     };
 
     socket.on("round:result", onRoundResult);
@@ -601,6 +684,7 @@ const RoundsGame: React.FC = () => {
     socket.on("game:final", onFinal);
     socket.on("augment:progress", onAugmentProgress);
     socket.on("augment:complete", onAugmentComplete);
+    socket.on("augment:snapshot", onAugmentSnapshot);
 
     return () => {
       socket.off("round:result", onRoundResult);
@@ -608,8 +692,9 @@ const RoundsGame: React.FC = () => {
       socket.off("game:final", onFinal);
       socket.off("augment:progress", onAugmentProgress);
       socket.off("augment:complete", onAugmentComplete);
+      socket.off("augment:snapshot", onAugmentSnapshot);
     };
-  }, []);
+  }, [isAugmentPhaseActive]);
 
   const handleOpenFinalResult = () => {
     setShowFinalModal(true);
@@ -652,6 +737,65 @@ const RoundsGame: React.FC = () => {
           </div>
         </PlayerListUI>
       )} */}
+
+      {/* ★ 증강 테스트 패널 (드롭다운 선택 -> 서버 전송) */}
+      {isGameReady && (
+        <AugmentTestPanel>
+          <div className="row">
+            <select
+              value={testAugmentId}
+              onChange={(e) => setTestAugmentId(e.target.value)}
+            >
+              <option value="">증강 선택...</option>
+              {AUGMENT_JSON.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} ({a.id})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => {
+                if (!testAugmentId) return;
+                socket.emit(
+                  "augment:select",
+                  {
+                    augmentId: testAugmentId,
+                    round: currentRound ?? 1,
+                    roomId: gameState?.room?.roomId,
+                  },
+                  (res: any) => {
+                    if (res?.ok) {
+                      console.log("✅ 증강 테스트 전송 성공", { testAugmentId });
+                    } else {
+                      console.warn("❌ 증강 테스트 전송 실패", res?.error);
+                    }
+                  }
+                );
+              }}
+            >
+              적용
+            </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "auto auto auto", gap: 6 }}>
+            <div>round: {currentRound ?? "-"}</div>
+            <div>room: {gameState?.room?.roomId ?? "-"}</div>
+            <div>me: {gameState?.myPlayerId ?? "-"}</div>
+          </div>
+          <div className="log">
+            {augmentEvents.map((e, idx) => (
+              <div key={idx} style={{ opacity: 0.9 }}>
+                [{new Date(e.t).toLocaleTimeString()}] {e.type}
+                : {(() => {
+                  try { return JSON.stringify(e.payload); } catch { return "(unserializable)"; }
+                })()}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <button onClick={() => setAugmentEvents([])}>로그 지우기</button>
+          </div>
+        </AugmentTestPanel>
+      )}
 
       <LoadingOverlay isVisible={isLoading}>
         <div>
@@ -720,7 +864,11 @@ const RoundsGame: React.FC = () => {
         }))}
         currentRound={currentRound}
         myPlayerId={gameState?.myPlayerId}
-        onClose={() => setIsAugmentSelectModalOpen(false)}
+        roomId={gameState?.room?.roomId}
+        onClose={() => {
+          setIsAugmentSelectModalOpen(false);
+          console.log("🎯 증강 선택 테스트 모달 닫힘");
+        }}
       />
 
       {/* ★ 최종 결과 모달 */}

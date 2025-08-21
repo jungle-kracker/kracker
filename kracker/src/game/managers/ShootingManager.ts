@@ -6,6 +6,7 @@ import { ShootingSystem } from "../bullet";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import AUGMENT_DEFS from "../../data/augments.json";
+import { aggregateAugments as centralAggregate } from "../../data/augments";
 import { Debug, debugManager } from "../debug/DebugManager";
 import { LogCategory } from "../debug/Logger";
 import Player from "../player/Player";
@@ -81,7 +82,7 @@ export class ShootingManager {
     // 증강으로 무기 파라미터 보정 (초기 1회)
     try {
       const aug = this.ownerId && this.augmentResolver ? this.augmentResolver(this.ownerId) : undefined;
-      const agg = this.aggregateAugments(aug);
+      const agg = centralAggregate(aug);
       // 재장전/탄창/발사간격 보정
       this.applyWeaponAugments(agg.weapon);
     } catch {}
@@ -189,18 +190,24 @@ export class ShootingManager {
     // 증강 파라미터 계산
 
     const aug =
-      this.ownerId && this.getAugmentsFor
-        ? this.getAugmentsFor(this.ownerId)
+      this.ownerId && this.augmentResolver
+        ? this.augmentResolver(this.ownerId)
         : undefined;
     let speedMul = 1.0;
     if (aug?.["벌이야!"]) speedMul *= 1.2; // 카드: +20% 총알 속도 증가
 
-    const agg = this.aggregateAugments(aug);
+    const agg = centralAggregate(aug);
+    try { console.log("🛠️ 증강 적용(사격):", { weapon: agg.weapon, bullet: agg.bullet }); } catch {}
 
     // 총알 기본치 기반 파라미터 구성
     const baseSpeed = this.config.muzzleVelocity;
     const baseDamage = this.config.damage;
     const baseRadius = 6;
+
+    // 총알 색상(증강 기반): 독걸려랑=녹색, 벌이야!=노란색
+    let bulletColor = 0xffaa00;
+    if (aug?.["독걸려랑"]) bulletColor = 0x00ff00;
+    else if (aug?.["벌이야!"]) bulletColor = 0xffff00;
 
     const bulletConfig = {
       speed: baseSpeed * agg.bullet.speedMul,
@@ -217,12 +224,13 @@ export class ShootingManager {
       targetY,
       {
         // 커스텀 총알 설정
-        color: 0xffffff,
-        tailColor: 0xffffff,
+        color: bulletColor,
+        tailColor: bulletColor,
         radius: bulletConfig.radius,
         speed: bulletConfig.speed,
         damage: bulletConfig.damage,
         homingStrength: bulletConfig.homingStrength,
+        explodeRadius: bulletConfig.explodeRadius,
         gravity: { x: 0, y: 500 },
         useWorldGravity: false,
         lifetime: 8000,
@@ -375,109 +383,37 @@ export class ShootingManager {
   }
 
   // ===== 증강 효과 집계 =====
-  private aggregateAugments(
-    aug?: Record<string, { id: string; startedAt: number }>
-  ): {
-    weapon: { reloadTimeDeltaMs: number; magazineDelta: number; fireIntervalAddMs: number };
-    bullet: {
-      speedMul: number;
-      damageMul: number;
-      damageAdd: number;
-      sizeMul: number;
-      homingStrength: number;
-      bounceCount: number;
-      pierceCount: number;
-      explodeRadius: number;
-      slowOnHitMs: number;
-      slowMul: number;
-      stunMs: number;
-      knockbackMul: number;
-    };
-    player: { jumpHeightMul: number; extraJumps: number; gravityMul: number; moveSpeedMul: number; maxHealthDelta: number; lifestealOnHit: number; blink: boolean };
-  } {
-    const result = {
-      weapon: { reloadTimeDeltaMs: 0, magazineDelta: 0, fireIntervalAddMs: 0 },
-      bullet: {
-        speedMul: 1,
-        damageMul: 1,
-        damageAdd: 0,
-        sizeMul: 1,
-        homingStrength: 0,
-        bounceCount: 0,
-        pierceCount: 0,
-        explodeRadius: 0,
-        slowOnHitMs: 0,
-        slowMul: 1,
-        stunMs: 0,
-        knockbackMul: 1,
-      },
-      player: { jumpHeightMul: 1, extraJumps: 0, gravityMul: 1, moveSpeedMul: 1, maxHealthDelta: 0, lifestealOnHit: 0, blink: false },
-    } as const;
-
-    const mutable: any = JSON.parse(JSON.stringify(result));
-    if (!aug) return mutable;
-
-    const defs: Array<any> = (AUGMENT_DEFS as any) || [];
-    const defById = new Map<string, any>();
-    for (let i = 0; i < defs.length; i++) defById.set(defs[i].id, defs[i]);
-
-    const keys = Object.keys(aug);
-    for (let i = 0; i < keys.length; i++) {
-      const id = keys[i];
-      const def = defById.get(id);
-      if (!def || !def.effects) continue;
-
-      const e = def.effects;
-      if (e.weapon) {
-        if (typeof e.weapon.reloadTimeDeltaMs === "number") mutable.weapon.reloadTimeDeltaMs += e.weapon.reloadTimeDeltaMs;
-        if (typeof e.weapon.magazineDelta === "number") mutable.weapon.magazineDelta += e.weapon.magazineDelta;
-        if (typeof e.weapon.fireIntervalAddMs === "number") mutable.weapon.fireIntervalAddMs += e.weapon.fireIntervalAddMs;
-      }
-
-      if (e.bullet) {
-        if (typeof e.bullet.speedMul === "number") mutable.bullet.speedMul *= e.bullet.speedMul;
-        if (typeof e.bullet.damageMul === "number") mutable.bullet.damageMul *= e.bullet.damageMul;
-        if (typeof e.bullet.damageAdd === "number") mutable.bullet.damageAdd += e.bullet.damageAdd;
-        if (typeof e.bullet.sizeMul === "number") mutable.bullet.sizeMul *= e.bullet.sizeMul;
-        if (typeof e.bullet.homingStrength === "number") mutable.bullet.homingStrength = Math.max(mutable.bullet.homingStrength, e.bullet.homingStrength);
-        if (typeof e.bullet.bounceCount === "number") mutable.bullet.bounceCount += e.bullet.bounceCount;
-        if (typeof e.bullet.pierceCount === "number") mutable.bullet.pierceCount += e.bullet.pierceCount;
-        if (typeof e.bullet.explodeRadius === "number") mutable.bullet.explodeRadius = Math.max(mutable.bullet.explodeRadius, e.bullet.explodeRadius);
-        if (typeof e.bullet.slowOnHitMs === "number") mutable.bullet.slowOnHitMs = Math.max(mutable.bullet.slowOnHitMs, e.bullet.slowOnHitMs);
-        if (typeof e.bullet.slowMul === "number") mutable.bullet.slowMul = Math.min(mutable.bullet.slowMul, e.bullet.slowMul);
-        if (typeof e.bullet.stunMs === "number") mutable.bullet.stunMs = Math.max(mutable.bullet.stunMs, e.bullet.stunMs);
-        if (typeof e.bullet.knockbackMul === "number") mutable.bullet.knockbackMul *= e.bullet.knockbackMul;
-      }
-
-      if (e.player) {
-        if (typeof e.player.jumpHeightMul === "number") mutable.player.jumpHeightMul *= e.player.jumpHeightMul;
-        if (typeof e.player.extraJumps === "number") mutable.player.extraJumps += e.player.extraJumps;
-        if (typeof e.player.gravityMul === "number") mutable.player.gravityMul *= e.player.gravityMul;
-        if (typeof e.player.moveSpeedMul === "number") mutable.player.moveSpeedMul *= e.player.moveSpeedMul;
-        if (typeof e.player.maxHealthDelta === "number") mutable.player.maxHealthDelta += e.player.maxHealthDelta;
-        if (typeof e.player.lifestealOnHit === "number") mutable.player.lifestealOnHit += e.player.lifestealOnHit;
-        if (typeof e.player.blink === "boolean") mutable.player.blink = mutable.player.blink || e.player.blink;
-      }
-    }
-
-    return mutable;
-  }
+  // 로컬 집계 함수 제거 → 중앙 유틸 사용
 
   // ===== 증강 적용/재적용 API =====
   public applyWeaponAugments(weaponAgg: { reloadTimeDeltaMs: number; magazineDelta: number; fireIntervalAddMs: number }): void {
     try {
+      const prevReload = this.config.reloadTime;
+      const prevMag = this.config.magazineSize;
       const reload = this.config.reloadTime + (weaponAgg?.reloadTimeDeltaMs || 0);
       const mag = this.config.magazineSize + (weaponAgg?.magazineDelta || 0);
       const addInterval = Math.max(0, weaponAgg?.fireIntervalAddMs || 0);
       this.shootingSystem.setReloadTime(reload);
       this.shootingSystem.setMagazineSize(mag);
       this.shootingSystem.setFireIntervalAddMs(addInterval);
+      try {
+        if ((weaponAgg?.magazineDelta || 0) !== 0) {
+          console.log(`🧩 증강(탄창): 총 탄창 수량 ${prevMag} -> ${mag} (Δ ${weaponAgg.magazineDelta})`);
+        }
+        if ((weaponAgg?.reloadTimeDeltaMs || 0) !== 0) {
+          console.log(`🧩 증강(재장전): 재장전 시간 ${prevReload}ms -> ${reload}ms (Δ ${weaponAgg.reloadTimeDeltaMs}ms)`);
+        }
+        if ((weaponAgg?.fireIntervalAddMs || 0) !== 0) {
+          console.log(`🧩 증강(발사간격): 추가 간격 +${weaponAgg.fireIntervalAddMs}ms`);
+        }
+      } catch {}
     } catch {}
   }
 
   public reapplyWeaponAugments(): void {
     const aug = this.ownerId && this.augmentResolver ? this.augmentResolver(this.ownerId) : undefined;
-    const agg = this.aggregateAugments(aug);
+    const agg = centralAggregate(aug);
+    try { console.log("🛠️ 증강 재적용(무기):", agg.weapon); } catch {}
     this.applyWeaponAugments(agg.weapon);
   }
 
@@ -689,7 +625,13 @@ export class ShootingManager {
 
     // 원격 사수의 증강 반영
     const remoteAug = this.augmentResolver ? this.augmentResolver(shootData.shooterId) : undefined;
-    const rAgg = this.aggregateAugments(remoteAug);
+    const rAgg = centralAggregate(remoteAug);
+    try { console.log("🛠️ 증강 적용(원격 총알):", { shooterId: shootData.shooterId, bullet: rAgg.bullet }); } catch {}
+
+    // 원격 총알 색상(증강 기반)
+    let bulletColor = 0xffaa00;
+    if (remoteAug?.["독걸려랑"]) bulletColor = 0x00ff00; // 녹색
+    else if (remoteAug?.["벌이야!"]) bulletColor = 0xffff00; // 노란색
   const shotFired = this.shootingSystem.createRemoteBullet(
 
       shootData.gunX,
@@ -697,9 +639,8 @@ export class ShootingManager {
       targetX,
       targetY,
       {
-
-        color: 0xffaa00, // 원래 총알과 동일한 색상
-        tailColor: 0xffaa00, // 원래 총알과 동일한 색상
+        color: bulletColor,
+        tailColor: bulletColor,
 
         gravity: { x: 0, y: 1500 }, // 원래 중력
 
@@ -724,6 +665,8 @@ export class ShootingManager {
           b._hitProcessed = false;
           // 시각 효과 및 물리 플래그 반영
           try {
+            // 소유자 id를 스프라이트 데이터에도 저장(유도 대상 판정용)
+            b.setData && b.setData("__ownerId", shootData.shooterId);
             if (remoteAug?.["유령이다"]) {
               b.setData && b.setData("__ghost", true);
             }

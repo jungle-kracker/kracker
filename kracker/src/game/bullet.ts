@@ -12,7 +12,15 @@ export interface BulletConfig {
   gravity?: { x: number; y: number };
   useWorldGravity?: boolean;
   lifetime?: number; // ms
-  homingStrength?: number; // 0~1 (간이 유도)
+  /**
+   * 유도탄 세기 (가속도 계수처럼 취급)
+   * - 0: 유도 없음
+   * - 0.3: 약하게 방향을 틀어 목표로 서서히 접근
+   * - 0.5: 눈에 띄게 휘어짐
+   * - 0.8~1.0+: 강하게 휘어져 반대 방향으로도 돌아나갈 수 있음
+   * 구현: 현재 속도 벡터를 목표 방향으로 점진적으로 회전시켜 부드럽게 유도
+   */
+  homingStrength?: number;
   // 증강 파라미터 (선택적)
   damageMul?: number;
   damageAdd?: number;
@@ -134,6 +142,19 @@ export class Bullet {
     console.log(`✅ 이알 생성 완료: ${this._id}`);
   }
 
+  // 외부에서 스프라이트 데이터 접근/설정이 필요할 때 사용
+  public setData(key: string, value: any): void {
+    try {
+      this.sprite?.setData?.(key, value);
+    } catch {}
+  }
+  public getData<T = any>(key: string): T | undefined {
+    try {
+      return this.sprite?.getData?.(key);
+    } catch {}
+    return undefined;
+  }
+
   /**
    * 이알 에셋 생성 (스프라이트, 테일, 시각 효과)
    */
@@ -151,6 +172,8 @@ export class Bullet {
 
     // 글로우 효과를 위한 블렌드 모드 설정
     this.sprite.setBlendMode(Phaser.BlendModes.ADD);
+    // 색상 틴트 적용(증강 색상 반영)
+    try { this.sprite.setTint(this.config.color); } catch {}
 
     // 2) 충돌 시스템 인식용 세팅
     bulletGroup.add(this.sprite);
@@ -356,25 +379,62 @@ export class Bullet {
       });
     }
 
-    // 간이 유도탄(유도)
-    if (
-      typeof this.config.homingStrength === "number" &&
-      this.config.homingStrength! > 0
-    ) {
-      // 화면 중앙을 가상의 목표로 삼는 간이 유도 (실전은 실제 타겟 필요)
-      const cam = this.scene.cameras.main;
-      const targetX = cam.scrollX + cam.width / 2;
-      const targetY = cam.scrollY + cam.height / 2;
-      const dx = targetX - x;
-      const dy = targetY - y;
-      const desired = Math.atan2(dy, dx);
-      const current = Math.atan2(body.velocity.y, body.velocity.x);
-      const diff = Phaser.Math.Angle.Wrap(desired - current);
-      const turn = diff * Math.min(1, Math.max(0, this.config.homingStrength));
-      const speed = body.velocity.length();
-      const nx = Math.cos(current + turn) * speed;
-      const ny = Math.sin(current + turn) * speed;
-      body.setVelocity(nx, ny);
+    // 간이 유도탄(유도): 주변 플레이어를 향해 부드럽게 곡선 유도
+    if (typeof this.config.homingStrength === "number" && this.config.homingStrength! > 0) {
+      // 타겟 선정: 
+      // - 발사자가 로컬 나이면(=ownerId==myPlayerId) -> 가장 가까운 원격 플레이어
+      // - 발사자가 원격이면 -> 로컬 플레이어
+      const sc: any = this.scene as any;
+      const ownerId: string | undefined = (this as any).__ownerId || this.sprite.getData("__ownerId");
+      const myId: string | null | undefined = sc?.myPlayerId;
+
+      let targetX = x;
+      let targetY = y;
+      let found = false;
+
+      if (myId && ownerId === myId && sc?.remotePlayers && typeof sc.remotePlayers.forEach === "function") {
+        // 내 총알 → 가장 가까운 살아있는 원격 플레이어
+        let bestD2 = Number.POSITIVE_INFINITY;
+        sc.remotePlayers.forEach((rp: any) => {
+          const alive = (rp?.networkState?.health ?? 0) > 0;
+          if (!alive) return;
+          const px = rp?.lastPosition?.x ?? rp?.gfxRefs?.body?.x;
+          const py = rp?.lastPosition?.y ?? rp?.gfxRefs?.body?.y;
+          if (px == null || py == null) return;
+          const dx = px - x;
+          const dy = py - y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < bestD2) {
+            bestD2 = d2;
+            targetX = px;
+            targetY = py;
+            found = true;
+          }
+        });
+      } else {
+        // 원격 총알 → 내 플레이어
+        const p = sc?.player;
+        if (p && typeof p.getPosition === "function") {
+          const pos = p.getPosition();
+          targetX = pos.x;
+          targetY = pos.y;
+          found = true;
+        }
+      }
+
+      if (found) {
+        const dx = targetX - x;
+        const dy = targetY - y;
+        const desired = Math.atan2(dy, dx);
+        const current = Math.atan2(body.velocity.y, body.velocity.x);
+        const diff = Phaser.Math.Angle.Wrap(desired - current);
+        // homingStrength를 회전 비율(가속도 계수)로 사용 → 강할수록 더 급하게 회전
+        const turn = diff * Math.min(2, Math.max(0, this.config.homingStrength));
+        const speed = body.velocity.length();
+        const nx = Math.cos(current + turn) * speed;
+        const ny = Math.sin(current + turn) * speed;
+        body.setVelocity(nx, ny);
+      }
     }
 
     // 속도 기반 시각적 효과
@@ -458,7 +518,7 @@ export class Bullet {
     const wing2Y = baseY - Math.sin(perpAngle) * wingOffset;
 
     // 🔥 총알과 같은 색상으로 맞춤 (더 은은하게)
-    const tailColor = 0xffaa40; // 총알과 같은 주황색
+    const tailColor = this.config.tailColor ?? this.config.color;
 
     // 테일 글로우 효과 (은은한 외부 후광)
     this.tail.fillStyle(0xffffff, 0.2); // 흰색 글로우 (더 은은하게)

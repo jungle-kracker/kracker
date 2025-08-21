@@ -42,6 +42,7 @@ export class NetworkManager {
   private myPlayerId: string | null = null;
   private roomId: string | null = null;
   private isConnected: boolean = false;
+  private hasJoinedRoom: boolean = false;
 
   // 네트워크 최적화
   private lastSentMovement: PlayerMovement | null = null;
@@ -87,13 +88,13 @@ export class NetworkManager {
       socket.connect();
     }
 
-    // 게임 룸 입장 알림
+    // 게임 룸 입장 알림 (중복 방지)
     this.joinGameRoom();
   }
 
   // 게임 룸 입장
   private joinGameRoom(): void {
-    if (!this.roomId) return;
+    if (!this.roomId || this.hasJoinedRoom) return;
 
     socket.emit(
       "game:join",
@@ -105,6 +106,7 @@ export class NetworkManager {
         if (response?.ok) {
           console.log("✅ 게임 룸 입장 성공");
           this.isConnected = true;
+          this.hasJoinedRoom = true;
         } else {
           console.error("❌ 게임 룸 입장 실패:", response?.error);
         }

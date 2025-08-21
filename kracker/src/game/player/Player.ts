@@ -428,9 +428,13 @@ export default class Player {
     if (!this.wall.isWallGrabbing) {
       const moveMul = this.isCrouching ? 0.5 : 1;
 
-      // 블링크 (Shift 키): 증강으로 허용된 경우
+      // 블링크 (Shift 키): 증강으로 허용 + 1초 쿨타임
       if (this.blinkEnabled && key.blink) {
-        this.performBlink(this.facingDirection === "right" ? 1 : -1);
+        const nowMs = Date.now();
+        if (nowMs - this.lastBlinkAt >= this.blinkCooldownMs) {
+          this.performBlink(this.facingDirection === "right" ? 1 : -1);
+          this.lastBlinkAt = nowMs;
+        }
       }
 
       if (key.left && !key.right) {
@@ -898,18 +902,20 @@ export default class Player {
 
   public setJumpHeightMultiplier(mult: number): void {
     this.jumpHeightMul = Math.max(0.2, mult || 1);
+    try { console.log(`🧩 증강 함수 발동: 점프 높이 배율 = x${this.jumpHeightMul}`); } catch {}
   }
   public setExtraJumps(n: number): void {
     this.extraJumpsAllowed = Math.max(0, Math.floor(n || 0));
-    this.remainingExtraJumps = this.isGrounded
-      ? this.extraJumpsAllowed
-      : Math.min(this.remainingExtraJumps, this.extraJumpsAllowed);
+    this.remainingExtraJumps = this.isGrounded ? this.extraJumpsAllowed : Math.min(this.remainingExtraJumps, this.extraJumpsAllowed);
+    try { console.log(`🧩 증강 함수 발동: 추가 점프 = ${this.extraJumpsAllowed}`); } catch {}
   }
   public setGravityMultiplier(mult: number): void {
     this.gravityMul = Math.max(0.1, mult || 1);
+    try { console.log(`🧩 증강 함수 발동: 중력 배율 = x${this.gravityMul}`); } catch {}
   }
   public setMoveSpeedMultiplier(mult: number): void {
     this.moveSpeedMul = Math.max(0.3, mult || 1);
+    try { console.log(`🧩 증강 함수 발동: 이동 속도 배율 = x${this.moveSpeedMul}`); } catch {}
   }
 
   private performJump(): void {
@@ -936,6 +942,8 @@ export default class Player {
   }
 
   private blinkEnabled: boolean = false;
+  private lastBlinkAt: number = 0;
+  private blinkCooldownMs: number = 1000; // 1초 쿨타임
   private performBlink(direction: -1 | 1): void {
     // 간단한 텔레포트: 150px + 충돌 보정은 생략
     const distance = 150;
@@ -947,6 +955,7 @@ export default class Player {
 
   public setBlinkEnabled(enabled: boolean): void {
     this.blinkEnabled = !!enabled;
+    try { console.log(`🧩 증강 함수 발동: 블링크 ${this.blinkEnabled ? "ON" : "OFF"}`); } catch {}
   }
 
   // HP바 렌더링
