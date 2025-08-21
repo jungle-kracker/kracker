@@ -475,6 +475,9 @@ const RoundsGame: React.FC = () => {
               myPlayerId: gameState.myPlayerId,
               room: gameState.room,
               startTime: gameState.startTime,
+              // 서버에서 받은 초기 스폰 정보 전달
+              spawnPlan: (gameState as any).spawnPlan,
+              spawnPositions: (gameState as any).spawnPositions,
             };
 
             console.log("🎮 멀티플레이어 데이터 전달:", gameData);
@@ -513,6 +516,9 @@ const RoundsGame: React.FC = () => {
           myPlayerId: gameState.myPlayerId,
           room: gameState.room,
           startTime: gameState.startTime,
+          // 서버에서 받은 초기 스폰 정보 전달
+          spawnPlan: (gameState as any).spawnPlan,
+          spawnPositions: (gameState as any).spawnPositions,
         };
 
         console.log("🎮 게임 씬에 플레이어 데이터 전달:", gameData);
